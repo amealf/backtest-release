@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 """
-GARCH(1,1) 模型验证程序（XAGUSD 15秒K线）
+GARCH(1,1) 模型验证程序（XAGUSD K线，自动识别bar周期）
 
 功能：
 1) 读取K线CSV：datetime, open, high, low, close, volume（自动兼容逗号/Tab分隔）
@@ -10,7 +10,7 @@ GARCH(1,1) 模型验证程序（XAGUSD 15秒K线）
 5) 训练集拟合 GARCH(1,1)（arch库），输出参数及显著性
 6) 测试集做滚动一步预测（固定参数，递推更新条件方差）
 7) 计算验证指标：
-   - 实现方差 RV：后续240根bar(1小时)的平方收益率之和
+   - 实现方差 RV：后续H根bar(1小时)的平方收益率之和（H根据bar周期自动计算）
    - Mincer-Zarnowitz：RV = a + b*sigma_hat^2（报告a,b,联合F检验p值、R²）
    - QLIKE：mean(log(sigma_hat^2) + RV/sigma_hat^2)
 8) 可视化：4张图，中文标题，字体大，配色清晰，保存PNG(dpi=150)
@@ -456,8 +456,8 @@ def plot_fig2_scatter_mz(
     ax.plot([lo, hi], [a + b * lo, a + b * hi], color="red", linewidth=2.2, label="MZ回归线（红）")
 
     ax.set_title("图2：预测方差 vs 实现方差（散点图，核心图）")
-    ax.set_xlabel("GARCH 预测方差 σ̂²（未来1小时，240根bar）")
-    ax.set_ylabel("实现方差 RV（未来1小时，240根bar）")
+    ax.set_xlabel("GARCH 预测方差 σ̂²")
+    ax.set_ylabel("实现方差 RV")
     ax.grid(True, alpha=0.25)
     ax.legend(loc="upper left")
 
@@ -531,12 +531,12 @@ def plot_fig4_qq(std_resid: pd.Series, out_path: Path):
 # 主流程
 # ----------------------------
 def main():
-    parser = argparse.ArgumentParser(description="GARCH(1,1) 模型验证（XAGUSD 15秒K线）")
+    parser = argparse.ArgumentParser(description="GARCH(1,1) 模型验证（XAGUSD K线，自动识别周期）")
     parser.add_argument(
         "--csv",
         type=str,
         default=r"F:\Data\XAGUSD\tick histdata\extracted_15s\DAT_ASCII_XAGUSD_T_202512_15s.csv",
-        help="15秒K线CSV路径"
+        help="K线CSV路径（自动识别bar周期）"
     )
     parser.add_argument(
         "--out",
@@ -553,8 +553,8 @@ def main():
     parser.add_argument(
         "--horizon",
         type=int,
-        default=240,
-        help="RV/预测聚合窗口（240根bar=1小时）"
+        default=0,
+        help="RV/预测聚合窗口。默认0=自动（根据bar周期计算1小时对应的bar数）"
     )
     parser.add_argument(
         "--scale",
@@ -576,16 +576,35 @@ def main():
     print(f"原始行数: {len(df_raw):,}")
     print(f"时间范围: {df_raw['datetime'].min()}  ->  {df_raw['datetime'].max()}")
     inferred_bar_seconds = infer_bar_seconds_from_datetime(df_raw["datetime"])
-    if inferred_bar_seconds is not None:
+
+    # ---- horizon 自动计算 ----
+    horizon = int(args.horizon)
+    if inferred_bar_seconds is not None and inferred_bar_seconds > 0:
         expected_horizon_1h = int(round(3600.0 / inferred_bar_seconds))
-        print(
-            f"检测到bar周期约 {inferred_bar_seconds:.2f} 秒；"
-            f"1小时对应约 {expected_horizon_1h} 根bar；当前 horizon={args.horizon}"
-        )
-        if abs(int(args.horizon) - expected_horizon_1h) > 1:
-            print("警告：当前 horizon 与 1小时口径不一致，MZ/QLIKE 可能失真。")
+        bar_label = f"{inferred_bar_seconds:.0f}秒" if inferred_bar_seconds < 60 else f"{inferred_bar_seconds/60:.1f}分钟"
+        if horizon <= 0:
+            # 自动模式：使用检测到的周期计算
+            horizon = expected_horizon_1h
+            print(f"检测到bar周期约 {bar_label}；自动设置 horizon={horizon}（1小时）")
+        else:
+            # 手动指定模式：仅做一致性提示
+            print(f"检测到bar周期约 {bar_label}；1小时对应约 {expected_horizon_1h} 根bar")
+            if abs(horizon - expected_horizon_1h) > 1:
+                print(f"提示：手动指定 horizon={horizon} 与 1小时口径不一致，MZ/QLIKE 评估的时间窗口不是整1小时。")
     else:
-        print("提示：未能自动识别bar周期，跳过horizon口径检查。")
+        if horizon <= 0:
+            horizon = 240  # 兜底默认值
+            print(f"未能自动识别bar周期，使用兜底 horizon={horizon}")
+        else:
+            print(f"未能自动识别bar周期，使用手动指定 horizon={horizon}")
+
+    # 计算 horizon 对应的时间长度（用于图表标签）
+    if inferred_bar_seconds is not None and inferred_bar_seconds > 0:
+        horizon_minutes = horizon * inferred_bar_seconds / 60.0
+        horizon_label = f"{horizon}根bar≈{horizon_minutes:.0f}分钟"
+    else:
+        horizon_label = f"{horizon}根bar"
+    print(f"最终使用 horizon={horizon}（{horizon_label}）")
 
     print("=" * 80)
     print("2) 预处理：对数收益率 + 剔除隔夜跳空")
@@ -687,16 +706,16 @@ def main():
     eps_test = (r_test - mu).rename("eps_test")
     h1_test_origin = (omega + alpha * (eps_test ** 2) + beta * h_test).rename("h1_next")
 
-    # 聚合成 1小时预测方差（未来240根bar方差之和）
+    # 聚合成预测方差（未来horizon根bar方差之和）
     sigma2_hat_1h = aggregate_garch_variance_1h_from_h1(
         h1=h1_test_origin,
         omega=omega,
         g=g,
-        horizon=int(args.horizon)
+        horizon=horizon
     ).rename("sigma2_hat_1h")
 
     # 实现方差 RV（在“全样本”上算未来窗，然后取测试集部分）
-    rv_all = realized_variance_forward(r, horizon=int(args.horizon))
+    rv_all = realized_variance_forward(r, horizon=horizon)
     rv_test_origin = rv_all.reindex(r_test.index).rename("RV_1h")
 
     # 评估样本（测试集 origin）需要：sigma2_hat_1h 与 RV_1h 同时非空
@@ -709,7 +728,7 @@ def main():
     eval_df["vol_hat_1h"] = np.sqrt(eval_df["sigma2_hat_1h"])
     eval_df["vol_real_1h"] = np.sqrt(eval_df["RV_1h"])
 
-    print(f"可评估样本数（测试集且未来有{args.horizon}根bar）: {len(eval_df):,}")
+    print(f"可评估样本数（测试集且未来有{horizon}根bar）: {len(eval_df):,}")
 
     print("=" * 80)
     print("5) Mincer-Zarnowitz 回归 + QLIKE")
@@ -806,7 +825,7 @@ def main():
     print("=" * 80)
     print("7) 结果有效性判断")
     is_valid, invalid_reasons, expected_h_1h, checked_ratio = evaluate_result_validity(
-        horizon=int(args.horizon),
+        horizon=horizon,
         inferred_bar_seconds=inferred_bar_seconds,
         eval_df=eval_df,
         qlike=qlike,
