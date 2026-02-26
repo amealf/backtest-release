@@ -462,7 +462,7 @@ def export_interactive_html_short(
         )
     )
 
-    html_dir = './%s short outcome/html' % file_name
+    html_dir = './result/%s short outcome/html' % file_name
     os.makedirs(html_dir, exist_ok=True)
     html_path = os.path.join(html_dir, save_name + ' Short interactive.html')
     html_text = fig_html.to_html(
@@ -952,8 +952,9 @@ if __name__ == '__main__':
     )
 
     # 创建输出文件夹
-    os.makedirs(f'./{file_name} short outcome/perf', exist_ok=True)
-    os.makedirs(f'./{file_name} short outcome/trans', exist_ok=True)
+    os.makedirs('./result', exist_ok=True)
+    os.makedirs(f'./result/{file_name} short outcome/perf', exist_ok=True)
+    os.makedirs(f'./result/{file_name} short outcome/trans', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
 
@@ -1108,7 +1109,7 @@ if __name__ == '__main__':
             fig1_title = str(Capital_outcome) + ' ' + save_name
             if SAVE_STATIC_PLOT:
                 plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-                fig1_path = ('%s short outcome/' % file_name
+                fig1_path = ('./result/%s short outcome/' % file_name
                              + ' ' + str(Capital_outcome)
                              + save_name + f' Short.{plot_ext}')
                 close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
@@ -1150,7 +1151,7 @@ if __name__ == '__main__':
                          + ' ' + str(Capital_outcome)
                          + ' ' + 'perf.xlsx')
             writer1 = pd.ExcelWriter(
-                '%s short outcome/perf/' % file_name + perf_name,
+                './result/%s short outcome/perf/' % file_name + perf_name,
                 engine='xlsxwriter')
             detail_df.to_excel(writer1, sheet_name='stats')
             workbook = writer1.book
@@ -1192,7 +1193,7 @@ if __name__ == '__main__':
 
             if len(transactions_df) != 0:
                 writer2 = pd.ExcelWriter(
-                    '%s short outcome/trans/' % file_name
+                    './result/%s short outcome/trans/' % file_name
                     + 'om' + str(round(open_bar, 4))
                     + ' o' + str(round(open_threshold, 4))
                     + ' oc' + str(round(open_continous_threshold, 4))
@@ -1267,21 +1268,21 @@ if __name__ == '__main__':
         plt.xticks(rotation=70)
         fig_stat_1.legend()
         plt.title('stats ' + str(startdate) + '-' + str(enddate))
-        os.makedirs('stats %s short outcome/' % file_name, exist_ok=True)
+        os.makedirs('./result/stats %s short outcome/' % file_name, exist_ok=True)
         if SAVE_STATIC_PLOT:
             stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-            plt.savefig('stats %s short outcome/' % file_name
+            plt.savefig('./result/stats %s short outcome/' % file_name
                         + ' ' + save_name + ' '
                         + str(for_num_1) + ' '
                         + str(for_num_2) + ' '
                         + f'all outcome.{stats_plot_ext}', dpi=1000)
-        outcome_stats.to_excel('stats %s short outcome/' % file_name
+        outcome_stats.to_excel('./result/stats %s short outcome/' % file_name
                                + ' ' + save_name + ' '
                                + str(for_num_1) + ' '
                                + str(for_num_2) + ' '
                                + 'all outcome.xlsx')
     else:
-        disk_path = 'C:/Users/lenovo/Desktop/backtest/'
+        disk_path = './result/'
         open_excel = False
         if open_excel:
             os.startfile(

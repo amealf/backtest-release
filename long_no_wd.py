@@ -13,6 +13,10 @@ from matplotlib.widgets import Cursor
 import matplotlib.ticker as ticker
 from mplfinance.original_flavor import candlestick2_ohlc
 import time, os
+try:
+    import plotly.graph_objects as go
+except ImportError:
+    go = None
 
 from backtest_main import (
     BacktestEngine, BaseStrategy,
@@ -60,6 +64,16 @@ COMMISION_PERCENT = 0.000
 CAPITAL = 100.0
 # 仅用于柱图可视化：把 segment_withdrawal=0 的柱子显示为最小高度（不改原始数据）
 ZERO_BAR_VISUAL_FLOOR_PCT = 0.0001
+EXPORT_INTERACTIVE_HTML = True
+ACCENT_BLUE = '#1F77B4'
+SELL_WD_COLOR = 'green'
+SELL_SPEED_COLOR = 'black'
+HTML_CROSSHAIR_ENABLED = False
+HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
+HTML_SHOW_TRADE_COUNT_BADGE = False
+SAVE_STATIC_PLOT = False
+# 当 SAVE_STATIC_PLOT=True 时决定保存为 PDF 或 PNG
+SAVE_PLOT_AS_PDF = False
 
 
 def minutes_to_bars(minutes: float, bar_seconds: int, name: str) -> int:
@@ -332,6 +346,289 @@ def build_entry_to_max_profit_withdrawal_df(
             current_entry = None
 
     return pd.DataFrame(records)
+
+
+def export_interactive_html_long_no_wd(
+        file_name: str,
+        save_name: str,
+        title: str,
+        underlying1: pd.DataFrame,
+        detail_df: pd.DataFrame,
+        transactions_df: pd.DataFrame,
+        factor: float):
+    if go is None:
+        print('[HTML] plotly is not installed, skip html export.')
+        return
+
+    def _safe_val(pref_data, key, digits=None):
+        if isinstance(pref_data, pd.Series) and key in pref_data.index:
+            val = pref_data[key]
+        else:
+            return 'nan'
+        if pd.isna(val):
+            return 'nan'
+        if digits is not None:
+            try:
+                return str(round(float(val), digits))
+            except Exception:
+                return str(val)
+        return str(val)
+
+    def _date_text(raw):
+        dt = str(raw)[:-3]
+        if len(dt) > 5:
+            return dt[:-5] + ' ' + dt[-5:]
+        return dt
+
+    fig_html = go.Figure()
+    x_index = underlying1.index.to_numpy()
+    x_min = int(x_index[0]) if len(x_index) > 0 else 0
+    x_max = int(x_index[-1]) if len(x_index) > 0 else 1
+    x_span = max(1, x_max - x_min + 1)
+    x_left_pad = max(1, int(round(x_span * 0.006)))
+    x_right_pad = max(1, int(round(x_span * 0.010)))
+
+    x_spike_cfg = {'showspikes': False}
+    y_spike_cfg = {'showspikes': False}
+    if HTML_CROSSHAIR_ENABLED:
+        x_spike_cfg = {
+            'showspikes': True,
+            'spikemode': 'across',
+            'spikesnap': 'cursor',
+            'spikecolor': HTML_CROSSHAIR_COLOR,
+            'spikethickness': 1,
+            'spikedash': 'solid'
+        }
+        y_spike_cfg = {
+            'showspikes': True,
+            'spikemode': 'across',
+            'spikesnap': 'cursor',
+            'spikecolor': HTML_CROSSHAIR_COLOR,
+            'spikethickness': 1,
+            'spikedash': 'solid'
+        }
+
+    fig_html.add_trace(go.Candlestick(
+        x=x_index,
+        open=underlying1['open'] / factor * 100,
+        high=underlying1['high'] / factor * 100,
+        low=underlying1['low'] / factor * 100,
+        close=underlying1['close'] / factor * 100,
+        name='price',
+        increasing=dict(
+            line=dict(color='salmon', width=0.8),
+            fillcolor='rgba(250, 128, 114, 0.28)'
+        ),
+        decreasing=dict(
+            line=dict(color='#2ca02c', width=0.8),
+            fillcolor='rgba(44, 160, 44, 0.28)'
+        )
+    ))
+
+    long_record = transactions_df.copy()
+    long_record['target'] = long_record['Price'] / factor * 100
+    long_record = long_record[long_record.Type == 'long']
+    if len(long_record) != 0:
+        long_texts = []
+        for idx, row in long_record.iterrows():
+            pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+            long_texts.append(
+                _date_text(row['Date']) + '<br>'
+                + 'high: ' + _safe_val(pref_data, 'high') + '<br>'
+                + 'total_inc: ' + _safe_val(pref_data, 't_inc_per', 2) + '%' + '<br>'
+                + 'execution: ' + _safe_val(pref_data, 'execution') + '<br>'
+                + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                + 'low_price: ' + _safe_val(pref_data, 'low_price') + '<br>'
+                + 'new_opening_count: ' + _safe_val(pref_data, 'new_opening_count') + '<br>'
+                + 'index: ' + str(idx)
+            )
+        fig_html.add_trace(go.Scatter(
+            x=long_record.index,
+            y=long_record['target'],
+            mode='markers',
+            marker=dict(color='red', size=4),
+            name='long',
+            text=long_texts,
+            hovertemplate='%{text}<extra></extra>'
+        ))
+
+    sell_record = transactions_df.copy()
+    sell_record['target'] = sell_record['Price'] / factor * 100
+    sell_record = sell_record[sell_record.Type == 'sell']
+    sell_1_count = 0
+    sell_2_count = 0
+    if len(sell_record) != 0:
+        close_type_1_df = sell_record[sell_record['Close_type'] == 1]
+        sell_1_count = int(len(close_type_1_df))
+        if len(close_type_1_df) != 0:
+            sell_1_texts = []
+            for idx, row in close_type_1_df.iterrows():
+                pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+                sell_1_texts.append(
+                    _date_text(row['Date']) + '<br>'
+                    + 'low: ' + _safe_val(pref_data, 'low') + '<br>'
+                    + 'hld_wd_per: ' + _safe_val(pref_data, 'hld_wd_per', 2) + '%' + '<br>'
+                    + 'holding_inc: ' + _safe_val(pref_data, 'holding_inc', 2) + '<br>'
+                    + 'max_inc: ' + _safe_val(pref_data, 'max_inc', 2) + '%' + '<br>'
+                    + 'max_wd: ' + _safe_val(pref_data, 'max_wd', 2) + '%' + '<br>'
+                    + 'execution2: ' + _safe_val(pref_data, 'execution') + '<br>'
+                    + 'period: ' + _safe_val(pref_data, 'period') + '<br>'
+                    + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                    + 'high_date: ' + _safe_val(pref_data, 'high_date') + '<br>'
+                    + 'high_price: ' + _safe_val(pref_data, 'high_price') + '<br>'
+                    + 'index: ' + str(idx)
+                )
+            fig_html.add_trace(go.Scatter(
+                x=close_type_1_df.index,
+                y=close_type_1_df['target'],
+                mode='markers',
+                marker=dict(color=SELL_WD_COLOR, size=4),
+                name='sell_1',
+                text=sell_1_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ))
+
+        close_type_2_df = sell_record[sell_record['Close_type'] == 2]
+        sell_2_count = int(len(close_type_2_df))
+        if len(close_type_2_df) != 0:
+            sell_2_texts = []
+            for idx, row in close_type_2_df.iterrows():
+                pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+                sell_2_texts.append(
+                    _date_text(row['Date']) + '<br>'
+                    + 'low: ' + _safe_val(pref_data, 'low') + '<br>'
+                    + 'hld_wd_per: ' + _safe_val(pref_data, 'hld_wd_per', 2) + '%' + '<br>'
+                    + 'max_inc: ' + _safe_val(pref_data, 'max_inc', 2) + '%' + '<br>'
+                    + 'max_wd: ' + _safe_val(pref_data, 'max_wd', 2) + '%' + '<br>'
+                    + 'execution2: ' + _safe_val(pref_data, 'execution') + '<br>'
+                    + 'period: ' + _safe_val(pref_data, 'period') + '<br>'
+                    + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                    + 'high_date: ' + _safe_val(pref_data, 'high_date') + '<br>'
+                    + 'high_price: ' + _safe_val(pref_data, 'high_price') + '<br>'
+                    + 'index: ' + str(idx)
+                )
+            fig_html.add_trace(go.Scatter(
+                x=close_type_2_df.index,
+                y=close_type_2_df['target'],
+                mode='markers',
+                marker=dict(color=SELL_SPEED_COLOR, size=4),
+                name='sell_2',
+                text=sell_2_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ))
+
+    trade_seq = transactions_df[
+        transactions_df['Type'].isin(['long', 'sell'])].copy()
+    trade_seq = trade_seq.sort_index()
+    trade_seq['target'] = trade_seq['Price'] / factor * 100
+    line_x = []
+    line_y = []
+    buy_idx = None
+    buy_y = None
+    for idx, row in trade_seq.iterrows():
+        if row['Type'] == 'long':
+            buy_idx = idx
+            buy_y = row['target']
+        elif row['Type'] == 'sell' and buy_idx is not None:
+            line_x.extend([buy_idx, idx, None])
+            line_y.extend([buy_y, row['target'], None])
+            buy_idx = None
+            buy_y = None
+    if len(line_x) > 0:
+        fig_html.add_trace(go.Scatter(
+            x=line_x,
+            y=line_y,
+            mode='lines',
+            line=dict(color=ACCENT_BLUE, width=2),
+            name='trade_link',
+            hoverinfo='skip'
+        ))
+
+    trade_count_annotation = []
+    if HTML_SHOW_TRADE_COUNT_BADGE:
+        total_trade_count = sell_1_count + sell_2_count
+        trade_count_annotation = [dict(
+            x=0.995, y=0.995,
+            xref='paper', yref='paper',
+            xanchor='right', yanchor='top',
+            align='right',
+            showarrow=False,
+            text=(
+                f"trades: {total_trade_count}"
+                + "<br>"
+                + f"sell_1: {sell_1_count}"
+                + "<br>"
+                + f"sell_2: {sell_2_count}"
+            ),
+            font=dict(size=11, color='black')
+        )]
+
+    fig_html.update_layout(
+        title=None,
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='left', x=0),
+        xaxis=dict(
+            title=None,
+            tickfont=dict(size=10),
+            showgrid=False,
+            rangeslider=dict(visible=False),
+            range=[x_min - x_left_pad, x_max + x_right_pad],
+            autorange=False,
+            **x_spike_cfg
+        ),
+        yaxis=dict(
+            title=None,
+            tickfont=dict(size=10),
+            showgrid=False,
+            **y_spike_cfg
+        ),
+        margin=dict(l=42, r=25, t=38, b=45, pad=0),
+        annotations=trade_count_annotation,
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.50)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+
+    html_dir = './result/%s long no wd outcome/html' % file_name
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(html_dir, save_name + ' LongNoWD interactive.html')
+    html_text = fig_html.to_html(
+        include_plotlyjs=True,
+        full_html=True,
+        default_width='100vw',
+        default_height='100vh',
+        config={
+            'responsive': True,
+            'displayModeBar': False,
+            'displaylogo': False
+        }
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.50) !important;'
+        'fill-opacity:0.50 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace('<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print('\n')
+    print(f'[HTML] saved interactive chart: {html_path}')
 
 
 # ============================================================
@@ -630,9 +927,10 @@ if __name__ == '__main__':
     )
 
     # 创建输出文件夹
-    os.makedirs(f'./{file_name} long no wd outcome/perf', exist_ok=True)
-    os.makedirs(f'./{file_name} long no wd outcome/trans', exist_ok=True)
-    os.makedirs(f'./{file_name} long no wd outcome/trade_stats', exist_ok=True)
+    os.makedirs('./result', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/perf', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/trans', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/trade_stats', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
 
@@ -805,7 +1103,7 @@ if __name__ == '__main__':
                          + ' ' + str(Capital_outcome)
                          + ' ' + 'perf.xlsx')
             writer1 = pd.ExcelWriter(
-                '%s long no wd outcome/perf/' % file_name + perf_name,
+                './result/%s long no wd outcome/perf/' % file_name + perf_name,
                 engine='xlsxwriter')
             detail_df.to_excel(writer1, sheet_name='stats')
             workbook = writer1.book
@@ -847,7 +1145,7 @@ if __name__ == '__main__':
 
             if len(transactions_df) != 0:
                 writer2 = pd.ExcelWriter(
-                    '%s long no wd outcome/trans/' % file_name
+                    './result/%s long no wd outcome/trans/' % file_name
                     + 'om' + str(round(open_bar, 4))
                     + ' o' + str(round(open_threshold, 4))
                     + ' oc' + str(round(open_continous_threshold, 4))
@@ -895,7 +1193,7 @@ if __name__ == '__main__':
                                 + ' ' + str(Capital_outcome)
                                 + ' ' + 'trade_stats.xlsx')
             writer3 = pd.ExcelWriter(
-                '%s long no wd outcome/trade_stats/' % file_name + trade_stats_name,
+                './result/%s long no wd outcome/trade_stats/' % file_name + trade_stats_name,
                 engine='xlsxwriter')
             trade_extreme_df.to_excel(writer3, sheet_name='trade_extremes', index=False)
             entry_to_max_profit_wd_df.to_excel(
@@ -1011,10 +1309,13 @@ if __name__ == '__main__':
                                     + ' ' + str(round(withdrawal_close_count, 4))
                                     + '+' + str(round(speed_close_count, 4))
                                     + ' ' + str(startdate) + '-' + str(enddate)
-                                    + ' profit_withdrawal.png')
-                    fig_wd.savefig(
-                        '%s long no wd outcome/trade_stats/' % file_name + wd_hist_name,
-                        dpi=300, bbox_inches='tight')
+                                    + ' profit_withdrawal')
+                    if SAVE_STATIC_PLOT:
+                        wd_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                        fig_wd.savefig(
+                            './result/%s long no wd outcome/trade_stats/' % file_name
+                            + wd_hist_name + f'.{wd_plot_ext}',
+                            dpi=300, bbox_inches='tight')
                     if for_num_2 == 1:
                         fig_wd.show()
                     else:
@@ -1119,10 +1420,13 @@ if __name__ == '__main__':
                                             + ' ' + str(round(withdrawal_close_count, 4))
                                             + '+' + str(round(speed_close_count, 4))
                                             + ' ' + str(startdate) + '-' + str(enddate)
-                                            + ' profit_sorted_withdrawal.png')
-                        fig_profit.savefig(
-                            '%s long no wd outcome/trade_stats/' % file_name + profit_hist_name,
-                            dpi=300, bbox_inches='tight')
+                                            + ' profit_sorted_withdrawal')
+                        if SAVE_STATIC_PLOT:
+                            profit_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                            fig_profit.savefig(
+                                './result/%s long no wd outcome/trade_stats/' % file_name
+                                + profit_hist_name + f'.{profit_plot_ext}',
+                                dpi=300, bbox_inches='tight')
                         if for_num_2 == 1:
                             fig_profit.show()
                         else:
@@ -1163,19 +1467,21 @@ if __name__ == '__main__':
         plt.xticks(rotation=70)
         fig_stat_1.legend()
         plt.title('stats ' + str(startdate) + '-' + str(enddate))
-        os.makedirs('stats %s long no wd outcome/' % file_name, exist_ok=True)
-        plt.savefig('stats %s long no wd outcome/' % file_name
-                    + ' ' + save_name + ' '
-                    + str(for_num_1) + ' '
-                    + str(for_num_2) + ' '
-                    + 'all outcome.pdf', dpi=1000)
-        outcome_stats.to_excel('stats %s long no wd outcome/' % file_name
+        os.makedirs('./result/stats %s long no wd outcome/' % file_name, exist_ok=True)
+        if SAVE_STATIC_PLOT:
+            stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+            plt.savefig('./result/stats %s long no wd outcome/' % file_name
+                        + ' ' + save_name + ' '
+                        + str(for_num_1) + ' '
+                        + str(for_num_2) + ' '
+                        + f'all outcome.{stats_plot_ext}', dpi=1000)
+        outcome_stats.to_excel('./result/stats %s long no wd outcome/' % file_name
                                + ' ' + save_name + ' '
                                + str(for_num_1) + ' '
                                + str(for_num_2) + ' '
                                + 'all outcome.xlsx')
     else:
-        disk_path = 'C:/Users/lenovo/Desktop/backtest/'
+        disk_path = './result/'
         open_excel = False
         if open_excel:
             os.startfile(
@@ -1386,15 +1692,16 @@ if __name__ == '__main__':
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
         plt.xticks(rotation=0)
-        plt.title('%s' % (' ' + str(round(Capital_outcome, 2))
-                          + ' om' + str(round(open_bar, 4))
-                          + ' o' + str(round(open_threshold, 4))
-                          + ' oc' + str(round(open_continous_threshold, 4))
-                          + ' cm' + str(round(close_bar, 4))
-                          + ' c' + str(round(close_threshold, 4))
-                          + ' ' + str(round(withdrawal_close_count, 4))
-                          + '+' + str(round(speed_close_count, 4))
-                          + ' ' + str(startdate) + '-' + str(enddate)))
+        fig2_title = (' ' + str(round(Capital_outcome, 2))
+                      + ' om' + str(round(open_bar, 4))
+                      + ' o' + str(round(open_threshold, 4))
+                      + ' oc' + str(round(open_continous_threshold, 4))
+                      + ' cm' + str(round(close_bar, 4))
+                      + ' c' + str(round(close_threshold, 4))
+                      + ' ' + str(round(withdrawal_close_count, 4))
+                      + '+' + str(round(speed_close_count, 4))
+                      + ' ' + str(startdate) + '-' + str(enddate))
+        plt.title('%s' % fig2_title)
 
         # fig2 不显示资金曲线
         candlestick2_ohlc(ax2, underlying_ratio.open, underlying_ratio.high,
@@ -1422,4 +1729,14 @@ if __name__ == '__main__':
                 buy_idx = None
                 buy_y = None
         ax2.xaxis.set_major_locator(plt.MaxNLocator(12))
+        if EXPORT_INTERACTIVE_HTML:
+            export_interactive_html_long_no_wd(
+                file_name=file_name,
+                save_name=save_name,
+                title=fig2_title,
+                underlying1=underlying1,
+                detail_df=detail_df,
+                transactions_df=transactions_df,
+                factor=factor
+            )
         plt.show()
