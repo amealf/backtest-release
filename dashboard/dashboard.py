@@ -26,8 +26,8 @@ PORT = 8765
 AUTO_OPEN_BROWSER = True
 
 # Set this to your result folder. Relative path is based on project root.
-# Example: "DAT_ASCII_XAGUSD_T_202501_15s long outcome"
-HTML_SOURCE_FOLDER = "DAT_ASCII_XAGUSD_T_202501_15s long outcome"
+# Default scans all html files under ./result
+HTML_SOURCE_FOLDER = "result"
 
 IGNORE_DIR_NAMES = {".git", "__pycache__"}
 MIN_SIDEBAR_WIDTH = 240
