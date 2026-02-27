@@ -29,10 +29,38 @@ pd.set_option('display.max_columns', None)
 # Data Loading & Validation
 # ============================================================
 
-def load_data(folder_path, file_name,
-              col_names=('Date', 'low', 'high', 'open', 'close', 'vol')):
+def _ohlc_validity_rate(df, o, h, l, c):
+    """计算 OHLC 自洽性比率：high>=max(o,c) 且 low<=min(o,c) 且 low<=high 的行占比"""
+    valid = (
+        (df[h] >= df[o] - 1e-8) &
+        (df[h] >= df[c] - 1e-8) &
+        (df[l] <= df[o] + 1e-8) &
+        (df[l] <= df[c] + 1e-8) &
+        (df[l] <= df[h] + 1e-8)
+    )
+    return valid.mean()
+
+
+def _detect_ohlc_columns(df, candidate_cols):
     """
-    读取 CSV 数据，执行 OHLC 自洽性校验，检测价格精度。
+    自动检测4列中哪列是 open/high/low/close。
+    策略：遍历所有排列，选 OHLC 自洽率最高的。
+    """
+    from itertools import permutations
+    best_rate = -1
+    best_mapping = None
+    for perm in permutations(candidate_cols):
+        o, h, l, c = perm
+        rate = _ohlc_validity_rate(df, o, h, l, c)
+        if rate > best_rate:
+            best_rate = rate
+            best_mapping = (o, h, l, c)
+    return best_mapping, best_rate
+
+
+def load_data(folder_path, file_name):
+    """
+    读取 CSV 数据，自动检测 OHLC 列顺序，执行自洽性校验，检测价格精度。
 
     Parameters
     ----------
@@ -40,20 +68,46 @@ def load_data(folder_path, file_name,
         数据文件夹路径，末尾需含分隔符。
     file_name : str
         文件名（不含 .csv 后缀）。
-    col_names : tuple
-        CSV 列名，默认为 ('Date','low','high','open','close','vol')。
 
     Returns
     -------
     df : pd.DataFrame
-        加载后的数据。
+        加载后的数据，列名固定为 Date/open/high/low/close/vol。
     round_precision : int
         价格小数位数。
     bar_seconds : int
         自动识别的周期（秒）。
     """
     path = folder_path + file_name + ".csv"
-    df = pd.read_csv(path, names=list(col_names))
+
+    # 先用临时列名读入
+    temp_names = ['Date', 'c1', 'c2', 'c3', 'c4', 'vol']
+    df = pd.read_csv(path, names=temp_names)
+
+    # 数值化价格列
+    for c in ['c1', 'c2', 'c3', 'c4', 'vol']:
+        df[c] = pd.to_numeric(df[c], errors='coerce')
+
+    # 自动检测 OHLC 列顺序
+    price_cols = ['c1', 'c2', 'c3', 'c4']
+    mapping, validity = _detect_ohlc_columns(df.dropna(subset=price_cols), price_cols)
+
+    if mapping is None or validity < 0.8:
+        raise ValueError(
+            f"无法自动识别 OHLC 列顺序（最佳自洽率={validity:.1%}）。\n"
+            "请检查 CSV 的列顺序是否为: datetime, [4个价格列], volume"
+        )
+
+    o_col, h_col, l_col, c_col = mapping
+    detected_order = [price_cols.index(x) + 1 for x in [o_col, h_col, l_col, c_col]]
+    standard_order = [1, 2, 3, 4]
+    if detected_order != standard_order:
+        print(f"[Data] 自动检测到 OHLC 列顺序: 第{detected_order}列 -> open/high/low/close (自洽率={validity:.1%})")
+    else:
+        print(f"[Data] OHLC 列顺序正常 (自洽率={validity:.1%})")
+
+    # 重命名为标准列名
+    df = df.rename(columns={o_col: 'open', h_col: 'high', l_col: 'low', c_col: 'close'})
 
     # Bar period 检测
     dates = pd.to_datetime(df['Date'], errors='coerce')
@@ -85,7 +139,7 @@ def load_data(folder_path, file_name,
 
     print(f'[Data] {file_name}  |  bar period: {bar_period} ({total_seconds}s)')
 
-    # OHLC 自洽性校验
+    # OHLC 自洽性校验（用已正确映射的列）
     bad = (
         df['Date'].isna() |
         df[['open', 'high', 'low', 'close']].isna().any(axis=1) |
@@ -95,21 +149,24 @@ def load_data(folder_path, file_name,
     )
     bad_cnt = int(bad.sum())
     if bad_cnt > 0:
-        sample = df.loc[bad, ['Date', 'open', 'high', 'low', 'close', 'vol']].head(8)
-        raise ValueError(
-            "OHLC 校验失败，已停止程序。\n"
-            f"失败行数：{bad_cnt} / {len(df)}\n"
-            "示例（前 8 行）：\n"
-            f"{sample.to_string(index=False)}\n\n"
-            "常见原因：\n"
-            "1) 读入时 names 的列顺序与文件真实顺序不一致。\n"
-            "2) Excel 第一行是表头，但你用 names 覆盖后把表头当数据读进来了。"
-        )
+        ratio = bad_cnt / len(df)
+        if ratio > 0.05:
+            sample = df.loc[bad, ['Date', 'open', 'high', 'low', 'close', 'vol']].head(8)
+            raise ValueError(
+                "OHLC 校验失败，已停止程序。\n"
+                f"失败行数：{bad_cnt} / {len(df)} ({ratio:.1%})\n"
+                "示例（前 8 行）：\n"
+                f"{sample.to_string(index=False)}"
+            )
+        else:
+            print(f"[Data] OHLC 校验：{bad_cnt} 行异常 ({ratio:.1%})，已忽略")
 
     # 精度检测
-    price_cols = ['low', 'high', 'open', 'close']
-    sample_raw = pd.read_csv(path, names=list(col_names),
+    price_cols_final = ['low', 'high', 'open', 'close']
+    sample_raw = pd.read_csv(path, names=temp_names,
                              nrows=50, dtype=str, keep_default_na=False)
+    # 映射回标准列名用于精度检测
+    sample_raw = sample_raw.rename(columns={o_col: 'open', h_col: 'high', l_col: 'low', c_col: 'close'})
 
     def decimal_places_from_str(x: str) -> int:
         s = str(x).strip()
@@ -122,7 +179,7 @@ def load_data(folder_path, file_name,
         return max(0, -d.as_tuple().exponent)
 
     col_precision = {}
-    for c in price_cols:
+    for c in price_cols_final:
         p = sample_raw[c].map(decimal_places_from_str).max()
         col_precision[c] = int(p) if p == p else 0
     round_precision = max(col_precision.values()) if col_precision else 0
