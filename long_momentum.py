@@ -27,8 +27,8 @@ start_time = time.time()
 # User Config
 # ============================================================
 # 数据
-DATA_FOLDER_PATH = r"F:\Data\XAGUSD\\"
-DATA_FILE_NAME = "DAT_ASCII_XAGUSD_T_202501_15s"
+DATA_FOLDER_PATH = r"D:\Code\data\converted_15s\\"
+DATA_FILE_NAME = "HISTDATA_COM_ASCII_XAGUSD_T202512_15s"
 
 # 回测区间
 START_INDEX = 0

@@ -19,7 +19,7 @@ base_dir = r"D:\Code\data"
 zip_dir = os.path.join(base_dir, "")
 
 # K 线周期（秒），例如 5 / 15 / 30 / 300
-bar_interval_seconds = 300
+bar_interval_seconds = 15
 
 _label = f"{bar_interval_seconds}s"
 extract_dir = os.path.join(base_dir, "extracted_tick")
