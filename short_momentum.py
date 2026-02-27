@@ -34,7 +34,7 @@ DATA_FILE_NAME = "DAT_ASCII_XAGUSD_T_202501_15s"
 
 # 回测区间
 START_INDEX = 60000
-END_INDEX = 66000  # 或 'lastest'
+END_INDEX = 66000  # 或 'latest'
 ONLY_CLOSE = False
 
 # 参数循环
@@ -114,6 +114,38 @@ def get_decrease(df):
             low = row['low']
         decrease = high - low
     return decrease
+
+
+def get_decrease_with_base(df):
+    """
+    返回跌幅及其对应的真实基准 high。
+    注意：基准 high 可能不是窗口第一根 bar 的 high。
+    """
+    if df.empty:
+        print('received empty dataframe at get_decrease function.')
+        return np.nan, np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan, np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan, np.nan
+    if df.iloc[0]['open'] <= df.iloc[0]['close']:
+        high = df.iloc[0]['high']
+        low = df.iloc[0]['low']
+    else:
+        high = df.iloc[0]['high']
+        low = df.iloc[0]['close']
+    decrease = 0
+    for index, row in df.iterrows():
+        if row['high'] >= high:
+            low = row['close']
+            high = row['high']
+        elif row['low'] < low:
+            low = row['low']
+        decrease = high - low
+    return decrease, high
+
+
 def get_analysis_decrease(df):
     if df.empty:
         print('received empty dataframe at get_decrease function.')
@@ -574,8 +606,7 @@ class ReverseMomentumStrategy(BaseStrategy):
         analysis_slice = quote.iloc[self.last_index:ii + 1]
         # --- 阶段 0: 检查速度 + 回撤 ---
         if self.var0 == 0:
-            decrease = get_decrease(analysis_slice)
-            dec_base = analysis_slice['high'].iloc[0]
+            decrease, dec_base = get_decrease_with_base(analysis_slice)
             dec_percent = decrease / dec_base if dec_base != 0 else 0
             with_low, rebound = get_rebound(
                 analysis_slice, close_withdrawal_threshold, ii)
@@ -623,7 +654,7 @@ class ReverseMomentumStrategy(BaseStrategy):
                 cond3_analysis_slice, close_withdrawal_threshold, ii)
             signal.at[index, 'rebound'] = rebound
             rebound_percent = rebound / with_low if with_low != 0 else 0
-            total_decrease = get_decrease(cond3_analysis_slice)
+            total_decrease, dec_base = get_decrease_with_base(cond3_analysis_slice)
             cond3 = rebound_percent < open_withdrawal_threshold
             signal.at[index, 'rb_signal'] = 1 if cond3 else 0
             if signal.at[index, 'rb_signal']:
@@ -641,13 +672,12 @@ class ReverseMomentumStrategy(BaseStrategy):
                         analysis_decrease_percent * 100)
                     if analysis_decrease_percent < close_threshold:
                         self.var0 = 4
-                dec_base = cond3_analysis_slice['high'].iloc[0]
                 total_decrease_percent = (
                     total_decrease / dec_base if dec_base != 0 else 0)
                 signal.at[index, 'total_dec'] = total_decrease
                 signal.at[index, 't_dec_per'] = round(
                     total_decrease_percent * 100, 4)
-                self.first_cond1_price = cond3_analysis_slice.iloc[0]['high']
+                self.first_cond1_price = dec_base
                 if total_decrease_percent >= open_continous_threshold:
                     signal.at[index, 'total_dec_signal'] = 1
             else:
@@ -850,8 +880,7 @@ class ReverseMomentumStrategy(BaseStrategy):
 
         max_slice = quote.iloc[low_index:high_index + 1]
         max_rb = get_max_rebound(max_slice)
-        max_dec = get_decrease(max_slice)
-        dec_base = max_slice['high'].iloc[0]
+        max_dec, dec_base = get_decrease_with_base(max_slice)
         max_dec_percent = max_dec / dec_base if dec_base != 0 else 0
         signal.at[index, 'max_dec'] = max_dec_percent * 100
         signal.at[index, 'max_rb'] = max_rb * 100
@@ -880,8 +909,7 @@ class ReverseMomentumStrategy(BaseStrategy):
                 break
         max_slice = quote.iloc[self.low_index:high_index + 1]
         max_rb = get_max_rebound(max_slice)
-        max_dec = get_decrease(max_slice)
-        dec_base = max_slice['high'].iloc[0]
+        max_dec, dec_base = get_decrease_with_base(max_slice)
         max_dec_percent = max_dec / dec_base if dec_base != 0 else 0
         signal.at[index, 'max_dec'] = max_dec_percent * 100
         signal.at[index, 'max_rb'] = max_rb * 100
@@ -963,7 +991,7 @@ if __name__ == '__main__':
     enddate = END_INDEX
 
     preview_df = df[df.index > startdate]
-    if enddate != 'lastest':
+    if enddate != 'latest':
         preview_df = preview_df[preview_df.index < enddate]
     if len(preview_df) == 0:
         raise ValueError(
@@ -973,7 +1001,7 @@ if __name__ == '__main__':
     print(f'[Main] backtest time range: {preview_df.iloc[0]["Date"]} -> {preview_df.iloc[-1]["Date"]}')
 
     df5 = df[df.index > startdate]
-    if enddate != 'lastest':
+    if enddate != 'latest':
         df5 = df5[df5.index < enddate].reset_index(drop=True)
     underlying = df5.copy()
 
@@ -1147,7 +1175,7 @@ if __name__ == '__main__':
                          + ' cw' + str(round(close_withdrawal_threshold, 4))
                          + ' ' + str(round(withdrawal_close_count, 4))
                          + '+' + str(round(speed_close_count, 4))
-                         + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
+                         + ' ' + 'Short ' + str(startdate) + '-' + str(enddate)
                          + ' ' + str(Capital_outcome)
                          + ' ' + 'perf.xlsx')
             writer1 = pd.ExcelWriter(
@@ -1203,7 +1231,7 @@ if __name__ == '__main__':
                     + ' cw' + str(round(close_withdrawal_threshold, 4))
                     + ' ' + str(round(withdrawal_close_count, 4))
                     + '+' + str(round(speed_close_count, 4)) + ' '
-                    + 'Long ' + str(startdate) + '-' + str(enddate)
+                    + 'Short ' + str(startdate) + '-' + str(enddate)
                     + ' ' + str(Capital_outcome)
                     + ' ' + 'trans.xlsx', engine='xlsxwriter')
                 transactions_df.reset_index(
