@@ -45,6 +45,12 @@ try:
 except Exception:
     candlestick2_ohlc = None
 
+import openpyxl  # xlsx 输出依赖
+
+# ========= 路径设置 =========
+CSV_PATH = r"D:\Code\data\converted_300s\HISTDATA_COM_ASCII_XAGUSD_T202512_300s.csv"
+# ============================
+
 # ----------------------------
 # 画图：中文字体与全局样式
 # ----------------------------
@@ -119,6 +125,23 @@ def read_kline_csv(path: str | Path) -> pd.DataFrame:
     df = df.dropna(subset=["close"]).copy()
     df = df[df["close"] > 0].copy()
 
+    # OHLC 合理性检查：high >= max(open,close), low <= min(open,close)
+    if len(df) > 10:
+        oc_max = df[["open", "close"]].max(axis=1)
+        oc_min = df[["open", "close"]].min(axis=1)
+        high_ok = (df["high"] >= oc_max - 1e-8).mean()
+        low_ok  = (df["low"]  <= oc_min + 1e-8).mean()
+        if high_ok < 0.9 or low_ok < 0.9:
+            # 尝试检测 open/low 互换（常见的列顺序错误）
+            if (df["low"] >= oc_max - 1e-8).mean() > 0.5:
+                print("警告：检测到 open 和 low 列可能互换，自动修正。")
+                df["open"], df["low"] = df["low"].copy(), df["open"].copy()
+            elif (df["high"] <= oc_min + 1e-8).mean() > 0.5:
+                print("警告：检测到 open 和 high 列可能互换，自动修正。")
+                df["open"], df["high"] = df["high"].copy(), df["open"].copy()
+            else:
+                print(f"警告：OHLC 数据可能有列顺序问题 (high合规率={high_ok:.1%}, low合规率={low_ok:.1%})")
+
     # 排序、去重
     df = df.sort_values("datetime").drop_duplicates("datetime", keep="last").reset_index(drop=True)
 
@@ -126,7 +149,41 @@ def read_kline_csv(path: str | Path) -> pd.DataFrame:
 
 
 # ----------------------------
-# 预处理：对数收益率 + 剔除隔夜跳空
+# 跳过长时间零成交段（停盘检测）
+# ----------------------------
+ZERO_VOL_GAP_THRESHOLD_MINUTES = 3  # 连续0成交超过此分钟数视为停盘
+
+
+def _mask_zero_volume_runs(df: pd.DataFrame, threshold_minutes: float = ZERO_VOL_GAP_THRESHOLD_MINUTES) -> pd.Series:
+    """
+    检测连续 volume==0 的区段。
+    如果一段连续0成交的总时间跨度 >= threshold_minutes 分钟，
+    则该段所有行标记为 True（应跳过）。
+    """
+    is_zero = (df["volume"] == 0).values
+    dt = df["datetime"].values  # datetime64
+    n = len(df)
+    mask = np.zeros(n, dtype=bool)
+
+    i = 0
+    while i < n:
+        if is_zero[i]:
+            j = i
+            while j < n and is_zero[j]:
+                j += 1
+            # [i, j) 是连续0成交段
+            span_minutes = (dt[j - 1] - dt[i]) / np.timedelta64(1, "m")
+            if span_minutes >= threshold_minutes:
+                mask[i:j] = True
+            i = j
+        else:
+            i += 1
+
+    return pd.Series(mask, index=df.index, name="zero_vol_gap")
+
+
+# ----------------------------
+# 预处理：对数收益率 + 剔除隔夜跳空 + 跳过停盘段
 # ----------------------------
 def preprocess_returns(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
@@ -137,7 +194,20 @@ def preprocess_returns(df: pd.DataFrame) -> pd.DataFrame:
     is_first_bar_of_day = date.ne(date.shift(1))
     out.loc[is_first_bar_of_day, "ret"] = np.nan
 
-    # 删除 NaN（包含首行diff产生的NaN、以及跨日第一根bar）
+    # 跳过停盘段：连续 >= 3分钟 volume==0 的区段
+    gap_mask = _mask_zero_volume_runs(out)
+    n_gap = gap_mask.sum()
+    if n_gap > 0:
+        print(f"  停盘检测：跳过 {n_gap} 根连续零成交bar（阈值={ZERO_VOL_GAP_THRESHOLD_MINUTES}分钟）")
+        out.loc[gap_mask, "ret"] = np.nan
+        # 停盘段之后的第一根有成交bar的收益率也应设为NaN（避免跳空）
+        gap_end = gap_mask & ~gap_mask.shift(-1, fill_value=False)
+        for idx_pos in np.where(gap_end.values)[0]:
+            next_pos = idx_pos + 1
+            if next_pos < len(out):
+                out.iloc[next_pos, out.columns.get_loc("ret")] = np.nan
+
+    # 删除 NaN（包含首行diff产生的NaN、跨日第一根bar、停盘段）
     out = out.dropna(subset=["ret"]).copy()
 
     # 使用 datetime 作为索引（后续时序/回归更方便）
@@ -361,6 +431,34 @@ def _build_time_formatter(time_index: pd.DatetimeIndex):
     return FuncFormatter(_fmt)
 
 
+def _insert_gap_nans(df: pd.DataFrame, gap_factor: float = 2.0) -> pd.DataFrame:
+    """
+    在时间索引的缺口处插入 NaN 行，使 matplotlib 断开连线。
+    gap_factor: 时间间隔超过中位数的多少倍时视为缺口。
+    """
+    if len(df) < 2:
+        return df
+    diffs = np.diff(df.index.values).astype("timedelta64[s]").astype(float)
+    median_diff = np.median(diffs[diffs > 0])
+    threshold = median_diff * gap_factor
+
+    gap_positions = np.where(diffs > threshold)[0]
+    if len(gap_positions) == 0:
+        return df
+
+    # 在每个缺口处插入一行 NaN
+    insert_rows = []
+    for pos in gap_positions:
+        gap_time = df.index[pos] + pd.Timedelta(seconds=median_diff)
+        insert_rows.append(pd.DataFrame(
+            {col: [np.nan] for col in df.columns},
+            index=[gap_time]
+        ))
+
+    result = pd.concat([df] + insert_rows).sort_index()
+    return result
+
+
 def plot_fig1_overview(
     ohlc_all: pd.DataFrame,
     train_end_time: pd.Timestamp,
@@ -485,10 +583,13 @@ def plot_fig3_vol_ts(
     eval_df: pd.DataFrame,
     out_path: Path,
 ):
+    # 插入 NaN 断开停盘缺口的连线
+    plot_df = _insert_gap_nans(eval_df[["vol_hat_1h", "vol_real_1h"]])
+
     fig, ax = plt.subplots(figsize=(18, 6.5))
 
-    ax.plot(eval_df.index, eval_df["vol_hat_1h"].values, label="预测波动率（蓝）", color="tab:blue")
-    ax.plot(eval_df.index, eval_df["vol_real_1h"].values, label="实现波动率（橙）", color="tab:orange")
+    ax.plot(plot_df.index, plot_df["vol_hat_1h"].values, label="预测波动率（蓝）", color="tab:blue")
+    ax.plot(plot_df.index, plot_df["vol_real_1h"].values, label="实现波动率（橙）", color="tab:orange")
 
     ax.set_title("图3：预测波动率 vs 实现波动率（未来1小时）时序对比")
     ax.set_xlabel("时间")
@@ -535,8 +636,8 @@ def main():
     parser.add_argument(
         "--csv",
         type=str,
-        default=r"F:\Data\XAGUSD\tick histdata\extracted_15s\DAT_ASCII_XAGUSD_T_202512_15s.csv",
-        help="15秒K线CSV路径"
+        default=CSV_PATH,
+        help="K线CSV路径"
     )
     parser.add_argument(
         "--out",
@@ -580,12 +681,15 @@ def main():
         expected_horizon_1h = int(round(3600.0 / inferred_bar_seconds))
         print(
             f"检测到bar周期约 {inferred_bar_seconds:.2f} 秒；"
-            f"1小时对应约 {expected_horizon_1h} 根bar；当前 horizon={args.horizon}"
+            f"1小时对应约 {expected_horizon_1h} 根bar"
         )
         if abs(int(args.horizon) - expected_horizon_1h) > 1:
-            print("警告：当前 horizon 与 1小时口径不一致，MZ/QLIKE 可能失真。")
+            print(f"自动修正 horizon: {args.horizon} -> {expected_horizon_1h}")
+            args.horizon = expected_horizon_1h
+        else:
+            print(f"当前 horizon={args.horizon}，与检测结果一致")
     else:
-        print("提示：未能自动识别bar周期，跳过horizon口径检查。")
+        print("提示：未能自动识别bar周期，使用默认 horizon={args.horizon}")
 
     print("=" * 80)
     print("2) 预处理：对数收益率 + 剔除隔夜跳空")
@@ -828,7 +932,36 @@ def main():
         for reason in invalid_reasons:
             print(f"- {reason}")
 
-    print("8) 显示全部图窗 ...")
+    # ----------------------------
+    # 8) 导出 GARCH 参数到 xlsx
+    # ----------------------------
+    print("="* 80)
+    print("8) 导出 GARCH 参数到 xlsx")
+    param_export = pd.DataFrame([{
+        "mu": mu,
+        "omega": omega,
+        "alpha": alpha,
+        "beta": beta,
+        "alpha+beta": g,
+        "scale": float(args.scale),
+        "horizon": int(args.horizon),
+        "bar_seconds": inferred_bar_seconds,
+        "train_ratio": float(args.train_ratio),
+        "train_samples": len(r_train),
+        "test_samples": len(r_test),
+        "MZ_a": a,
+        "MZ_b": b,
+        "MZ_R2": r2_mz,
+        "MZ_F_pval": pval_joint,
+        "QLIKE": qlike,
+        "mean_pred/mean_rv": ratio_pred_to_rv,
+        "valid": is_valid,
+    }])
+    xlsx_path = out_dir / "garch_params.xlsx"
+    param_export.to_excel(xlsx_path, index=False, engine="openpyxl")
+    print(f"参数已保存：{xlsx_path}")
+
+    print("9) 显示全部图窗 ...")
     plt.show()
         
 if __name__ == "__main__":

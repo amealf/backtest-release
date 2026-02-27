@@ -38,7 +38,7 @@ DATA_FILE_NAME = "xagusd_30s_all"
 
 # 回测区间
 START_INDEX = 35001
-END_INDEX = 40000  # 或 'lastest'
+END_INDEX = 40000  # 或 'latest'
 ONLY_CLOSE = False
 
 # 参数循环
@@ -118,6 +118,36 @@ def get_increase(df):
             high = row['high']
         increase = high - low
     return increase
+
+
+def get_increase_with_base(df):
+    """
+    返回涨幅及其对应的真实基准 low。
+    注意：基准 low 可能不是窗口第一根 bar 的 low。
+    """
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan, np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan, np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan, np.nan
+    if df.iloc[0]['open'] >= df.iloc[0]['close']:
+        low = df.iloc[0]['low']
+        high = df.iloc[0]['high']
+    else:
+        low = df.iloc[0]['low']
+        high = df.iloc[0]['close']
+    increase = 0
+    for index, row in df.iterrows():
+        if row['low'] <= low:
+            high = row['close']
+            low = row['low']
+        elif row['high'] > high:
+            high = row['high']
+        increase = high - low
+    return increase, low
 
 
 def get_analysis_increase(df):
@@ -696,8 +726,7 @@ class LongNoWDStrategy(BaseStrategy):
         # 空仓时每根bar直接开仓（当根开盘价）
         if open_bar > 1 and ii + 1 >= open_bar:
             open_slice = quote.iloc[ii + 1 - open_bar:ii + 1]
-            open_increase = get_increase(open_slice)
-            inc_base = open_slice['low'].iloc[0]
+            open_increase, inc_base = get_increase_with_base(open_slice)
             t_inc_per = (open_increase / inc_base * 100) if inc_base != 0 else 0.0
             signal.at[index, 'total_inc'] = open_increase
             signal.at[index, 't_inc_per'] = round(t_inc_per, 4)
@@ -864,9 +893,8 @@ class LongNoWDStrategy(BaseStrategy):
 
         max_slice = quote.iloc[low_index:high_index + 1]
         max_wd = get_max_wd(max_slice)
-        max_inc = get_increase(max_slice)
-        inc_base = max_slice['low'].iloc[0]
-        max_inc_percent = max_inc / inc_base
+        max_inc, inc_base = get_increase_with_base(max_slice)
+        max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
         signal.at[index, 'max_inc'] = max_inc_percent * 100
         signal.at[index, 'max_wd'] = max_wd * 100
         signal.at[index, 'high_index'] = high_index
@@ -894,9 +922,8 @@ class LongNoWDStrategy(BaseStrategy):
                 break
         max_slice = quote.iloc[self.low_index:high_index + 1]
         max_wd = get_max_wd(max_slice)
-        max_inc = get_increase(max_slice)
-        inc_base = max_slice['low'].iloc[0]
-        max_inc_percent = max_inc / inc_base
+        max_inc, inc_base = get_increase_with_base(max_slice)
+        max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
         signal.at[index, 'max_inc'] = max_inc_percent * 100
         signal.at[index, 'max_wd'] = max_wd * 100
         signal.at[index, 'high_index'] = high_index
@@ -939,7 +966,7 @@ if __name__ == '__main__':
     enddate = END_INDEX
 
     preview_df = df[df.index > startdate]
-    if enddate != 'lastest':
+    if enddate != 'latest':
         preview_df = preview_df[preview_df.index < enddate]
     if len(preview_df) == 0:
         raise ValueError(
@@ -949,7 +976,7 @@ if __name__ == '__main__':
     print(f'[Main] backtest time range: {preview_df.iloc[0]["Date"]} -> {preview_df.iloc[-1]["Date"]}')
 
     df5 = df[df.index > startdate]
-    if enddate != 'lastest':
+    if enddate != 'latest':
         df5 = df5[df5.index < enddate].reset_index(drop=True)
     underlying = df5.copy()
 
