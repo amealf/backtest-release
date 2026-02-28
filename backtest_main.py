@@ -402,7 +402,8 @@ class BacktestEngine:
 # ============================================================
 
 def plot_backtest_chart(underlying, transactions_df, perf_outcome,
-                        title, save_path, close_fig=True):
+                        title, save_path, close_fig=True,
+                        direction='long'):
     """
     通用回测结果图：K 线 + 买卖标记 + 资金曲线叠加。
 
@@ -420,11 +421,16 @@ def plot_backtest_chart(underlying, transactions_df, perf_outcome,
         PDF 保存路径。
     close_fig : bool
         是否在保存后关闭图表，默认 True。
+    direction : str
+        'long' 或 'short'，决定开仓/平仓类型名称。
 
     Returns
     -------
     fig, ax : matplotlib Figure 和 Axes 对象。
     """
+    open_type = direction                          # 'long' or 'short'
+    close_type = 'sell' if direction == 'long' else 'buy'
+
     fig = plt.figure(figsize=(19, 9.8))
     rect_line = [0.043, 0.055, 0.943, 0.9]
     ax = fig.add_axes(rect_line)
@@ -441,12 +447,12 @@ def plot_backtest_chart(underlying, transactions_df, perf_outcome,
     # 资金锚点
     cap_series = pd.to_numeric(perf_outcome['capital'], errors='coerce')
     tr = transactions_df[
-        transactions_df['Type'].isin(['long', 'sell'])].copy()
+        transactions_df['Type'].isin([open_type, close_type])].copy()
     tr = tr.sort_index()
     tr['Capital'] = pd.to_numeric(tr.get('Capital'), errors='coerce')
     cap_at_bar = cap_series.reindex(tr.index)
     tr['cap_point'] = np.where(
-        tr['Type'].eq('sell') & tr['Capital'].notna(),
+        tr['Type'].eq(close_type) & tr['Capital'].notna(),
         tr['Capital'], cap_at_bar)
     cap0 = float(cap_series.iloc[0]) if len(cap_series) else np.nan
     tr['cap_point'] = tr['cap_point'].ffill().fillna(cap0)
@@ -466,25 +472,25 @@ def plot_backtest_chart(underlying, transactions_df, perf_outcome,
                       colordown='#2ca02c')
 
     # 买卖标记
-    long_record = transactions_df[transactions_df.Type == 'long']
-    if len(long_record) != 0:
-        for idx, row in long_record.iterrows():
+    open_record = transactions_df[transactions_df.Type == open_type]
+    if len(open_record) != 0:
+        for idx, row in open_record.iterrows():
             plt.scatter(idx, row['Price'] / factor * 100, c='red', s=10)
-    sell_record = transactions_df[transactions_df.Type == 'sell']
-    if len(sell_record) != 0:
-        for idx, row in sell_record.iterrows():
+    close_record = transactions_df[transactions_df.Type == close_type]
+    if len(close_record) != 0:
+        for idx, row in close_record.iterrows():
             plt.scatter(idx, row['Price'] / factor * 100, c='green', s=10)
 
     # 蓝线连接买卖点
     buy_idx = None
     buy_y = None
     trade_seq = transactions_df[
-        transactions_df.Type.isin(['long', 'sell'])].sort_index()
+        transactions_df.Type.isin([open_type, close_type])].sort_index()
     for idx, row in trade_seq.iterrows():
-        if row['Type'] == 'long':
+        if row['Type'] == open_type:
             buy_idx = idx
             buy_y = row['Price'] / factor * 100
-        elif row['Type'] == 'sell' and buy_idx is not None:
+        elif row['Type'] == close_type and buy_idx is not None:
             sell_idx = idx
             sell_y = row['Price'] / factor * 100
             ax.plot([buy_idx, sell_idx], [buy_y, sell_y],
@@ -514,7 +520,9 @@ def plot_backtest_chart(underlying, transactions_df, perf_outcome,
 # Performance Calculator
 # ============================================================
 
-def generate_performance(quote, signal, capital, commision_percent):
+def generate_performance(quote, signal, capital, commision_percent,
+                         direction='long'):
+    """direction: 'long' or 'short'"""
     starting_capital = capital
     signal['capital'] = 0.0
     transactions_df = pd.DataFrame(columns=[
@@ -522,29 +530,37 @@ def generate_performance(quote, signal, capital, commision_percent):
         'Close_type', 'Capital', 'Percent'])
     state = None
     cost = None
+    open_type = direction                          # 'long' or 'short'
+    close_type = 'sell' if direction == 'long' else 'buy'
     for index, row in signal.iterrows():
         if row['signal'] == 0.0:
             if state is None:
                 signal.at[index, 'capital'] = starting_capital
-            elif state == 'long':
-                percent = row['execution'] / cost
+            elif state == open_type:
+                if direction == 'long':
+                    percent = row['execution'] / cost
+                else:
+                    percent = cost / row['execution']
                 starting_capital = starting_capital * percent
                 signal.at[index, 'capital'] = starting_capital
                 state = None
                 transactions_df.loc[index] = [
-                    row['date'], 'sell',
+                    row['date'], close_type,
                     row['execution'], row['type'],
                     starting_capital, percent]
         elif row['signal'] == 1.0:
             starting_capital = starting_capital * (1 - commision_percent)
             signal.at[index, 'capital'] = starting_capital
             cost = row['execution']
-            state = 'long'
+            state = open_type
             transactions_df.loc[index] = [
                 row['date'], state, cost, "", "", ""]
         elif row['signal'] == 3.0:
-            if state == 'long':
-                percent = quote.close[index] / cost
+            if state == open_type:
+                if direction == 'long':
+                    percent = quote.close[index] / cost
+                else:
+                    percent = cost / quote.close[index]
                 temp = starting_capital * percent
                 signal.at[index, 'capital'] = temp
     return signal, transactions_df
