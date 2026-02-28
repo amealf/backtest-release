@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Long Momentum Strategy - 动量做多策略
 =====================================
@@ -69,6 +69,11 @@ HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
 HTML_SHOW_TRADE_COUNT_BADGE = True
 # 图片保存格式开关：True 保存为 PDF；False 保存为 PNG（默认关闭 PDF）
 SAVE_PLOT_AS_PDF = False
+
+# 观察模式: 回测结束后打开 perf.xlsx, 输入买点 index 查看附近行情
+OBSERVE_MODE = False
+OBSERVE_MODE = True
+OBSERVE_PADDING = 100  # 买点前 / 卖点后显示的 bar 数
 
 
 def minutes_to_bars(minutes: float, bar_seconds: int, name: str) -> int:
@@ -535,6 +540,307 @@ def export_interactive_html_long(
         f.write(html_text)
     print('\n')
     print(f'[HTML] saved interactive chart: {html_path}')
+
+
+def launch_observe_mode(perf_xlsx_path, underlying, transactions_df,
+                       detail_df, factor, padding,
+                       file_name, save_name):
+    """观察模式: 打开 perf.xlsx, 循环接收 index 并生成局部行情 HTML."""
+    if go is None:
+        print('[Observe] plotly is not installed, cannot launch observe mode.')
+        return
+
+    # 打开 perf.xlsx
+    perf_abs = os.path.abspath(perf_xlsx_path)
+    try:
+        os.startfile(perf_abs)
+        print(f'[Observe] opened: {perf_abs}')
+    except Exception as e:
+        print(f'[Observe] failed to open perf.xlsx: {e}')
+
+    # 构建买卖点映射: buy_index -> sell_index
+    trade_seq = transactions_df[
+        transactions_df['Type'].isin(['long', 'sell'])].copy().sort_index()
+    buy_sell_pairs = {}  # {buy_index: sell_index}
+    pending_buy = None
+    for idx, row in trade_seq.iterrows():
+        if row['Type'] == 'long':
+            pending_buy = idx
+        elif row['Type'] == 'sell' and pending_buy is not None:
+            buy_sell_pairs[pending_buy] = idx
+            pending_buy = None
+
+    all_buy_indices = sorted(buy_sell_pairs.keys())
+    n_bars = len(underlying)
+
+    print(f'[Observe] {len(all_buy_indices)} trades available.')
+    print('[Observe] Enter buy-point index (column A in perf.xlsx) to view,')
+    print('          or "q" to quit.')
+
+    while True:
+        raw = input('\n[Observe] index> ').strip()
+        if raw.lower() == 'q':
+            print('[Observe] exiting observe mode.')
+            break
+        try:
+            obs_idx = int(raw)
+        except ValueError:
+            print(f'[Observe] invalid input: "{raw}". Enter an integer or "q".')
+            continue
+
+        if obs_idx not in buy_sell_pairs:
+            # 找最近的买点提示
+            if len(all_buy_indices) == 0:
+                print('[Observe] no trades in this backtest.')
+                continue
+            closest = min(all_buy_indices, key=lambda x: abs(x - obs_idx))
+            print(f'[Observe] index {obs_idx} is not a buy point. '
+                  f'Nearest buy index: {closest}')
+            continue
+
+        buy_idx = obs_idx
+        sell_idx = buy_sell_pairs[buy_idx]
+        view_start = max(0, buy_idx - padding)
+        view_end = min(n_bars - 1, sell_idx + padding)
+
+        # 切片数据
+        obs_underlying = underlying.iloc[view_start:view_end + 1]
+        obs_x = obs_underlying.index.to_numpy()
+
+        fig_obs = go.Figure()
+
+        # K线
+        fig_obs.add_trace(go.Candlestick(
+            x=obs_x,
+            open=obs_underlying['open'],
+            high=obs_underlying['high'],
+            low=obs_underlying['low'],
+            close=obs_underlying['close'],
+            name='price',
+            increasing=dict(
+                line=dict(color='salmon', width=0.8),
+                fillcolor='rgba(250, 128, 114, 0.28)'
+            ),
+            decreasing=dict(
+                line=dict(color='#2ca02c', width=0.8),
+                fillcolor='rgba(44, 160, 44, 0.28)'
+            )
+        ))
+
+        # 该范围内的所有买卖点
+        range_trades = transactions_df[
+            (transactions_df.index >= view_start)
+            & (transactions_df.index <= view_end)].copy()
+
+        # 买点
+        range_long = range_trades[range_trades.Type == 'long']
+        if len(range_long) > 0:
+            long_texts = []
+            for tidx, trow in range_long.iterrows():
+                pdata = detail_df.loc[tidx] if tidx in detail_df.index else pd.Series(dtype='object')
+                info = f"index: {tidx}<br>date: {trow['Date']}"
+                for col in ['t_inc_per', 'execution', 'low_date', 'low_price', 'new_opening_count']:
+                    if col in pdata.index and pd.notna(pdata[col]):
+                        info += f'<br>{col}: {pdata[col]}'
+                long_texts.append(info)
+            fig_obs.add_trace(go.Scatter(
+                x=range_long.index,
+                y=range_long['Price'],
+                mode='markers',
+                marker=dict(color='red', size=8, symbol='triangle-up'),
+                name='buy',
+                text=long_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ))
+
+        # 卖点
+        range_sell = range_trades[range_trades.Type == 'sell']
+        if len(range_sell) > 0:
+            # close_type 1 = 回撤平仓
+            ct1 = range_sell[range_sell['Close_type'] == 1]
+            if len(ct1) > 0:
+                sell1_texts = []
+                for tidx, trow in ct1.iterrows():
+                    pdata = detail_df.loc[tidx] if tidx in detail_df.index else pd.Series(dtype='object')
+                    info = f"index: {tidx}<br>date: {trow['Date']}<br>type: withdrawal"
+                    for col in ['hld_wd_per', 'max_inc', 'max_wd', 'period', 'high_price']:
+                        if col in pdata.index and pd.notna(pdata[col]):
+                            info += f'<br>{col}: {pdata[col]}'
+                    sell1_texts.append(info)
+                fig_obs.add_trace(go.Scatter(
+                    x=ct1.index, y=ct1['Price'],
+                    mode='markers',
+                    marker=dict(color=SELL_WD_COLOR, size=8, symbol='triangle-down'),
+                    name='sell_wd',
+                    text=sell1_texts,
+                    hovertemplate='%{text}<extra></extra>'
+                ))
+            # close_type 2 = 速度平仓
+            ct2 = range_sell[range_sell['Close_type'] == 2]
+            if len(ct2) > 0:
+                sell2_texts = []
+                for tidx, trow in ct2.iterrows():
+                    pdata = detail_df.loc[tidx] if tidx in detail_df.index else pd.Series(dtype='object')
+                    info = f"index: {tidx}<br>date: {trow['Date']}<br>type: speed"
+                    for col in ['hld_wd_per', 'max_inc', 'max_wd', 'period', 'high_price']:
+                        if col in pdata.index and pd.notna(pdata[col]):
+                            info += f'<br>{col}: {pdata[col]}'
+                    sell2_texts.append(info)
+                fig_obs.add_trace(go.Scatter(
+                    x=ct2.index, y=ct2['Price'],
+                    mode='markers',
+                    marker=dict(color=SELL_SPEED_COLOR, size=8, symbol='triangle-down'),
+                    name='sell_speed',
+                    text=sell2_texts,
+                    hovertemplate='%{text}<extra></extra>'
+                ))
+
+        # 买卖连线
+        line_x, line_y = [], []
+        for bi, si in buy_sell_pairs.items():
+            if view_start <= bi <= view_end and view_start <= si <= view_end:
+                bp = transactions_df.loc[bi, 'Price']
+                sp = transactions_df.loc[si, 'Price']
+                line_x.extend([bi, si, None])
+                line_y.extend([bp, sp, None])
+        if line_x:
+            fig_obs.add_trace(go.Scatter(
+                x=line_x, y=line_y,
+                mode='lines',
+                line=dict(color=ACCENT_BLUE, width=2),
+                name='trade_link',
+                hoverinfo='skip'
+            ))
+
+        # high_index / low_index / buy / sell 标注
+        obs_annotations = []
+        buy_pdata = detail_df.loc[buy_idx] if buy_idx in detail_df.index else pd.Series(dtype='object')
+        sell_pdata = detail_df.loc[sell_idx] if sell_idx in detail_df.index else pd.Series(dtype='object')
+        _ann_bgcolor = 'rgba(255,255,255,0.35)'
+
+        # low_index (记录在买点行)
+        if 'low_price' in buy_pdata.index and pd.notna(buy_pdata.get('low_price')):
+            low_i = int(buy_pdata['low_index']) if 'low_index' in buy_pdata.index and pd.notna(buy_pdata.get('low_index')) else None
+            if low_i is None and 'low_date' in buy_pdata.index:
+                pass
+            if low_i is not None:
+                low_price = buy_pdata['low_price']
+                obs_annotations.append(dict(
+                    x=low_i, y=float(low_price),
+                    xref='x', yref='y',
+                    text=f'low #{low_i}<br>{low_price}',
+                    showarrow=True, arrowhead=2, arrowwidth=1.2,
+                    arrowcolor='red', ax=-60, ay=60,
+                    font=dict(size=10, color='black'),
+                    bordercolor='black', borderwidth=1,
+                    bgcolor=_ann_bgcolor, borderpad=3,
+                ))
+
+        # high_index (记录在卖点行)
+        if 'high_price' in sell_pdata.index and pd.notna(sell_pdata.get('high_price')):
+            high_i = int(sell_pdata['high_index']) if 'high_index' in sell_pdata.index and pd.notna(sell_pdata.get('high_index')) else None
+            if high_i is not None:
+                high_price = sell_pdata['high_price']
+                obs_annotations.append(dict(
+                    x=high_i, y=float(high_price),
+                    xref='x', yref='y',
+                    text=f'high #{high_i}<br>{high_price}',
+                    showarrow=True, arrowhead=2, arrowwidth=1.2,
+                    arrowcolor='red', ax=60, ay=-60,
+                    font=dict(size=10, color='black'),
+                    bordercolor='black', borderwidth=1,
+                    bgcolor=_ann_bgcolor, borderpad=3,
+                ))
+
+        # buy 买入点标注
+        buy_price_val = transactions_df.loc[buy_idx, 'Price']
+        obs_annotations.append(dict(
+            x=buy_idx, y=float(buy_price_val),
+            xref='x', yref='y',
+            text=f'buy #{buy_idx}<br>{buy_price_val}',
+            showarrow=True, arrowhead=2, arrowwidth=1.2,
+            arrowcolor='red', ax=-60, ay=-50,
+            font=dict(size=10, color='red'),
+            bordercolor='red', borderwidth=1,
+            bgcolor=_ann_bgcolor, borderpad=3,
+        ))
+
+        # sell 卖出点标注
+        sell_price_val = transactions_df.loc[sell_idx, 'Price']
+        sell_ct = transactions_df.loc[sell_idx, 'Close_type'] if 'Close_type' in transactions_df.columns else ''
+        sell_label = 'sell_wd' if sell_ct == 1 else ('sell_spd' if sell_ct == 2 else 'sell')
+        sell_marker_color = SELL_WD_COLOR if sell_ct == 1 else (SELL_SPEED_COLOR if sell_ct == 2 else 'green')
+        obs_annotations.append(dict(
+            x=sell_idx, y=float(sell_price_val),
+            xref='x', yref='y',
+            text=f'{sell_label} #{sell_idx}<br>{sell_price_val}',
+            showarrow=True, arrowhead=2, arrowwidth=1.2,
+            arrowcolor='red', ax=60, ay=50,
+            font=dict(size=10, color=sell_marker_color),
+            bordercolor=sell_marker_color, borderwidth=1,
+            bgcolor=_ann_bgcolor, borderpad=3,
+        ))
+
+        # 布局
+        buy_date = transactions_df.loc[buy_idx, 'Date']
+        sell_date = transactions_df.loc[sell_idx, 'Date']
+        buy_price = transactions_df.loc[buy_idx, 'Price']
+        sell_price = transactions_df.loc[sell_idx, 'Price']
+        pnl = sell_price - buy_price
+        pnl_pct = pnl / buy_price * 100
+        title_text = (f'Observe #{buy_idx}  |  '
+                      f'buy: {buy_date} @ {buy_price}  |  '
+                      f'sell: {sell_date} @ {sell_price}  |  '
+                      f'PnL: {pnl:+.4f} ({pnl_pct:+.2f}%)')
+
+        fig_obs.update_layout(
+            title=dict(text=title_text, font=dict(size=13)),
+            template='plotly_white',
+            autosize=True,
+            hovermode='closest',
+            legend=dict(orientation='h', yanchor='bottom', y=1.01,
+                        xanchor='left', x=0),
+            xaxis=dict(title=None, tickfont=dict(size=10),
+                       showgrid=False,
+                       rangeslider=dict(visible=False)),
+            yaxis=dict(title=None, tickfont=dict(size=10),
+                       showgrid=False),
+            margin=dict(l=50, r=25, t=50, b=45),
+            annotations=obs_annotations,
+            hoverlabel=dict(
+                bgcolor='rgba(255, 255, 255, 0.35)',
+                bordercolor='rgba(0, 0, 0, 0.45)',
+                font=dict(color='black')
+            )
+        )
+
+        # 保存并打开
+        html_dir = f'./result/{file_name} long outcome/html'
+        os.makedirs(html_dir, exist_ok=True)
+        obs_html_path = os.path.join(html_dir,
+                                     f'observe_{buy_idx}.html')
+        html_text = fig_obs.to_html(
+            include_plotlyjs=True, full_html=True,
+            default_width='100vw', default_height='100vh',
+            config={'responsive': True, 'displayModeBar': False,
+                    'displaylogo': False}
+        )
+        html_text = html_text.replace(
+            '<head>',
+            '<head><style>'
+            'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+            '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+            '</style>', 1
+        )
+        html_text = html_text.replace(
+            '<body>', '<body style="margin:0;overflow:hidden;">', 1)
+        with open(obs_html_path, 'w', encoding='utf-8') as f:
+            f.write(html_text)
+        print(f'[Observe] saved: {obs_html_path}')
+        try:
+            os.startfile(os.path.abspath(obs_html_path))
+        except Exception as e:
+            print(f'[Observe] failed to open html: {e}')
 
 
 # ============================================================
@@ -1152,9 +1458,10 @@ if __name__ == '__main__':
                  'holding_wd_signal', 'total_inc_signal',
                  'speed_close_signal', 'have_holding'],
                 axis=1, inplace=True)
-            detail_df.drop(
-                ['var0', 'low_index', 'high_index'],
-                axis=1, inplace=True)
+            drop_cols = ['var0']
+            if not OBSERVE_MODE:
+                drop_cols.extend(['low_index', 'high_index'])
+            detail_df.drop(drop_cols, axis=1, inplace=True)
             if len(detail_df) == 0:
                 detail_df.drop(
                     ['holding_wd', 'holding_inc', 'execution'],
@@ -1567,4 +1874,30 @@ if __name__ == '__main__':
                 transactions_df=transactions_df,
                 factor=factor
             )
-        plt.show()
+
+        if OBSERVE_MODE:
+            plt.close('all')
+            # 自动打开主 HTML
+            html_dir = './result/%s long outcome/html' % file_name
+            main_html = os.path.join(
+                html_dir, save_name + ' Long interactive.html')
+            if os.path.exists(main_html):
+                try:
+                    os.startfile(os.path.abspath(main_html))
+                    print(f'[Observe] opened main chart: {main_html}')
+                except Exception as e:
+                    print(f'[Observe] failed to open main chart: {e}')
+            perf_path = ('./result/%s long outcome/perf/' % file_name
+                         + perf_name)
+            launch_observe_mode(
+                perf_xlsx_path=perf_path,
+                underlying=underlying1,
+                transactions_df=transactions_df,
+                detail_df=detail_df,
+                factor=factor,
+                padding=OBSERVE_PADDING,
+                file_name=file_name,
+                save_name=save_name,
+            )
+        else:
+            plt.show()

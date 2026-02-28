@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 import warnings
 
 import numpy as np
@@ -414,7 +415,7 @@ def mincer_zarnowitz_regression(rv: pd.Series, sigma2_hat: pd.Series):
 # ----------------------------
 def save_fig(fig, out_path: Path, dpi: int = 150, close: bool = True):
     fig.tight_layout()
-    fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
+    # 按需求：不保存图片，仅保留图窗显示
     if close:
         plt.close(fig)
 
@@ -429,6 +430,30 @@ def _build_time_formatter(time_index: pd.DatetimeIndex):
         return pd.Timestamp(time_index[i]).strftime("%m-%d %H:%M")
 
     return FuncFormatter(_fmt)
+
+
+def format_period_label(bar_seconds: float | int | None) -> str:
+    if bar_seconds is None or not np.isfinite(bar_seconds):
+        return "unknown"
+    sec = int(round(float(bar_seconds)))
+    if sec < 60:
+        return f"{sec}s"
+    if sec % 3600 == 0:
+        return f"{sec // 3600}h"
+    if sec % 60 == 0:
+        return f"{sec // 60}m"
+    return f"{sec}s"
+
+
+def infer_symbol_from_csv_path(csv_path: str) -> str:
+    stem_upper = Path(csv_path).stem.upper()
+    m = re.search(r"([A-Z]{6})", stem_upper)
+    if m:
+        return m.group(1)[:3]
+    m = re.search(r"(XAG|XAU|BTC|ETH|EUR|GBP|JPY|AUD|CAD|CHF|NZD)", stem_upper)
+    if m:
+        return m.group(1)[:3]
+    return "UNK"
 
 
 def _insert_gap_nans(df: pd.DataFrame, gap_factor: float = 2.0) -> pd.DataFrame:
@@ -481,7 +506,7 @@ def plot_fig1_overview(
     vol_real_aligned.loc[common_idx] = eval_df.loc[common_idx, "vol_real_1h"].to_numpy()
     x = np.arange(len(ohlc))
     fig, (ax1, ax2, ax3) = plt.subplots(
-        3, 1, figsize=(18, 11), sharex=True,
+        3, 1, figsize=(26, 15), sharex=True,
         gridspec_kw={"height_ratios": [4, 1.6, 1.6]}
     )
     if candlestick2_ohlc is not None:
@@ -541,7 +566,7 @@ def plot_fig2_scatter_mz(
     x = eval_df["sigma2_hat_1h"].values
     y = eval_df["RV_1h"].values
 
-    fig, ax = plt.subplots(figsize=(10.5, 8.5))
+    fig, ax = plt.subplots(figsize=(18, 13))
 
     ax.scatter(x, y, s=18, alpha=0.25, color="tab:blue", edgecolors="none")
 
@@ -586,7 +611,7 @@ def plot_fig3_vol_ts(
     # 插入 NaN 断开停盘缺口的连线
     plot_df = _insert_gap_nans(eval_df[["vol_hat_1h", "vol_real_1h"]])
 
-    fig, ax = plt.subplots(figsize=(18, 6.5))
+    fig, ax = plt.subplots(figsize=(26, 11))
 
     ax.plot(plot_df.index, plot_df["vol_hat_1h"].values, label="预测波动率（蓝）", color="tab:blue")
     ax.plot(plot_df.index, plot_df["vol_real_1h"].values, label="实现波动率（橙）", color="tab:orange")
@@ -613,7 +638,7 @@ def plot_fig4_qq(std_resid: pd.Series, out_path: Path):
     p = (np.arange(1, n + 1) - 0.5) / n
     theo = st.norm.ppf(p)
 
-    fig, ax = plt.subplots(figsize=(8.5, 8.5))
+    fig, ax = plt.subplots(figsize=(16, 13))
     ax.scatter(theo, z_sorted, s=18, alpha=0.35, color="tab:blue", edgecolors="none")
 
     lo = float(min(theo.min(), z_sorted.min()))
@@ -846,7 +871,7 @@ def main():
     print(f"\n评估明细已保存：{eval_csv}")
 
     print("=" * 80)
-    print("6) 生成图表（PNG, dpi=150）")
+    print("6) 生成图表（仅显示，不保存）")
 
     # 图1：上方K线，下方两栏分别显示预测波动/实现波动
     ohlc_all = (
@@ -862,7 +887,7 @@ def main():
         eval_df=eval_df,
         out_path=fig1_path
     )
-    print(f"已保存：{fig1_path}")
+    print("图1已生成（不保存）")
 
     fig2_path = out_dir / "图2_预测vs实现_散点_MZ.png"
     plot_fig2_scatter_mz(
@@ -870,17 +895,17 @@ def main():
         a=a, b=b, r2=r2_mz, pval=pval_joint, qlike=qlike,
         out_path=fig2_path
     )
-    print(f"已保存：{fig2_path}")
+    print("图2已生成（不保存）")
 
     fig3_path = out_dir / "图3_波动率时序对比.png"
     plot_fig3_vol_ts(eval_df=eval_df, out_path=fig3_path)
-    print(f"已保存：{fig3_path}")
+    print("图3已生成（不保存）")
 
     # QQ图：用训练集标准化残差（诊断模型）
     std_resid_train = (resid_train / sigma_train).rename("std_resid")
     fig4_path = out_dir / "图4_标准化残差QQ图.png"
     plot_fig4_qq(std_resid=std_resid_train, out_path=fig4_path)
-    print(f"已保存：{fig4_path}")
+    print("图4已生成（不保存）")
 
     print("=" * 80)
     print("全部完成。输出目录：", out_dir.resolve())
@@ -938,26 +963,19 @@ def main():
     print("="* 80)
     print("8) 导出 GARCH 参数到 xlsx")
     param_export = pd.DataFrame([{
+        "csv_path": str(args.csv),
+        "train_ratio": float(args.train_ratio),
+        "horizon": int(args.horizon),
+        "scale": float(args.scale),
         "mu": mu,
         "omega": omega,
         "alpha": alpha,
         "beta": beta,
-        "alpha+beta": g,
-        "scale": float(args.scale),
-        "horizon": int(args.horizon),
-        "bar_seconds": inferred_bar_seconds,
-        "train_ratio": float(args.train_ratio),
-        "train_samples": len(r_train),
-        "test_samples": len(r_test),
-        "MZ_a": a,
-        "MZ_b": b,
-        "MZ_R2": r2_mz,
-        "MZ_F_pval": pval_joint,
-        "QLIKE": qlike,
-        "mean_pred/mean_rv": ratio_pred_to_rv,
-        "valid": is_valid,
+        "alpha_plus_beta": g,
     }])
-    xlsx_path = out_dir / "garch_params.xlsx"
+    symbol = infer_symbol_from_csv_path(str(args.csv))
+    period_label = format_period_label(inferred_bar_seconds)
+    xlsx_path = out_dir / f"garch_params_{symbol}_{period_label}.xlsx"
     param_export.to_excel(xlsx_path, index=False, engine="openpyxl")
     print(f"参数已保存：{xlsx_path}")
 
