@@ -19,7 +19,7 @@ except ImportError:
 from backtest_main import (
     BacktestEngine, BaseStrategy,
     BarContext, OpenResult, CloseResult,
-    load_data,
+    generate_performance, load_data,
     plot_backtest_chart,
 )
 start_time = time.time()
@@ -533,11 +533,13 @@ def export_interactive_html_short(
 # ============================================================
 # Momentum Strategy
 # ============================================================
+
 class ReverseMomentumStrategy(BaseStrategy):
     """
     动量策略实现。
     从原 generate_signals 中的策略逻辑提取而来。
     """
+
     def __init__(self, params: dict):
         super().__init__(params)
         # 策略内部状态
@@ -554,6 +556,7 @@ class ReverseMomentumStrategy(BaseStrategy):
         self.decrease_start_index = 0
         self.holding_decrease_percent = np.nan
         self.HIGH_MATCH_EPS = 1e-10
+
     def get_extra_columns(self) -> list:
         return [
             'rebound', 'rb_per', 'rb_signal',
@@ -569,6 +572,7 @@ class ReverseMomentumStrategy(BaseStrategy):
             'high_date', 'high_price',
             'last_index', 'new_opening_count',
         ]
+
     def get_default_columns(self) -> dict:
         return {
             'rb_signal': 0.0,
@@ -577,10 +581,12 @@ class ReverseMomentumStrategy(BaseStrategy):
             'holding_rb_signal': 0.0,
             'speed_close_signal': 0.0,
         }
+
     def on_bar_record(self, ctx: BarContext):
         """每根K线记录策略状态到signal"""
         ctx.signal.at[ctx.index, 'last_index'] = self.last_index
         ctx.signal.at[ctx.index, 'new_opening_count'] = self.new_opening_count
+
     def on_bar_idle(self, ctx: BarContext) -> OpenResult | None:
         quote = ctx.quote
         signal = ctx.signal
@@ -922,46 +928,6 @@ class ReverseMomentumStrategy(BaseStrategy):
         signal.at[index, 'period'] = self.new_opening_count
         signal.at[index, 'type'] = stat_type
 
-
-
-# ============================================================
-# Performance Calculator (Short)
-# ============================================================
-
-def generate_performance_short(quote, signal, capital, commision_percent):
-    starting_capital = capital
-    signal['capital'] = 0.0
-    transactions_df = pd.DataFrame(columns=[
-        'Date', 'Type', 'Price',
-        'Close_type', 'Capital', 'Percent'])
-    state = None
-    cost = None
-    for index, row in signal.iterrows():
-        if row['signal'] == 0.0:
-            if state is None:
-                signal.at[index, 'capital'] = starting_capital
-            elif state == 'short':
-                percent = cost / row['execution']
-                starting_capital = starting_capital * percent
-                signal.at[index, 'capital'] = starting_capital
-                state = None
-                transactions_df.loc[index] = [
-                    row['date'], 'buy',
-                    row['execution'], row['type'],
-                    starting_capital, percent]
-        elif row['signal'] == 1.0:
-            starting_capital = starting_capital * (1 - commision_percent)
-            signal.at[index, 'capital'] = starting_capital
-            cost = row['execution']
-            state = 'short'
-            transactions_df.loc[index] = [
-                row['date'], state, cost, "", "", ""]
-        elif row['signal'] == 3.0:
-            if state == 'short':
-                percent = cost / quote.close[index]
-                temp = starting_capital * percent
-                signal.at[index, 'capital'] = temp
-    return signal, transactions_df
 # ============================================================
 # Main Script
 # ============================================================
@@ -1091,8 +1057,9 @@ if __name__ == '__main__':
             withdrawal_close_count = close_counts.get(1, 0)
             speed_close_count = close_counts.get(2, 0)
 
-            performance, transactions_df = generate_performance_short(
-                underlying, df_signal, capital, commision_percent)
+            performance, transactions_df = generate_performance(
+                underlying, df_signal, capital, commision_percent,
+                direction='short')
 
             if len(transactions_df) > 1:
                 Capital_outcome = round(
@@ -1141,13 +1108,12 @@ if __name__ == '__main__':
                              + ' ' + str(Capital_outcome)
                              + save_name + f' Short.{plot_ext}')
                 close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
-                transactions_plot_df = transactions_df.copy()
-                transactions_plot_df['Type'] = transactions_plot_df['Type'].replace({'short': 'long', 'buy': 'sell'})
                 plot_backtest_chart(
-                    underlying, transactions_plot_df, perf_outcome,
+                    underlying, transactions_df, perf_outcome,
                     title=fig1_title,
                     save_path=fig1_path,
-                    close_fig=close_fig)
+                    close_fig=close_fig,
+                    direction='short')
 
             # ====== Perf & Excel ======
             detail_df = pd.concat([signal, df5], axis=1, join='inner')
@@ -1521,17 +1487,6 @@ if __name__ == '__main__':
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
         plt.xticks(rotation=0)
-        plt.title('%s' % (' ' + str(round(Capital_outcome, 2))
-                          + ' om' + str(round(open_bar, 4))
-                          + ' o' + str(round(open_threshold, 4))
-                          + ' oc' + str(round(open_continous_threshold, 4))
-                          + ' cm' + str(round(close_bar, 4))
-                          + ' c' + str(round(close_threshold, 4))
-                          + ' ow' + str(round(open_withdrawal_threshold, 4))
-                          + ' cw' + str(round(close_withdrawal_threshold, 4))
-                          + ' ' + str(round(withdrawal_close_count, 4))
-                          + '+' + str(round(speed_close_count, 4))
-                          + ' ' + str(startdate) + '-' + str(enddate)))
         fig2_title = (' ' + str(round(Capital_outcome, 2))
                       + ' om' + str(round(open_bar, 4))
                       + ' o' + str(round(open_threshold, 4))
@@ -1543,12 +1498,13 @@ if __name__ == '__main__':
                       + ' ' + str(round(withdrawal_close_count, 4))
                       + '+' + str(round(speed_close_count, 4))
                       + ' ' + str(startdate) + '-' + str(enddate))
+        plt.title('%s' % fig2_title)
 
         xaxis1 = detail_df.index
         yaxis1 = detail_df.capital
         xaxis2 = x.index
         yaxis2 = x
-        plt.plot(xaxis1, yaxis1, linewidth=1.2)
+        plt.plot(xaxis1, yaxis1, linewidth=1.2, color=ACCENT_BLUE)
         candlestick2_ohlc(ax2, underlying_ratio.open, underlying_ratio.high,
                           underlying_ratio.low, underlying_ratio.close,
                           width=0.7,
@@ -1570,7 +1526,7 @@ if __name__ == '__main__':
                 sell_y = row['target']
                 ax2.plot(
                     [buy_idx, sell_idx], [buy_y, sell_y],
-                    color='tab:blue', linewidth=2.0, alpha=0.8, zorder=1)
+                    color=ACCENT_BLUE, linewidth=2.0, alpha=0.8, zorder=1)
                 buy_idx = None
                 buy_y = None
         ax2.xaxis.set_major_locator(plt.MaxNLocator(12))
@@ -1585,6 +1541,4 @@ if __name__ == '__main__':
                 factor=factor
             )
         plt.show()
-
-
 

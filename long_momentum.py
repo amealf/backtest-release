@@ -44,9 +44,9 @@ STEP2 = 0.001
 STEP3 = 0.01
 
 # 策略参数（分钟输入，自动换算 bars）
-OPEN_BAR_MINUTES = 40.0
-OPEN_THRESHOLD = 0.0017
-OPEN_WITHDRAWAL_THRESHOLD = 0.0009
+OPEN_BAR_MINUTES = 50.0
+OPEN_THRESHOLD = 0.0020
+OPEN_WITHDRAWAL_THRESHOLD = 0.0013
 CLOSE_BAR_MINUTES = OPEN_BAR_MINUTES
 CLOSE_THRESHOLD = 0.001
 OPEN_CONTINOUS_THRESHOLD = OPEN_THRESHOLD
@@ -67,7 +67,9 @@ SELL_SPEED_COLOR = 'black'
 HTML_CROSSHAIR_ENABLED = False
 HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
 HTML_SHOW_TRADE_COUNT_BADGE = True
-# 图片保存格式开关：True 保存为 PDF；False 保存为 PNG（默认关闭 PDF）
+# 静态图保存开关：默认不保存 PDF/PNG（保留 HTML 导出）
+SAVE_STATIC_PLOT = False
+# 当 SAVE_STATIC_PLOT=True 时决定保存为 PDF 或 PNG
 SAVE_PLOT_AS_PDF = False
 
 
@@ -1132,16 +1134,17 @@ if __name__ == '__main__':
                          + '+' + str(round(speed_close_count, 4)))
 
             fig1_title = str(Capital_outcome) + ' ' + save_name
-            plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-            fig1_path = ('./result/%s long outcome/' % file_name
-                         + ' ' + str(Capital_outcome)
-                         + save_name + f' Long.{plot_ext}')
-            close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
-            plot_backtest_chart(
-                underlying, transactions_df, perf_outcome,
-                title=fig1_title,
-                save_path=fig1_path,
-                close_fig=close_fig)
+            if SAVE_STATIC_PLOT:
+                plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                fig1_path = ('./result/%s long outcome/' % file_name
+                             + ' ' + str(Capital_outcome)
+                             + save_name + f' Long.{plot_ext}')
+                close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
+                plot_backtest_chart(
+                    underlying, transactions_df, perf_outcome,
+                    title=fig1_title,
+                    save_path=fig1_path,
+                    close_fig=close_fig)
 
             # ====== Perf & Excel ======
             detail_df = pd.concat([signal, df5], axis=1, join='inner')

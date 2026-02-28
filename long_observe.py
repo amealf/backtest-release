@@ -44,9 +44,9 @@ STEP2 = 0.001
 STEP3 = 0.01
 
 # 策略参数（分钟输入，自动换算 bars）
-OPEN_BAR_MINUTES = 40.0
-OPEN_THRESHOLD = 0.0017
-OPEN_WITHDRAWAL_THRESHOLD = 0.0009
+OPEN_BAR_MINUTES = 50.0
+OPEN_THRESHOLD = 0.0020
+OPEN_WITHDRAWAL_THRESHOLD = 0.0013
 CLOSE_BAR_MINUTES = OPEN_BAR_MINUTES
 CLOSE_THRESHOLD = 0.001
 OPEN_CONTINOUS_THRESHOLD = OPEN_THRESHOLD
@@ -67,7 +67,9 @@ SELL_SPEED_COLOR = 'black'
 HTML_CROSSHAIR_ENABLED = False
 HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
 HTML_SHOW_TRADE_COUNT_BADGE = True
-# 图片保存格式开关：True 保存为 PDF；False 保存为 PNG（默认关闭 PDF）
+# 静态图保存开关：默认不保存 PDF/PNG（保留 HTML 导出）
+SAVE_STATIC_PLOT = False
+# 当 SAVE_STATIC_PLOT=True 时决定保存为 PDF 或 PNG
 SAVE_PLOT_AS_PDF = False
 
 # 观察模式: 回测结束后打开 perf.xlsx, 输入买点 index 查看附近行情
@@ -758,8 +760,7 @@ def launch_observe_mode(perf_xlsx_path, underlying, transactions_df,
             x=buy_idx, y=float(buy_price_val),
             xref='x', yref='y',
             text=f'buy #{buy_idx}<br>{buy_price_val}',
-            showarrow=True, arrowhead=2, arrowwidth=1.2,
-            arrowcolor='red', ax=-60, ay=-50,
+            showarrow=False,
             font=dict(size=10, color='red'),
             bordercolor='red', borderwidth=1,
             bgcolor=_ann_bgcolor, borderpad=3,
@@ -774,8 +775,7 @@ def launch_observe_mode(perf_xlsx_path, underlying, transactions_df,
             x=sell_idx, y=float(sell_price_val),
             xref='x', yref='y',
             text=f'{sell_label} #{sell_idx}<br>{sell_price_val}',
-            showarrow=True, arrowhead=2, arrowwidth=1.2,
-            arrowcolor='red', ax=60, ay=50,
+            showarrow=False,
             font=dict(size=10, color=sell_marker_color),
             bordercolor=sell_marker_color, borderwidth=1,
             bgcolor=_ann_bgcolor, borderpad=3,
@@ -815,7 +815,7 @@ def launch_observe_mode(perf_xlsx_path, underlying, transactions_df,
         )
 
         # 保存并打开
-        html_dir = f'./result/{file_name} long outcome/html'
+        html_dir = f'./result/{file_name} long outcome/observe'
         os.makedirs(html_dir, exist_ok=True)
         obs_html_path = os.path.join(html_dir,
                                      f'observe_{buy_idx}.html')
@@ -1438,16 +1438,17 @@ if __name__ == '__main__':
                          + '+' + str(round(speed_close_count, 4)))
 
             fig1_title = str(Capital_outcome) + ' ' + save_name
-            plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-            fig1_path = ('./result/%s long outcome/' % file_name
-                         + ' ' + str(Capital_outcome)
-                         + save_name + f' Long.{plot_ext}')
-            close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
-            plot_backtest_chart(
-                underlying, transactions_df, perf_outcome,
-                title=fig1_title,
-                save_path=fig1_path,
-                close_fig=close_fig)
+            if SAVE_STATIC_PLOT:
+                plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                fig1_path = ('./result/%s long outcome/' % file_name
+                             + ' ' + str(Capital_outcome)
+                             + save_name + f' Long.{plot_ext}')
+                close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
+                plot_backtest_chart(
+                    underlying, transactions_df, perf_outcome,
+                    title=fig1_title,
+                    save_path=fig1_path,
+                    close_fig=close_fig)
 
             # ====== Perf & Excel ======
             detail_df = pd.concat([signal, df5], axis=1, join='inner')
