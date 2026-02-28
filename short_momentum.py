@@ -664,12 +664,12 @@ class ReverseMomentumStrategy(BaseStrategy):
                         self.low_index:ii + 1 - open_bar]
                     analysis_decrease = (ana_dec_slice_2.low.min()
                                          - ana_dec_slice_1.low.min())
-                    dec_base = ana_dec_slice_1['high'].iloc[0]
+                    ana_dec_base = ana_dec_slice_1['high'].iloc[0]
                     analysis_decrease_percent = (
-                        analysis_decrease / dec_base if dec_base != 0 else 0)
+                        analysis_decrease / ana_dec_base if ana_dec_base != 0 else 0)
                     signal.at[index, 'ana_dec'] = analysis_decrease
-                    signal.at[index, 'a_dec_per'] = (
-                        analysis_decrease_percent * 100)
+                    signal.at[index, 'a_dec_per'] = round(
+                        analysis_decrease_percent * 100, 4)
                     if analysis_decrease_percent < close_threshold:
                         self.var0 = 4
                 total_decrease_percent = (
@@ -882,8 +882,8 @@ class ReverseMomentumStrategy(BaseStrategy):
         max_rb = get_max_rebound(max_slice)
         max_dec, dec_base = get_decrease_with_base(max_slice)
         max_dec_percent = max_dec / dec_base if dec_base != 0 else 0
-        signal.at[index, 'max_dec'] = max_dec_percent * 100
-        signal.at[index, 'max_rb'] = max_rb * 100
+        signal.at[index, 'max_dec'] = round(max_dec_percent * 100, 4)
+        signal.at[index, 'max_rb'] = round(max_rb * 100, 4)
         signal.at[index, 'high_index'] = high_index
         signal.at[index, 'high_date'] = str(
             signal.at[high_index, 'date']).removesuffix('.0')
@@ -911,8 +911,8 @@ class ReverseMomentumStrategy(BaseStrategy):
         max_rb = get_max_rebound(max_slice)
         max_dec, dec_base = get_decrease_with_base(max_slice)
         max_dec_percent = max_dec / dec_base if dec_base != 0 else 0
-        signal.at[index, 'max_dec'] = max_dec_percent * 100
-        signal.at[index, 'max_rb'] = max_rb * 100
+        signal.at[index, 'max_dec'] = round(max_dec_percent * 100, 4)
+        signal.at[index, 'max_rb'] = round(max_rb * 100, 4)
         signal.at[index, 'high_index'] = high_index
         signal.at[index, 'high_date'] = str(
             signal.at[high_index, 'date']).removesuffix('.0')

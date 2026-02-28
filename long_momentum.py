@@ -31,7 +31,7 @@ DATA_FOLDER_PATH = r"D:\Code\data\converted_15s\\"
 DATA_FILE_NAME = "HISTDATA_COM_ASCII_XAGUSD_T202512_15s"
 
 # 回测区间
-START_INDEX = 0
+START_INDEX = 2000
 END_INDEX = 5000  # 或 'latest'
 ONLY_CLOSE = False
 
@@ -690,11 +690,11 @@ class MomentumStrategy(BaseStrategy):
                         self.low_index:ii + 1 - open_bar]
                     analysis_increase = (ana_inc_slice_1.high.max()
                                          - ana_inc_slice_2.high.max())
-                    inc_base = ana_inc_slice_1['low'].iloc[0]
-                    analysis_increase_percent = analysis_increase / inc_base
+                    ana_inc_base = ana_inc_slice_1['low'].iloc[0]
+                    analysis_increase_percent = analysis_increase / ana_inc_base if ana_inc_base != 0 else 0
                     signal.at[index, 'ana_inc'] = analysis_increase
-                    signal.at[index, 'a_inc_per'] = (
-                        analysis_increase_percent * 100)
+                    signal.at[index, 'a_inc_per'] = round(
+                        analysis_increase_percent * 100, 4)
                     if analysis_increase_percent < close_threshold:
                         self.var0 = 4
 
@@ -828,7 +828,7 @@ class MomentumStrategy(BaseStrategy):
             holding_increase = (
                 ana_inc_slice_1.high.max() - ana_inc_slice_2.high.max())
             holding_base = analysis_slice['low'].iloc[0]
-            self.holding_increase_percent = holding_increase / holding_base
+            self.holding_increase_percent = holding_increase / holding_base if holding_base != 0 else 0
             signal.at[index, 'holding_inc'] = holding_increase
             if self.holding_increase_percent < close_threshold:
                 signal.at[index, 'speed_close_signal'] = 1
@@ -918,8 +918,8 @@ class MomentumStrategy(BaseStrategy):
         max_wd = get_max_wd(max_slice)
         max_inc, inc_base = get_increase_with_base(max_slice)
         max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
-        signal.at[index, 'max_inc'] = max_inc_percent * 100
-        signal.at[index, 'max_wd'] = max_wd * 100
+        signal.at[index, 'max_inc'] = round(max_inc_percent * 100, 4)
+        signal.at[index, 'max_wd'] = round(max_wd * 100, 4)
         signal.at[index, 'high_index'] = high_index
         signal.at[index, 'high_date'] = str(
             signal.at[high_index, 'date']).removesuffix('.0')
@@ -947,8 +947,8 @@ class MomentumStrategy(BaseStrategy):
         max_wd = get_max_wd(max_slice)
         max_inc, inc_base = get_increase_with_base(max_slice)
         max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
-        signal.at[index, 'max_inc'] = max_inc_percent * 100
-        signal.at[index, 'max_wd'] = max_wd * 100
+        signal.at[index, 'max_inc'] = round(max_inc_percent * 100, 4)
+        signal.at[index, 'max_wd'] = round(max_wd * 100, 4)
         signal.at[index, 'high_index'] = high_index
         signal.at[index, 'high_date'] = str(
             signal.at[high_index, 'date']).removesuffix('.0')

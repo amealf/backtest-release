@@ -895,8 +895,8 @@ class LongNoWDStrategy(BaseStrategy):
         max_wd = get_max_wd(max_slice)
         max_inc, inc_base = get_increase_with_base(max_slice)
         max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
-        signal.at[index, 'max_inc'] = max_inc_percent * 100
-        signal.at[index, 'max_wd'] = max_wd * 100
+        signal.at[index, 'max_inc'] = round(max_inc_percent * 100, 4)
+        signal.at[index, 'max_wd'] = round(max_wd * 100, 4)
         signal.at[index, 'high_index'] = high_index
         signal.at[index, 'high_date'] = str(
             signal.at[high_index, 'date']).removesuffix('.0')
@@ -924,8 +924,8 @@ class LongNoWDStrategy(BaseStrategy):
         max_wd = get_max_wd(max_slice)
         max_inc, inc_base = get_increase_with_base(max_slice)
         max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
-        signal.at[index, 'max_inc'] = max_inc_percent * 100
-        signal.at[index, 'max_wd'] = max_wd * 100
+        signal.at[index, 'max_inc'] = round(max_inc_percent * 100, 4)
+        signal.at[index, 'max_wd'] = round(max_wd * 100, 4)
         signal.at[index, 'high_index'] = high_index
         signal.at[index, 'high_date'] = str(
             signal.at[high_index, 'date']).removesuffix('.0')
