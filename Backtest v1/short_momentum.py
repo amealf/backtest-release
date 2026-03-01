@@ -16,6 +16,8 @@ try:
     import plotly.graph_objects as go
 except ImportError:
     go = None
+import sys, os as _os
+sys.path.insert(0, _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..')))
 from backtest_main import (
     BacktestEngine, BaseStrategy,
     BarContext, OpenResult, CloseResult,

@@ -1,11 +1,10 @@
 ﻿# -*- coding: utf-8 -*-
 """
-Long No-WD Strategy - 无回撤做多策略
+Long Momentum Strategy - 动量做多策略
 =====================================
-策略入口脚本：包含 LongNoWDStrategy 类、参数循环、绘图、Excel 输出。
+策略入口脚本：包含 MomentumStrategy 类、参数循环、绘图、Excel 输出。
 依赖 backtest_main.py 中的通用框架。
 """
-
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
@@ -17,28 +16,25 @@ try:
     import plotly.graph_objects as go
 except ImportError:
     go = None
-
+import sys, os as _os
+sys.path.insert(0, _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..')))
 from backtest_main import (
     BacktestEngine, BaseStrategy,
     BarContext, OpenResult, CloseResult,
     generate_performance, load_data,
     plot_backtest_chart,
 )
-
 start_time = time.time()
-
-
 # ============================================================
 # User Config
 # ============================================================
-
 # 数据
-DATA_FOLDER_PATH = r"F:\Data\XAGUSD\\"
-DATA_FILE_NAME = "xagusd_30s_all"
+DATA_FOLDER_PATH = r"D:\Code\data\converted_15s\\"
+DATA_FILE_NAME = "HISTDATA_COM_ASCII_XAGUSD_T202512_15s"
 
 # 回测区间
-START_INDEX = 35001
-END_INDEX = 40000  # 或 'latest'
+START_INDEX = 2000
+END_INDEX = 5000  # 或 'latest'
 ONLY_CLOSE = False
 
 # 参数循环
@@ -46,31 +42,34 @@ FOR_NUM_1 = 1
 FOR_NUM_2 = 1
 FOR_NUM_3 = 1
 STEP1 = 0.001
+STEP2 = 0.001
 STEP3 = 0.01
 
 # 策略参数（分钟输入，自动换算 bars）
-OPEN_BAR_MINUTES = 10.0
-OPEN_THRESHOLD = 0.0001
-CLOSE_BAR_MINUTES = 10.0
+OPEN_BAR_MINUTES = 50.0
+OPEN_THRESHOLD = 0.0020
+OPEN_WITHDRAWAL_THRESHOLD = 0.0013
+CLOSE_BAR_MINUTES = OPEN_BAR_MINUTES
 CLOSE_THRESHOLD = 0.001
-OPEN_CONTINOUS_THRESHOLD = 0.0013
+OPEN_CONTINOUS_THRESHOLD = OPEN_THRESHOLD
+CLOSE_WITHDRAWAL_THRESHOLD = OPEN_WITHDRAWAL_THRESHOLD
 
 # 双策略参数（保留）
 OPEN_BAR2_MINUTES = np.nan  # np.nan 表示不启用
 OPEN_THRESHOLD2 = np.nan
 OPEN_CONTINOUS_THRESHOLD2 = 0.003
+CLOSE_WITHDRAWAL_THRESHOLD2 = 0.003
 
 COMMISION_PERCENT = 0.000
 CAPITAL = 100.0
-# 仅用于柱图可视化：把 segment_withdrawal=0 的柱子显示为最小高度（不改原始数据）
-ZERO_BAR_VISUAL_FLOOR_PCT = 0.0001
 EXPORT_INTERACTIVE_HTML = True
 ACCENT_BLUE = '#1F77B4'
 SELL_WD_COLOR = 'green'
 SELL_SPEED_COLOR = 'black'
 HTML_CROSSHAIR_ENABLED = False
 HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
-HTML_SHOW_TRADE_COUNT_BADGE = False
+HTML_SHOW_TRADE_COUNT_BADGE = True
+# 静态图保存开关：默认不保存 PDF/PNG（保留 HTML 导出）
 SAVE_STATIC_PLOT = False
 # 当 SAVE_STATIC_PLOT=True 时决定保存为 PDF 或 PNG
 SAVE_PLOT_AS_PDF = False
@@ -167,7 +166,9 @@ def get_analysis_increase(df):
     return analysis_increase
 
 
-def get_withdrawal(df):
+def get_withdrawal(df, close_withdrawal_threshold0,
+                   index0, assumebarwithdrawal=True,
+                   switch0=False):
     if df.empty:
         print('received empty dataframe at get_increase function.')
         return np.nan
@@ -248,137 +249,7 @@ def get_outcome_withdrawal(sers):
     return with_high, withdrawal
 
 
-# 每笔交易统计：最大收益、最大收益前最大亏损
-def build_trade_extreme_stats_long(quote: pd.DataFrame,
-                                   transactions_df: pd.DataFrame) -> pd.DataFrame:
-    records = []
-    tr = transactions_df[transactions_df['Type'].isin(['long', 'sell'])].sort_index()
-    current_entry = None
-
-    for idx, row in tr.iterrows():
-        if row['Type'] == 'long':
-            current_entry = (int(idx), row)
-            continue
-
-        if row['Type'] == 'sell' and current_entry is not None:
-            entry_idx, entry_row = current_entry
-            exit_idx = int(idx)
-            if exit_idx < entry_idx:
-                current_entry = None
-                continue
-
-            entry_price = float(entry_row['Price'])
-            exit_price = float(row['Price'])
-            trade_slice = quote.iloc[entry_idx:exit_idx + 1].copy()
-            if len(trade_slice) == 0:
-                current_entry = None
-                continue
-
-            max_profit_bar_idx = int(trade_slice['high'].idxmax())
-            max_profit_price = float(quote.loc[max_profit_bar_idx, 'high'])
-            max_profit_pct = (max_profit_price / entry_price - 1.0) * 100.0
-
-            pre_slice = quote.iloc[entry_idx:max_profit_bar_idx + 1].copy()
-            max_loss_bar_idx = int(pre_slice['low'].idxmin())
-            max_loss_price = float(quote.loc[max_loss_bar_idx, 'low'])
-            max_loss_before_max_profit_pct = (max_loss_price / entry_price - 1.0) * 100.0
-
-            realized_pct = (exit_price / entry_price - 1.0) * 100.0
-            holding_bars = exit_idx - entry_idx + 1
-
-            records.append({
-                'entry_index': entry_idx,
-                'entry_date': quote.loc[entry_idx, 'Date'],
-                'entry_price': entry_price,
-                'exit_index': exit_idx,
-                'exit_date': quote.loc[exit_idx, 'Date'],
-                'exit_price': exit_price,
-                'holding_bars': holding_bars,
-                'realized_pct': realized_pct,
-                'max_profit_pct': max_profit_pct,
-                'max_profit_index': max_profit_bar_idx,
-                'max_profit_date': quote.loc[max_profit_bar_idx, 'Date'],
-                'max_profit_price': max_profit_price,
-                'max_loss_before_max_profit_pct': max_loss_before_max_profit_pct,
-                'max_loss_before_max_profit_index': max_loss_bar_idx,
-                'max_loss_before_max_profit_date': quote.loc[max_loss_bar_idx, 'Date'],
-                'max_loss_before_max_profit_price': max_loss_price,
-            })
-
-            current_entry = None
-
-    return pd.DataFrame(records)
-
-
-def build_entry_to_max_profit_withdrawal_df(
-        quote: pd.DataFrame,
-        transactions_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    逐笔统计：从开仓到「该笔最大盈利点」这段区间的最大回撤比例。
-    回撤比例口径 = withdrawal / with_high（%）。
-    """
-    records = []
-    tr = transactions_df[transactions_df['Type'].isin(['long', 'sell'])].sort_index()
-    current_entry = None
-    trade_id = 0
-
-    for idx, row in tr.iterrows():
-        if row['Type'] == 'long':
-            current_entry = (int(idx), row)
-            continue
-
-        if row['Type'] == 'sell' and current_entry is not None:
-            trade_id += 1
-            entry_idx, entry_row = current_entry
-            exit_idx = int(idx)
-            if exit_idx < entry_idx:
-                current_entry = None
-                continue
-
-            trade_slice = quote.iloc[entry_idx:exit_idx + 1].copy()
-            if len(trade_slice) == 0:
-                current_entry = None
-                continue
-
-            # 该笔交易的最大盈利点（long口径：最高点）
-            max_profit_idx = int(trade_slice['high'].idxmax())
-            entry_price = float(entry_row['Price'])
-            max_profit_price = float(quote.loc[max_profit_idx, 'high'])
-            max_profit_pct = (max_profit_price / entry_price - 1.0) * 100.0
-
-            # 开仓 -> 最大盈利点
-            seg_slice = quote.iloc[entry_idx:max_profit_idx + 1].copy()
-            if len(seg_slice) == 0:
-                current_entry = None
-                continue
-
-            with_high, withdrawal = get_withdrawal(seg_slice)
-            max_withdrawal_to_max_profit_pct = (
-                (withdrawal / with_high) * 100.0
-                if (pd.notna(with_high) and with_high != 0)
-                else np.nan
-            )
-
-            records.append({
-                'trade_id': trade_id,
-                'entry_index': entry_idx,
-                'entry_date': quote.loc[entry_idx, 'Date'],
-                'entry_price': entry_price,
-                'max_profit_index': max_profit_idx,
-                'max_profit_date': quote.loc[max_profit_idx, 'Date'],
-                'max_profit_pct': max_profit_pct,
-                'segment_bars': max_profit_idx - entry_idx + 1,
-                'segment_with_high': with_high,
-                'segment_withdrawal': withdrawal,
-                'max_withdrawal_to_max_profit_pct': max_withdrawal_to_max_profit_pct,
-            })
-
-            current_entry = None
-
-    return pd.DataFrame(records)
-
-
-def export_interactive_html_long_no_wd(
+def export_interactive_html_long(
         file_name: str,
         save_name: str,
         title: str,
@@ -437,6 +308,15 @@ def export_interactive_html_long_no_wd(
             'spikethickness': 1,
             'spikedash': 'solid'
         }
+
+    fig_html.add_trace(go.Scatter(
+        x=detail_df.index,
+        y=detail_df.capital,
+        mode='lines',
+        line=dict(width=1.2, color=ACCENT_BLUE),
+        name='capital',
+        hovertemplate='index: %{x}<br>capital: %{y:.4f}<extra></extra>'
+    ))
 
     fig_html.add_trace(go.Candlestick(
         x=x_index,
@@ -617,15 +497,15 @@ def export_interactive_html_long_no_wd(
         margin=dict(l=42, r=25, t=38, b=45, pad=0),
         annotations=trade_count_annotation,
         hoverlabel=dict(
-            bgcolor='rgba(255, 255, 255, 0.50)',
+            bgcolor='rgba(255, 255, 255, 0.35)',
             bordercolor='rgba(0, 0, 0, 0.45)',
             font=dict(color='black')
         )
     )
 
-    html_dir = './result/%s long no wd outcome/html' % file_name
+    html_dir = './result/%s long outcome/html' % file_name
     os.makedirs(html_dir, exist_ok=True)
-    html_path = os.path.join(html_dir, save_name + ' LongNoWD interactive.html')
+    html_path = os.path.join(html_dir, save_name + ' Long interactive.html')
     html_text = fig_html.to_html(
         include_plotlyjs=True,
         full_html=True,
@@ -645,8 +525,8 @@ def export_interactive_html_long_no_wd(
         '.hoverlayer .hovertext .bg,'
         '.hoverlayer .hovertext rect,'
         '.hoverlayer .hovertext path{'
-        'fill:rgba(255,255,255,0.50) !important;'
-        'fill-opacity:0.50 !important;'
+        'fill:rgba(255,255,255,0.35) !important;'
+        'fill-opacity:0.35 !important;'
         'stroke:rgba(0,0,0,0.45) !important;'
         'stroke-opacity:0.45 !important;}'
         '.hoverlayer .hovertext{opacity:1 !important;}'
@@ -665,8 +545,11 @@ def export_interactive_html_long_no_wd(
 # Momentum Strategy
 # ============================================================
 
-class LongNoWDStrategy(BaseStrategy):
-    """无回撤版本：空仓即开仓，持仓仅速度平仓。"""
+class MomentumStrategy(BaseStrategy):
+    """
+    动量策略实现。
+    从原 generate_signals 中的策略逻辑提取而来。
+    """
 
     def __init__(self, params: dict):
         super().__init__(params)
@@ -721,38 +604,156 @@ class LongNoWDStrategy(BaseStrategy):
         index = ctx.index
         ii = ctx.integer_index
         p = self.params
+
         open_bar = p['open_bar']
+        open_threshold = p['open_threshold']
+        open_continous_threshold = p['open_continous_threshold']
+        open_withdrawal_threshold = p['open_withdrawal_threshold']
+        close_bar = p['close_bar']
+        close_threshold = p['close_threshold']
+        close_withdrawal_threshold = p['close_withdrawal_threshold']
+        open_continous_threshold2 = p['open_continous_threshold2']
 
-        # 空仓时每根bar直接开仓（当根开盘价）
-        if open_bar > 1 and ii + 1 >= open_bar:
-            open_slice = quote.iloc[ii + 1 - open_bar:ii + 1]
-            open_increase, inc_base = get_increase_with_base(open_slice)
-            t_inc_per = (open_increase / inc_base * 100) if inc_base != 0 else 0.0
-            signal.at[index, 'total_inc'] = open_increase
-            signal.at[index, 't_inc_per'] = round(t_inc_per, 4)
-        else:
-            signal.at[index, 'total_inc'] = 0.0
-            signal.at[index, 't_inc_per'] = 0.0
+        # 1. last_index 赋值
+        if self.new_opening:
+            self.last_index = ii - 1
+            self.new_opening = False
 
-        signal.at[index, 'total_inc_signal'] = 1.0
-        signal.at[index, 'inc_signal'] = 1.0
-        signal.at[index, 'wd_signal'] = 1.0
+        # 2. 窗口移动
+        if self.new_opening_count >= open_bar:
+            self.last_index = ii - open_bar + 1
+        self.new_opening_count += 1
 
-        self.low_index = ii
-        self.start_index = ii
-        self.first_cond1_price = float(quote.loc[index, 'open'])
-        self.new_opening_count = 1
-        self.new_opening = True
+        analysis_slice = quote.iloc[self.last_index:ii + 1]
 
-        signal.at[index, 'low_index'] = self.low_index
-        signal.at[index, 'period'] = 1
+        # --- 阶段 0: 检查速度 + 回撤 ---
+        if self.var0 == 0:
+            increase, inc_base = get_increase_with_base(analysis_slice)
+            inc_percent = increase / inc_base if inc_base != 0 else 0
+            with_high, withdrawal = get_withdrawal(
+                analysis_slice, close_withdrawal_threshold, ii)
+            wd_percent = withdrawal / with_high if with_high != 0 else 0
 
-        return OpenResult(
-            execution_price=round(self.first_cond1_price, self.params['round_precision']),
-            low_index=self.low_index,
-            low_price=self.first_cond1_price,
-            start_index=self.start_index,
-        )
+            signal.at[index, 'withdrawal'] = withdrawal
+            signal.at[index, 'wd_per'] = round(wd_percent * 100, 4)
+            signal.at[index, 'increase'] = increase
+            signal.at[index, 'inc_per'] = round(inc_percent * 100, 4)
+
+            cond1 = (inc_percent >= open_threshold)
+            signal.at[index, 'inc_signal'] = 1 if cond1 else 0
+
+            cond2 = wd_percent < open_withdrawal_threshold
+            signal.at[index, 'wd_signal'] = 1 if cond2 else 0
+
+            if signal.at[index, 'wd_signal']:
+                if signal.at[index, 'inc_signal']:
+                    for i in reversed(range(self.last_index, ii + 1)):
+                        low_index_slice = quote.iloc[i:ii + 1]
+                        increase2 = get_increase(low_index_slice)
+                        if np.isclose(increase2, increase,
+                                      rtol=0.0, atol=self.HIGH_MATCH_EPS):
+                            self.low_index = i
+                            break
+                    signal.at[index, 'low_index'] = self.low_index
+                    signal.at[index, 'low_date'] = str(
+                        signal.at[self.low_index, 'date'])
+                    self.last_index = self.low_index
+                    self.start_index = self.last_index
+                    self.var0 = 1
+            else:
+                if inc_percent > open_continous_threshold:
+                    print(str(index) + '满足开仓和满足回撤reset同时发生')
+                self.new_opening = True
+                self.new_opening_count = 1
+
+        # --- 阶段 1: 赋值 new_opening_count ---
+        if self.var0 == 1:
+            self.new_opening_count = ii - self.low_index + 1
+            signal.at[index, 'low_index'] = self.low_index
+            signal.at[index, 'low_date'] = str(
+                signal.at[self.low_index, 'date']).removesuffix('.0')
+            signal.at[index, 'period'] = self.new_opening_count
+            self.var0 = 2
+
+        # --- 阶段 2: 判断持续涨幅 ---
+        if self.var0 == 2:
+            cond3_analysis_slice = quote.iloc[self.low_index:ii + 1]
+            with_high, withdrawal = get_withdrawal(
+                cond3_analysis_slice, close_withdrawal_threshold, ii)
+            signal.at[index, 'withdrawal'] = withdrawal
+            withdrawal_percent = withdrawal / with_high if with_high != 0 else 0
+            total_increase, inc_base = get_increase_with_base(cond3_analysis_slice)
+
+            cond3 = withdrawal_percent < open_withdrawal_threshold
+            signal.at[index, 'wd_signal'] = 1 if cond3 else 0
+
+            if signal.at[index, 'wd_signal']:
+                if self.new_opening_count >= open_bar:
+                    ana_inc_slice_1 = quote.iloc[self.low_index:ii + 1]
+                    ana_inc_slice_2 = quote.iloc[
+                        self.low_index:ii + 1 - open_bar]
+                    analysis_increase = (ana_inc_slice_1.high.max()
+                                         - ana_inc_slice_2.high.max())
+                    ana_inc_base = ana_inc_slice_1['low'].iloc[0]
+                    analysis_increase_percent = analysis_increase / ana_inc_base if ana_inc_base != 0 else 0
+                    signal.at[index, 'ana_inc'] = analysis_increase
+                    signal.at[index, 'a_inc_per'] = round(
+                        analysis_increase_percent * 100, 4)
+                    if analysis_increase_percent < close_threshold:
+                        self.var0 = 4
+
+                total_increase_percent = (
+                    total_increase / inc_base if inc_base != 0 else 0
+                )
+                signal.at[index, 'total_inc'] = total_increase
+                signal.at[index, 't_inc_per'] = round(
+                    total_increase_percent * 100, 4)
+                self.first_cond1_price = inc_base
+
+                if total_increase_percent >= open_continous_threshold:
+                    signal.at[index, 'total_inc_signal'] = 1
+            else:
+                self.var0 = 3
+
+            # var0=3: 回撤 reset
+            if self.var0 == 3:
+                self._do_idle_stats(quote, signal, index, ii, 'open withdraw')
+                self.new_opening = True
+                self.var0 = 0
+                self.new_opening_count = 0
+                self.first_cond1_price = 0
+                self.analysis_increase = 0
+
+            # var0=4: 涨速不够 reset
+            if self.var0 == 4:
+                self._do_idle_stats(quote, signal, index, ii, 'open speed')
+                # reset with recalculated low_index
+                increase1_slice = quote.iloc[self.last_index:ii + 1]
+                increase1 = get_increase(increase1_slice)
+                for i in range(self.last_index, ii + 1):
+                    low_index_slice = quote.iloc[i:ii + 1]
+                    increase2 = get_increase(low_index_slice)
+                    if np.isclose(increase2, increase1,
+                                  rtol=0.0, atol=self.HIGH_MATCH_EPS):
+                        self.recent_low_index = i
+                self.last_index = self.recent_low_index
+                self.var0 = 0
+                self.new_opening_count = ii - self.recent_low_index + 1
+                self.first_cond1_price = 0
+                self.analysis_increase = 0
+
+            # 开仓信号
+            if signal.at[index, 'total_inc_signal'] == 1:
+                return OpenResult(
+                    execution_price=round(
+                        self.first_cond1_price * (1 + open_continous_threshold),
+                        self.params['round_precision']),
+                    low_index=self.low_index,
+                    low_price=self.first_cond1_price,
+                    start_index=self.start_index,
+                )
+
+        return None
 
     def on_position_opened(self, ctx: BarContext, result):
         """开仓后记录开仓信息并重置策略状态"""
@@ -764,7 +765,7 @@ class LongNoWDStrategy(BaseStrategy):
         signal.at[index, 'low_date'] = str(
             signal.at[result.low_index, 'date']).removesuffix('.0')
         # 重置策略状态
-        self.new_opening_count = 1
+        self.new_opening_count = ctx.integer_index - result.low_index
         self.var0 = 0
         self.new_opening = True
 
@@ -805,6 +806,8 @@ class LongNoWDStrategy(BaseStrategy):
 
         close_bar = p['close_bar']
         close_threshold = p['close_threshold']
+        close_withdrawal_threshold = p['close_withdrawal_threshold']
+        open_continous_threshold2 = p['open_continous_threshold2']
 
         # 初始化
         if self.new_opening:
@@ -821,7 +824,7 @@ class LongNoWDStrategy(BaseStrategy):
         analysis_slice = quote.iloc[self.last_index + 1:ii + 1]
         holding_slice = quote.iloc[self.increase_start_index:ii + 1]
 
-        # 速度条件（唯一平仓条件）
+        # 速度条件
         if window_ready:
             ana_inc_slice_1 = quote.iloc[self.low_index:ii + 1]
             ana_inc_slice_2 = quote.iloc[
@@ -829,23 +832,47 @@ class LongNoWDStrategy(BaseStrategy):
             holding_increase = (
                 ana_inc_slice_1.high.max() - ana_inc_slice_2.high.max())
             holding_base = analysis_slice['low'].iloc[0]
-            self.holding_increase_percent = (
-                holding_increase / holding_base if holding_base != 0 else 0.0)
+            self.holding_increase_percent = holding_increase / holding_base if holding_base != 0 else 0
             signal.at[index, 'holding_inc'] = holding_increase
             if self.holding_increase_percent < close_threshold:
                 signal.at[index, 'speed_close_signal'] = 1
 
-        # 回撤仅记录，不参与平仓
-        with_high, holding_withdrawal = get_withdrawal(holding_slice)
+        # 回撤条件
+        with_high, holding_withdrawal = get_withdrawal(
+            holding_slice, close_withdrawal_threshold, ii, switch0=True)
         holding_withdrawal_percent = (
             holding_withdrawal / with_high if with_high != 0 else 0)
         signal.at[index, 'holding_wd'] = holding_withdrawal
         signal.at[index, 'hld_wd_per'] = round(
             holding_withdrawal_percent * 100, 4)
-        signal.at[index, 'holding_wd_signal'] = 0.0
+
+        if (open_continous_threshold2 == 0
+            or (window_ready
+                and (self.holding_increase_percent
+                     < open_continous_threshold2))):
+            if holding_withdrawal_percent > close_withdrawal_threshold:
+                signal.at[index, 'holding_wd_signal'] = 1
+        else:
+            if holding_withdrawal_percent > close_withdrawal_threshold:
+                signal.at[index, 'holding_wd_signal'] = 1
 
         period = ii - self.holding_start_index + 1
         signal.at[index, 'high_price'] = max(holding_slice['high'])
+
+        # 回撤平仓
+        if signal.at[index, 'holding_wd_signal'] == 1:
+            exec_price = (max(holding_slice['high'])
+                          * (1 - close_withdrawal_threshold))
+            if exec_price > quote.loc[index, 'open']:
+                exec_price = quote.loc[index, 'open']
+            return CloseResult(
+                close_type=1,
+                execution_price=round(
+                    exec_price, self.params['round_precision']),
+                start_index=self.start_index,
+                low_index=self.low_index,
+                period=period,
+            )
 
         # 速度平仓
         if signal.at[index, 'speed_close_signal'] == 1:
@@ -955,9 +982,8 @@ if __name__ == '__main__':
 
     # 创建输出文件夹
     os.makedirs('./result', exist_ok=True)
-    os.makedirs(f'./result/{file_name} long no wd outcome/perf', exist_ok=True)
-    os.makedirs(f'./result/{file_name} long no wd outcome/trans', exist_ok=True)
-    os.makedirs(f'./result/{file_name} long no wd outcome/trade_stats', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long outcome/perf', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long outcome/trans', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
 
@@ -990,6 +1016,7 @@ if __name__ == '__main__':
     for_num_3 = FOR_NUM_3
     print(for_num_1, for_num_2, for_num_3)
     step1 = STEP1
+    step2 = STEP2
     step3 = STEP3
 
     for num in range(for_num_1):
@@ -999,17 +1026,29 @@ if __name__ == '__main__':
             # 策略参数
             open_bar = open_bar_cfg
             open_threshold = OPEN_THRESHOLD
+            open_withdrawal_threshold = OPEN_WITHDRAWAL_THRESHOLD
             close_bar = close_bar_cfg
             close_threshold = CLOSE_THRESHOLD
             open_continous_threshold = OPEN_CONTINOUS_THRESHOLD + (i * step1)
+            close_withdrawal_threshold = CLOSE_WITHDRAWAL_THRESHOLD + (num * step2)
             # 双策略
             open_bar2 = open_bar2_cfg
             open_threshold2 = OPEN_THRESHOLD2
             open_continous_threshold2 = OPEN_CONTINOUS_THRESHOLD2
+            close_withdrawal_threshold2 = CLOSE_WITHDRAWAL_THRESHOLD2 + (num * step3)
             commision_percent = COMMISION_PERCENT
             capital = CAPITAL
 
-            # 无回撤策略下，回撤阈值参数已移除
+            # 参数校验
+            if open_threshold < open_withdrawal_threshold:
+                print('open_threshold不可小于open_withdrawal_threshold')
+                continue
+            if open_continous_threshold < open_threshold:
+                print('open_continous_threshold不可小于open_threshold')
+                continue
+            if open_continous_threshold < close_withdrawal_threshold:
+                print('open_continous_threshold不可小于close_withdrawal_threshold')
+                continue
 
             # Window_Increase 预计算
             arr = underlying[['low', 'high', 'open', 'close']].to_numpy(dtype=float)
@@ -1036,13 +1075,16 @@ if __name__ == '__main__':
                 'open_bar': open_bar,
                 'open_threshold': open_threshold,
                 'open_continous_threshold': open_continous_threshold,
+                'open_withdrawal_threshold': open_withdrawal_threshold,
                 'close_bar': close_bar,
                 'close_threshold': close_threshold,
+                'close_withdrawal_threshold': close_withdrawal_threshold,
                 'open_continous_threshold2': open_continous_threshold2,
+                'close_withdrawal_threshold2': close_withdrawal_threshold2,
                 'round_precision': ROUND_PRECISION,
             }
 
-            strategy = LongNoWDStrategy(params)
+            strategy = MomentumStrategy(params)
             engine = BacktestEngine(
                 underlying, strategy, capital,
                 ROUND_PRECISION, commision_percent)
@@ -1052,13 +1094,6 @@ if __name__ == '__main__':
 
             performance, transactions_df = generate_performance(
                 underlying, df_signal, capital, commision_percent)
-            trade_extreme_df = build_trade_extreme_stats_long(
-                underlying, transactions_df)
-            entry_to_max_profit_wd_df = build_entry_to_max_profit_withdrawal_df(
-                underlying, transactions_df)
-
-            open_count = int((df_signal['signal'] == 1.0).sum())
-            idle_count = int((signal['have_holding'] == 0).sum())
 
             if len(transactions_df) > 1:
                 Capital_outcome = round(
@@ -1082,25 +1117,36 @@ if __name__ == '__main__':
                   + ' oc' + str(round(open_continous_threshold, 4))
                   + ' cm' + str(round(close_bar, 4))
                   + ' c' + str(round(close_threshold, 4))
+                  + ' ow' + str(round(open_withdrawal_threshold, 4))
+                  + ' cw' + str(round(close_withdrawal_threshold, 4))
                   + ' ' + str(round(withdrawal_close_count, 4))
                   + '+' + str(round(speed_close_count, 4)))
             print('profit: ' + str(round(performance.capital.iloc[-1], 2)))
-            print(f'[Check-1] withdrawal close count (should be 0): {withdrawal_close_count}')
-            print(f'[Check-2] open-on-idle count: open={open_count}, idle={idle_count}')
-            print(f'[Check-3] trade extreme stats rows: {len(trade_extreme_df)}')
-            print(f'[Check-4] entry->max-profit wd rows: {len(entry_to_max_profit_wd_df)}')
-            if len(entry_to_max_profit_wd_df) > 0:
-                print(entry_to_max_profit_wd_df.head(5))
 
-            # ====== 命名（fig1 已移除） ======
+            # ====== Plot (fig1) ======
             save_name = (str(startdate) + '-' + str(enddate)
                          + ' om' + str(round(open_bar, 4))
                          + ' o' + str(round(open_threshold, 4))
                          + ' oc' + str(round(open_continous_threshold, 4))
                          + ' cm' + str(round(close_bar, 4))
                          + ' c' + str(round(close_threshold, 4))
+                         + ' ow' + str(round(open_withdrawal_threshold, 4))
+                         + ' cw' + str(round(close_withdrawal_threshold, 4))
                          + ' ' + str(round(withdrawal_close_count, 4))
                          + '+' + str(round(speed_close_count, 4)))
+
+            fig1_title = str(Capital_outcome) + ' ' + save_name
+            if SAVE_STATIC_PLOT:
+                plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                fig1_path = ('./result/%s long outcome/' % file_name
+                             + ' ' + str(Capital_outcome)
+                             + save_name + f' Long.{plot_ext}')
+                close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
+                plot_backtest_chart(
+                    underlying, transactions_df, perf_outcome,
+                    title=fig1_title,
+                    save_path=fig1_path,
+                    close_fig=close_fig)
 
             # ====== Perf & Excel ======
             detail_df = pd.concat([signal, df5], axis=1, join='inner')
@@ -1122,15 +1168,17 @@ if __name__ == '__main__':
             perf_name = ('om' + str(round(open_bar, 4))
                          + ' o' + str(round(open_threshold, 4))
                          + ' oc' + str(round(open_continous_threshold, 4))
+                         + ' ow' + str(round(open_withdrawal_threshold, 4))
                          + ' cm' + str(round(close_bar, 4))
                          + ' c' + str(round(close_threshold, 4))
+                         + ' cw' + str(round(close_withdrawal_threshold, 4))
                          + ' ' + str(round(withdrawal_close_count, 4))
                          + '+' + str(round(speed_close_count, 4))
                          + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
                          + ' ' + str(Capital_outcome)
                          + ' ' + 'perf.xlsx')
             writer1 = pd.ExcelWriter(
-                './result/%s long no wd outcome/perf/' % file_name + perf_name,
+                './result/%s long outcome/perf/' % file_name + perf_name,
                 engine='xlsxwriter')
             detail_df.to_excel(writer1, sheet_name='stats')
             workbook = writer1.book
@@ -1172,12 +1220,14 @@ if __name__ == '__main__':
 
             if len(transactions_df) != 0:
                 writer2 = pd.ExcelWriter(
-                    './result/%s long no wd outcome/trans/' % file_name
+                    './result/%s long outcome/trans/' % file_name
                     + 'om' + str(round(open_bar, 4))
                     + ' o' + str(round(open_threshold, 4))
                     + ' oc' + str(round(open_continous_threshold, 4))
+                    + ' ow' + str(round(open_withdrawal_threshold, 4))
                     + ' cm' + str(round(close_bar, 4))
                     + ' c' + str(round(close_threshold, 4))
+                    + ' cw' + str(round(close_withdrawal_threshold, 4))
                     + ' ' + str(round(withdrawal_close_count, 4))
                     + '+' + str(round(speed_close_count, 4)) + ' '
                     + 'Long ' + str(startdate) + '-' + str(enddate)
@@ -1209,258 +1259,9 @@ if __name__ == '__main__':
                 worksheet2.set_column('F:G', 13, fmt2)
                 writer2.close()
 
-            trade_stats_name = ('om' + str(round(open_bar, 4))
-                                + ' o' + str(round(open_threshold, 4))
-                                + ' oc' + str(round(open_continous_threshold, 4))
-                                + ' cm' + str(round(close_bar, 4))
-                                + ' c' + str(round(close_threshold, 4))
-                                + ' ' + str(round(withdrawal_close_count, 4))
-                                + '+' + str(round(speed_close_count, 4))
-                                + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
-                                + ' ' + str(Capital_outcome)
-                                + ' ' + 'trade_stats.xlsx')
-            writer3 = pd.ExcelWriter(
-                './result/%s long no wd outcome/trade_stats/' % file_name + trade_stats_name,
-                engine='xlsxwriter')
-            trade_extreme_df.to_excel(writer3, sheet_name='trade_extremes', index=False)
-            entry_to_max_profit_wd_df.to_excel(
-                writer3, sheet_name='entry_to_max_profit_wd', index=False)
-            writer3.close()
-
-            # 排序柱状图：每笔交易一根柱（按回撤比例从大到小）
-            if len(entry_to_max_profit_wd_df) > 0:
-                wd_plot_df = entry_to_max_profit_wd_df.copy()
-                wd_plot_df['max_withdrawal_to_max_profit_pct'] = pd.to_numeric(
-                    wd_plot_df['max_withdrawal_to_max_profit_pct'],
-                    errors='coerce'
-                )
-                wd_plot_df = wd_plot_df.dropna(
-                    subset=['max_withdrawal_to_max_profit_pct']
-                ).sort_values(
-                    by='max_withdrawal_to_max_profit_pct',
-                    ascending=False
-                ).reset_index(drop=True)
-                if len(wd_plot_df) > 0:
-                    fig_wd = plt.figure(figsize=(20, 11))
-                    fig_wd.clf()
-                    if hasattr(fig_wd.canvas, 'manager') and fig_wd.canvas.manager is not None:
-                        fig_wd.canvas.manager.set_window_title('profit_withdrawal')
-                    ax_wd = fig_wd.add_subplot(111)
-                    x_rank = np.arange(1, len(wd_plot_df) + 1)
-                    wd_values = wd_plot_df['max_withdrawal_to_max_profit_pct'].to_numpy(
-                        dtype=float
-                    )
-                    max_profit_values = wd_plot_df['max_profit_pct'].to_numpy(dtype=float)
-                    wd_visual_values = wd_values.copy()
-                    zero_mask = np.isclose(wd_visual_values, 0.0, atol=1e-12)
-                    if zero_mask.any():
-                        wd_visual_values[zero_mask] = ZERO_BAR_VISUAL_FLOOR_PCT
-
-                    bars = ax_wd.bar(
-                        x_rank,
-                        wd_visual_values,
-                        width=0.9,
-                        label='segment_withdrawal_pct'
-                    )
-                    # 叠加每笔交易最大盈利幅度柱（宽度=withdrawal柱的1/3）
-                    ax_wd.bar(
-                        x_rank,
-                        max_profit_values,
-                        width=0.3,
-                        color='tab:orange',
-                        alpha=0.8,
-                        label='max_profit_pct'
-                    )
-                    # x 轴只覆盖实际柱子数量，避免右侧留白
-                    ax_wd.set_xlim(0.5, len(wd_plot_df) + 0.5)
-                    ax_wd.set_title('profit_withdrawal')
-                    ax_wd.set_xlabel('Trade Rank (Descending)')
-                    ax_wd.set_ylabel('Max Withdrawal to Max Profit (%)')
-                    ax_wd.grid(alpha=0.25)
-                    ax_wd.legend()
-                    if zero_mask.any():
-                        ax_wd.text(
-                            0.99, 0.98,
-                            f'zero-value bars shown as {ZERO_BAR_VISUAL_FLOOR_PCT:.4f}: {int(zero_mask.sum())}',
-                            transform=ax_wd.transAxes,
-                            ha='right', va='top',
-                            bbox=dict(boxstyle='round', fc='white', alpha=0.6)
-                        )
-
-                    # 交互：鼠标移到柱子上显示该笔交易时间区间
-                    annot_wd = ax_wd.annotate(
-                        "", xy=(0, 0), xytext=(18, 18),
-                        textcoords="offset points",
-                        bbox=dict(boxstyle="round", fc="w"),
-                        arrowprops=dict(arrowstyle="->")
-                    )
-                    annot_wd.set_visible(False)
-
-                    def update_wd_annot(rect, idx):
-                        x = rect.get_x() + rect.get_width() / 2.0
-                        y = rect.get_height()
-                        annot_wd.xy = (x, y)
-                        row = wd_plot_df.iloc[idx]
-                        text = (
-                            f"rank: {idx + 1}\n"
-                            f"wd: {row['max_withdrawal_to_max_profit_pct']:.4f}%\n"
-                            f"max_profit_pct: {row['max_profit_pct']:.4f}%\n"
-                            f"entry: {row['entry_date']}\n"
-                            f"max_profit: {row['max_profit_date']}\n"
-                            f"bars: {int(row['segment_bars'])}"
-                        )
-                        annot_wd.set_text(text)
-                        annot_wd.get_bbox_patch().set_alpha(0.4)
-
-                    def hover_wd_bar(event):
-                        vis = annot_wd.get_visible()
-                        if event.inaxes == ax_wd:
-                            for idx, rect in enumerate(bars):
-                                contains, _ = rect.contains(event)
-                                if contains:
-                                    update_wd_annot(rect, idx)
-                                    annot_wd.set_visible(True)
-                                    fig_wd.canvas.draw_idle()
-                                    return
-                            if vis:
-                                annot_wd.set_visible(False)
-                                fig_wd.canvas.draw_idle()
-
-                    fig_wd.canvas.mpl_connect("motion_notify_event", hover_wd_bar)
-
-                    wd_hist_name = ('om' + str(round(open_bar, 4))
-                                    + ' o' + str(round(open_threshold, 4))
-                                    + ' oc' + str(round(open_continous_threshold, 4))
-                                    + ' cm' + str(round(close_bar, 4))
-                                    + ' c' + str(round(close_threshold, 4))
-                                    + ' ' + str(round(withdrawal_close_count, 4))
-                                    + '+' + str(round(speed_close_count, 4))
-                                    + ' ' + str(startdate) + '-' + str(enddate)
-                                    + ' profit_withdrawal')
-                    if SAVE_STATIC_PLOT:
-                        wd_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-                        fig_wd.savefig(
-                            './result/%s long no wd outcome/trade_stats/' % file_name
-                            + wd_hist_name + f'.{wd_plot_ext}',
-                            dpi=300, bbox_inches='tight')
-                    if for_num_2 == 1:
-                        fig_wd.show()
-                    else:
-                        plt.close(fig_wd)
-
-                    # 新柱状图：按最大盈利从大到小排序，叠加最大回撤（宽度=1/3）
-                    profit_plot_df = entry_to_max_profit_wd_df.copy()
-                    profit_plot_df['max_profit_pct'] = pd.to_numeric(
-                        profit_plot_df['max_profit_pct'],
-                        errors='coerce'
-                    )
-                    profit_plot_df['max_withdrawal_to_max_profit_pct'] = pd.to_numeric(
-                        profit_plot_df['max_withdrawal_to_max_profit_pct'],
-                        errors='coerce'
-                    )
-                    profit_plot_df = profit_plot_df.dropna(
-                        subset=['max_profit_pct']
-                    ).sort_values(
-                        by='max_profit_pct',
-                        ascending=False
-                    ).reset_index(drop=True)
-
-                    if len(profit_plot_df) > 0:
-                        fig_profit = plt.figure(figsize=(20, 11))
-                        fig_profit.clf()
-                        if hasattr(fig_profit.canvas, 'manager') and fig_profit.canvas.manager is not None:
-                            fig_profit.canvas.manager.set_window_title('profit_sorted_withdrawal')
-                        ax_profit = fig_profit.add_subplot(111)
-                        x_rank_profit = np.arange(1, len(profit_plot_df) + 1)
-                        max_profit_values_sorted = profit_plot_df['max_profit_pct'].to_numpy(dtype=float)
-                        wd_values_sorted = np.nan_to_num(
-                            profit_plot_df['max_withdrawal_to_max_profit_pct'].to_numpy(dtype=float),
-                            nan=0.0
-                        )
-                        bars_profit_main = ax_profit.bar(
-                            x_rank_profit,
-                            max_profit_values_sorted,
-                            width=0.9,
-                            label='max_profit_pct'
-                        )
-                        ax_profit.bar(
-                            x_rank_profit,
-                            wd_values_sorted,
-                            width=0.3,
-                            color='tab:orange',
-                            alpha=0.8,
-                            label='segment_withdrawal_pct'
-                        )
-                        ax_profit.set_xlim(0.5, len(profit_plot_df) + 0.5)
-                        ax_profit.set_title('profit_sorted_withdrawal')
-                        ax_profit.set_xlabel('Trade Rank By Max Profit (Descending)')
-                        ax_profit.set_ylabel('Percent (%)')
-                        ax_profit.grid(alpha=0.25)
-                        ax_profit.legend()
-
-                        # 交互：鼠标移到柱子上显示该笔交易时间区间
-                        annot_profit = ax_profit.annotate(
-                            "", xy=(0, 0), xytext=(18, 18),
-                            textcoords="offset points",
-                            bbox=dict(boxstyle="round", fc="w"),
-                            arrowprops=dict(arrowstyle="->")
-                        )
-                        annot_profit.set_visible(False)
-
-                        def update_profit_annot(rect, idx):
-                            x = rect.get_x() + rect.get_width() / 2.0
-                            y = rect.get_height()
-                            annot_profit.xy = (x, y)
-                            row = profit_plot_df.iloc[idx]
-                            text = (
-                                f"rank: {idx + 1}\n"
-                                f"max_profit_pct: {row['max_profit_pct']:.4f}%\n"
-                                f"wd: {row['max_withdrawal_to_max_profit_pct']:.4f}%\n"
-                                f"entry: {row['entry_date']}\n"
-                                f"max_profit: {row['max_profit_date']}\n"
-                                f"bars: {int(row['segment_bars'])}"
-                            )
-                            annot_profit.set_text(text)
-                            annot_profit.get_bbox_patch().set_alpha(0.4)
-
-                        def hover_profit_bar(event):
-                            vis = annot_profit.get_visible()
-                            if event.inaxes == ax_profit:
-                                for idx, rect in enumerate(bars_profit_main):
-                                    contains, _ = rect.contains(event)
-                                    if contains:
-                                        update_profit_annot(rect, idx)
-                                        annot_profit.set_visible(True)
-                                        fig_profit.canvas.draw_idle()
-                                        return
-                                if vis:
-                                    annot_profit.set_visible(False)
-                                    fig_profit.canvas.draw_idle()
-
-                        fig_profit.canvas.mpl_connect("motion_notify_event", hover_profit_bar)
-
-                        profit_hist_name = ('om' + str(round(open_bar, 4))
-                                            + ' o' + str(round(open_threshold, 4))
-                                            + ' oc' + str(round(open_continous_threshold, 4))
-                                            + ' cm' + str(round(close_bar, 4))
-                                            + ' c' + str(round(close_threshold, 4))
-                                            + ' ' + str(round(withdrawal_close_count, 4))
-                                            + '+' + str(round(speed_close_count, 4))
-                                            + ' ' + str(startdate) + '-' + str(enddate)
-                                            + ' profit_sorted_withdrawal')
-                        if SAVE_STATIC_PLOT:
-                            profit_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-                            fig_profit.savefig(
-                                './result/%s long no wd outcome/trade_stats/' % file_name
-                                + profit_hist_name + f'.{profit_plot_ext}',
-                                dpi=300, bbox_inches='tight')
-                        if for_num_2 == 1:
-                            fig_profit.show()
-                        else:
-                            plt.close(fig_profit)
-
             # Stats
-            outcome_index = str(round(open_continous_threshold, 4))
+            outcome_index = (str(round(open_continous_threshold, 4))
+                             + ' ' + str(round(close_withdrawal_threshold, 4)))
             perf_temp = perf_outcome[-1:].capital.iloc[0] - 100
             outcome_stats.at[outcome_index, 'capital'] = perf_temp + 100
             trade_num = len(transactions_df) / 2
@@ -1494,15 +1295,14 @@ if __name__ == '__main__':
         plt.xticks(rotation=70)
         fig_stat_1.legend()
         plt.title('stats ' + str(startdate) + '-' + str(enddate))
-        os.makedirs('./result/stats %s long no wd outcome/' % file_name, exist_ok=True)
-        if SAVE_STATIC_PLOT:
-            stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-            plt.savefig('./result/stats %s long no wd outcome/' % file_name
-                        + ' ' + save_name + ' '
-                        + str(for_num_1) + ' '
-                        + str(for_num_2) + ' '
-                        + f'all outcome.{stats_plot_ext}', dpi=1000)
-        outcome_stats.to_excel('./result/stats %s long no wd outcome/' % file_name
+        os.makedirs('./result/stats %s long outcome/' % file_name, exist_ok=True)
+        stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+        plt.savefig('./result/stats %s long outcome/' % file_name
+                    + ' ' + save_name + ' '
+                    + str(for_num_1) + ' '
+                    + str(for_num_2) + ' '
+                    + f'all outcome.{stats_plot_ext}', dpi=1000)
+        outcome_stats.to_excel('./result/stats %s long outcome/' % file_name
                                + ' ' + save_name + ' '
                                + str(for_num_1) + ' '
                                + str(for_num_2) + ' '
@@ -1512,7 +1312,7 @@ if __name__ == '__main__':
         open_excel = False
         if open_excel:
             os.startfile(
-                disk_path + '%s long no wd outcome/perf/' % file_name + perf_name)
+                disk_path + '%s long outcome/perf/' % file_name + perf_name)
 
     # ====== 交互式图 (fig2) ======
     if for_num_2 == 1:
@@ -1551,11 +1351,11 @@ if __name__ == '__main__':
             close_type_1_df = sell_record[sell_record['Close_type'] == 1]
             scatter_g = ax2.scatter(
                 close_type_1_df.index,
-                close_type_1_df['target'], c='green', s=10)
+                close_type_1_df['target'], c=SELL_WD_COLOR, s=10)
             close_type_2_df = sell_record[sell_record['Close_type'] == 2]
             scatter_b = ax2.scatter(
                 close_type_2_df.index,
-                close_type_2_df['target'], c='black', s=10)
+                close_type_2_df['target'], c=SELL_SPEED_COLOR, s=10)
 
         # 交互: 买点 hover
         if len(long_record) != 0:
@@ -1725,12 +1525,18 @@ if __name__ == '__main__':
                       + ' oc' + str(round(open_continous_threshold, 4))
                       + ' cm' + str(round(close_bar, 4))
                       + ' c' + str(round(close_threshold, 4))
+                      + ' ow' + str(round(open_withdrawal_threshold, 4))
+                      + ' cw' + str(round(close_withdrawal_threshold, 4))
                       + ' ' + str(round(withdrawal_close_count, 4))
                       + '+' + str(round(speed_close_count, 4))
                       + ' ' + str(startdate) + '-' + str(enddate))
         plt.title('%s' % fig2_title)
 
-        # fig2 不显示资金曲线
+        xaxis1 = detail_df.index
+        yaxis1 = detail_df.capital
+        xaxis2 = x.index
+        yaxis2 = x
+        plt.plot(xaxis1, yaxis1, linewidth=1.2, color=ACCENT_BLUE)
         candlestick2_ohlc(ax2, underlying_ratio.open, underlying_ratio.high,
                           underlying_ratio.low, underlying_ratio.close,
                           width=0.7,
@@ -1752,12 +1558,12 @@ if __name__ == '__main__':
                 sell_y = row['target']
                 ax2.plot(
                     [buy_idx, sell_idx], [buy_y, sell_y],
-                    color='tab:blue', linewidth=2.0, alpha=0.8, zorder=1)
+                    color=ACCENT_BLUE, linewidth=2.0, alpha=0.8, zorder=1)
                 buy_idx = None
                 buy_y = None
         ax2.xaxis.set_major_locator(plt.MaxNLocator(12))
         if EXPORT_INTERACTIVE_HTML:
-            export_interactive_html_long_no_wd(
+            export_interactive_html_long(
                 file_name=file_name,
                 save_name=save_name,
                 title=fig2_title,
