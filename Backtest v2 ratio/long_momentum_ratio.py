@@ -14,8 +14,10 @@ from mplfinance.original_flavor import candlestick2_ohlc
 import time, os
 try:
     import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 except ImportError:
     go = None
+    make_subplots = None
 import sys, os as _os
 sys.path.insert(0, _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..')))
 from backtest_main import (
@@ -33,36 +35,64 @@ DATA_FOLDER_PATH = r"D:\Code\data\converted_15s\\"
 DATA_FILE_NAME = "HISTDATA_COM_ASCII_XAGUSD_T202512_15s"
 
 # 回测区间
-START_INDEX = 2000
-END_INDEX = 5000  # 或 'latest'
-ONLY_CLOSE = False
+start_index = 1000
+end_index = 5000  # 或 'latest'
+only_close = False
 
 # 参数循环
-FOR_NUM_1 = 1
-FOR_NUM_2 = 1
-FOR_NUM_3 = 1
-STEP1 = 0.001
-STEP2 = 0.001
-STEP3 = 0.01
+for_num_1 = 1
+for_num_2 = 1
+for_num_3 = 1
+step1 = 0.001
+step2 = 0.001
+step3 = 0.01
 
 # 策略参数（分钟输入，自动换算 bars）
-OPEN_BAR_MINUTES = 50.0
-OPEN_THRESHOLD = 0.0020
-OPEN_WITHDRAWAL_THRESHOLD = 0.0013
-CLOSE_BAR_MINUTES = OPEN_BAR_MINUTES
-CLOSE_THRESHOLD = 0.001
-OPEN_CONTINOUS_THRESHOLD = OPEN_THRESHOLD
-CLOSE_WITHDRAWAL_THRESHOLD = OPEN_WITHDRAWAL_THRESHOLD
+open_bar_minutes = 50.0
+open_threshold_cfg = 0.0020
+open_withdrawal_threshold_cfg = 0.0013
+close_bar_minutes = open_bar_minutes
+close_threshold_cfg = 0.001
+open_continous_threshold_cfg = open_threshold_cfg
+close_withdrawal_threshold_cfg = open_withdrawal_threshold_cfg
 
 # 双策略参数（保留）
-OPEN_BAR2_MINUTES = np.nan  # np.nan 表示不启用
-OPEN_THRESHOLD2 = np.nan
-OPEN_CONTINOUS_THRESHOLD2 = 0.003
-CLOSE_WITHDRAWAL_THRESHOLD2 = 0.003
+open_bar2_minutes = np.nan  # np.nan 表示不启用
+open_threshold2_cfg = np.nan
+open_continous_threshold2_cfg = 0.003
+close_withdrawal_threshold2_cfg = 0.003
+
+# 阈值模式:
+# - 'fixed': 使用原固定比例
+# - 'adaptive_directional_test': 使用测试版自适应方向波动基准
+THRESHOLD_MODE = 'adaptive_directional_test'
+
+# 测试版自适应方向波动基准:
+# 当前 bar 为 t 时，只使用 (t - basis_span - basis_subwindow, t) 的历史 bar。
+# 基准按每根 15s bar 独立重算，和是否持仓无关。
+basis_span_minutes = 5 * open_bar_minutes
+basis_subwindow_minutes = open_bar_minutes
+BASIS_AGGREGATION_METHOD = 'mean'
+
+# 当 THRESHOLD_MODE='adaptive_directional_test' 时，
+# 以下参数不再表示固定阈值，而是各阈值对应的倍率。
+OPEN_POS_MULTIPLIER = 1.0
+OPEN_CONTINOUS_POS_MULTIPLIER = 1.0
+CLOSE_SPEED_POS_MULTIPLIER = 1.0
+OPEN_WD_NEG_MULTIPLIER = 1.0
+CLOSE_WD_NEG_MULTIPLIER = 1.0
+
+# 第一版仅保留最小阈值。默认值为 0，表示事实上不起作用。
+OPEN_POS_MIN_THRESHOLD = 0.0
+OPEN_CONTINOUS_POS_MIN_THRESHOLD = 0.0
+CLOSE_SPEED_POS_MIN_THRESHOLD = 0.0
+OPEN_WD_NEG_MIN_THRESHOLD = 0.0
+CLOSE_WD_NEG_MIN_THRESHOLD = 0.0
 
 COMMISION_PERCENT = 0.000
 CAPITAL = 100.0
 EXPORT_INTERACTIVE_HTML = True
+EXPORT_STATS = True
 ACCENT_BLUE = '#1F77B4'
 SELL_WD_COLOR = 'green'
 SELL_SPEED_COLOR = 'black'
@@ -247,6 +277,771 @@ def get_outcome_withdrawal(sers):
                 with_low = row
             withdrawal = with_high - with_low
     return with_high, withdrawal
+
+
+def get_decrease_with_base(df):
+    """
+    返回跌幅及其对应的真实基准 high。
+    这是做多策略里反向基准的测试版本，用于估算回撤类阈值。
+    """
+    if df.empty:
+        print('received empty dataframe at get_decrease function.')
+        return np.nan, np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan, np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan, np.nan
+    if df.iloc[0]['open'] <= df.iloc[0]['close']:
+        high = df.iloc[0]['high']
+        low = df.iloc[0]['low']
+    else:
+        high = df.iloc[0]['high']
+        low = df.iloc[0]['close']
+    decrease = 0
+    for index, row in df.iterrows():
+        if row['high'] >= high:
+            low = row['close']
+            high = row['high']
+        elif row['low'] < low:
+            low = row['low']
+        decrease = high - low
+    return decrease, high
+
+
+def _get_increase_with_base_array(window):
+    first_low, first_high, first_open, first_close = (
+        window[0, 0], window[0, 1], window[0, 2], window[0, 3]
+    )
+    if first_open >= first_close:
+        low = first_low
+        high = first_high
+    else:
+        low = first_low
+        high = first_close
+
+    for j in range(1, len(window)):
+        low_j, high_j, close_j = window[j, 0], window[j, 1], window[j, 3]
+        if low_j <= low:
+            high = close_j
+            low = low_j
+        elif high_j > high:
+            high = high_j
+
+    return high - low, low
+
+
+def _get_increase_with_base_array_detail(window):
+    first_low, first_high, first_open, first_close = (
+        window[0, 0], window[0, 1], window[0, 2], window[0, 3]
+    )
+    if first_open >= first_close:
+        low = first_low
+        high = first_high
+    else:
+        low = first_low
+        high = first_close
+    low_idx = 0
+    high_idx = 0
+
+    for j in range(1, len(window)):
+        low_j, high_j, close_j = window[j, 0], window[j, 1], window[j, 3]
+        if low_j <= low:
+            high = close_j
+            low = low_j
+            low_idx = j
+            high_idx = j
+        elif high_j > high:
+            high = high_j
+            high_idx = j
+
+    return {
+        'move': high - low,
+        'base': low,
+        'low_idx': low_idx,
+        'high_idx': high_idx,
+    }
+
+
+def _get_decrease_with_base_array(window):
+    first_low, first_high, first_open, first_close = (
+        window[0, 0], window[0, 1], window[0, 2], window[0, 3]
+    )
+    if first_open <= first_close:
+        high = first_high
+        low = first_low
+    else:
+        high = first_high
+        low = first_close
+
+    for j in range(1, len(window)):
+        low_j, high_j, close_j = window[j, 0], window[j, 1], window[j, 3]
+        if high_j >= high:
+            low = close_j
+            high = high_j
+        elif low_j < low:
+            low = low_j
+
+    return high - low, high
+
+
+def _get_decrease_with_base_array_detail(window):
+    first_low, first_high, first_open, first_close = (
+        window[0, 0], window[0, 1], window[0, 2], window[0, 3]
+    )
+    if first_open <= first_close:
+        high = first_high
+        low = first_low
+    else:
+        high = first_high
+        low = first_close
+    high_idx = 0
+    low_idx = 0
+
+    for j in range(1, len(window)):
+        low_j, high_j, close_j = window[j, 0], window[j, 1], window[j, 3]
+        if high_j >= high:
+            low = close_j
+            high = high_j
+            high_idx = j
+            low_idx = j
+        elif low_j < low:
+            low = low_j
+            low_idx = j
+
+    return {
+        'move': high - low,
+        'base': high,
+        'high_idx': high_idx,
+        'low_idx': low_idx,
+    }
+
+
+def _aggregate_directional_basis(values: np.ndarray, method: str) -> float:
+    if len(values) == 0:
+        return np.nan
+    if method == 'mean':
+        return float(np.nanmean(values))
+    if method == 'ewma':
+        # Placeholder for future versions.
+        pass
+    if method == 'semivariance_rms':
+        # Placeholder for future versions.
+        pass
+    raise NotImplementedError(
+        f'Unsupported BASIS_AGGREGATION_METHOD={method!r}.'
+    )
+
+
+def precompute_long_adaptive_bases(
+        quote: pd.DataFrame,
+        bar_seconds: int,
+        basis_span_minutes: float,
+        basis_subwindow_minutes: float,
+        aggregation_method: str = 'mean') -> pd.DataFrame:
+    """
+    预计算做多策略的测试版自适应方向波动基准。
+
+    定义:
+    - 当前 bar 起点为 t
+    - 只使用 (t - basis_span - basis_subwindow, t) 的历史 bar
+    - 在这段历史里按 1 个 bar 滑动子窗口
+    - 正向基准: mean(get_increase_with_base(window) / base_low)
+    - 反向基准: mean(get_decrease_with_base(window) / base_high)
+    """
+    quote = quote.copy()
+    span_bars = minutes_to_bars(
+        basis_span_minutes, bar_seconds, 'basis_span'
+    )
+    subwindow_bars = minutes_to_bars(
+        basis_subwindow_minutes, bar_seconds, 'basis_subwindow'
+    )
+    required_history_bars = span_bars + subwindow_bars - 1
+
+    dates = pd.to_datetime(quote['Date'], errors='coerce')
+    if dates.notna().sum() >= 2:
+        diffs = dates.diff().dt.total_seconds()
+        irregular_mask = diffs.notna() & (~np.isclose(diffs, bar_seconds))
+        irregular_count = int(irregular_mask.sum())
+        if irregular_count > 0:
+            print(
+                '[AdaptiveBasis] warning: detected '
+                f'{irregular_count} irregular bar gaps; '
+                'test version continues by row order.'
+            )
+
+    arr = quote[['low', 'high', 'open', 'close']].to_numpy(dtype=float)
+    n = arr.shape[0]
+    window_count = n - subwindow_bars + 1
+    pos_window_ratio = np.full(window_count, np.nan, dtype=float)
+    neg_window_ratio = np.full(window_count, np.nan, dtype=float)
+
+    for start in range(window_count):
+        window = arr[start:start + subwindow_bars]
+        increase, low_base = _get_increase_with_base_array(window)
+        decrease, high_base = _get_decrease_with_base_array(window)
+        if low_base != 0:
+            pos_window_ratio[start] = increase / low_base
+        if high_base != 0:
+            neg_window_ratio[start] = decrease / high_base
+
+    if aggregation_method == 'mean':
+        pos_valid = ~np.isnan(pos_window_ratio)
+        neg_valid = ~np.isnan(neg_window_ratio)
+        pos_cumsum = np.concatenate((
+            [0.0], np.cumsum(np.where(pos_valid, pos_window_ratio, 0.0))
+        ))
+        neg_cumsum = np.concatenate((
+            [0.0], np.cumsum(np.where(neg_valid, neg_window_ratio, 0.0))
+        ))
+        pos_count_cumsum = np.concatenate(([0], np.cumsum(pos_valid.astype(int))))
+        neg_count_cumsum = np.concatenate(([0], np.cumsum(neg_valid.astype(int))))
+    else:
+        pos_cumsum = neg_cumsum = pos_count_cumsum = neg_count_cumsum = None
+
+    adaptive_pos_basis = np.full(n, np.nan, dtype=float)
+    adaptive_neg_basis = np.full(n, np.nan, dtype=float)
+
+    for ii in range(required_history_bars, n):
+        start_lo = ii - required_history_bars
+        start_hi = ii - subwindow_bars
+
+        if aggregation_method == 'mean':
+            pos_sum = pos_cumsum[start_hi + 1] - pos_cumsum[start_lo]
+            pos_count = pos_count_cumsum[start_hi + 1] - pos_count_cumsum[start_lo]
+            neg_sum = neg_cumsum[start_hi + 1] - neg_cumsum[start_lo]
+            neg_count = neg_count_cumsum[start_hi + 1] - neg_count_cumsum[start_lo]
+
+            if pos_count > 0:
+                adaptive_pos_basis[ii] = pos_sum / pos_count
+            if neg_count > 0:
+                adaptive_neg_basis[ii] = neg_sum / neg_count
+        else:
+            adaptive_pos_basis[ii] = _aggregate_directional_basis(
+                pos_window_ratio[start_lo:start_hi + 1], aggregation_method
+            )
+            adaptive_neg_basis[ii] = _aggregate_directional_basis(
+                neg_window_ratio[start_lo:start_hi + 1], aggregation_method
+            )
+
+    quote['adaptive_pos_basis'] = adaptive_pos_basis
+    quote['adaptive_neg_basis'] = adaptive_neg_basis
+    quote['adaptive_basis_ready'] = (
+        quote['adaptive_pos_basis'].notna() & quote['adaptive_neg_basis'].notna()
+    ).astype(int)
+
+    return quote
+
+
+def export_first_long_basis_snapshot_excel(
+        file_name: str,
+        save_name: str,
+        quote: pd.DataFrame,
+        open_bar: int,
+        bar_seconds: int,
+        basis_span_minutes_cfg: float,
+        basis_subwindow_minutes_cfg: float):
+    """
+    导出首个 basis 有效时刻的调试快照。
+
+    sheets:
+    - summary: 首个 basis 时刻与参数摘要
+    - ohlc_open_bar: 当时过去 open_bar_minutes 的全部 OHLC
+    - basis_windows: 当时 basis_span_minutes 内所有子窗口的正/反向波动明细
+    """
+    if 'adaptive_basis_ready' not in quote.columns:
+        return
+
+    ready_index = quote.index[quote['adaptive_basis_ready'] == 1]
+    if len(ready_index) == 0:
+        print('[BasisDebug] no ready basis row found, skip snapshot export.')
+        return
+
+    current_idx = int(ready_index[0])
+    span_bars = minutes_to_bars(
+        basis_span_minutes_cfg, bar_seconds, 'basis_span'
+    )
+    subwindow_bars = minutes_to_bars(
+        basis_subwindow_minutes_cfg, bar_seconds, 'basis_subwindow'
+    )
+    required_history_bars = span_bars + subwindow_bars - 1
+
+    open_bar_start = max(0, current_idx - open_bar)
+    ohlc_slice = quote.iloc[open_bar_start:current_idx].copy().reset_index(drop=False)
+    ohlc_slice = ohlc_slice.rename(columns={'index': 'source_index'})
+
+    basis_start_lo = current_idx - required_history_bars
+    basis_start_hi = current_idx - subwindow_bars
+    arr = quote[['low', 'high', 'open', 'close']].to_numpy(dtype=float)
+    basis_rows = []
+    for start in range(basis_start_lo, basis_start_hi + 1):
+        window = arr[start:start + subwindow_bars]
+        pos_detail = _get_increase_with_base_array_detail(window)
+        neg_detail = _get_decrease_with_base_array_detail(window)
+
+        pos_ratio = (
+            pos_detail['move'] / pos_detail['base']
+            if pos_detail['base'] != 0 else np.nan
+        )
+        neg_ratio = (
+            neg_detail['move'] / neg_detail['base']
+            if neg_detail['base'] != 0 else np.nan
+        )
+
+        pos_low_abs = start + pos_detail['low_idx']
+        pos_high_abs = start + pos_detail['high_idx']
+        neg_high_abs = start + neg_detail['high_idx']
+        neg_low_abs = start + neg_detail['low_idx']
+
+        basis_rows.append({
+            'window_start_index': start,
+            'start_date': quote.at[start, 'Date'],
+            'pos_low_index': pos_low_abs,
+            'pos_low': quote.at[pos_low_abs, 'low'],
+            'pos_high_index': pos_high_abs,
+            'pos_high': quote.at[pos_high_abs, 'high'],
+            'pos_move': pos_detail['move'],
+            'pos_ratio': pos_ratio,
+            'neg_high_index': neg_high_abs,
+            'neg_high': quote.at[neg_high_abs, 'high'],
+            'neg_low_index': neg_low_abs,
+            'neg_low': quote.at[neg_low_abs, 'low'],
+            'neg_move': neg_detail['move'],
+            'neg_ratio': neg_ratio,
+        })
+
+    basis_windows_df = pd.DataFrame(basis_rows, columns=[
+        'window_start_index',
+        'start_date',
+        'pos_low_index',
+        'pos_low',
+        'pos_high_index',
+        'pos_high',
+        'pos_move',
+        'pos_ratio',
+        'neg_high_index',
+        'neg_high',
+        'neg_low_index',
+        'neg_low',
+        'neg_move',
+        'neg_ratio',
+    ])
+    summary_df = pd.DataFrame([{
+        'first_basis_index': current_idx,
+        'first_basis_date': quote.at[current_idx, 'Date'],
+        'adaptive_pos_basis': quote.at[current_idx, 'adaptive_pos_basis'],
+        'adaptive_neg_basis': quote.at[current_idx, 'adaptive_neg_basis'],
+        'open_bar_bars': open_bar,
+        'open_bar_minutes': open_bar * bar_seconds / 60.0,
+        'basis_span_minutes': basis_span_minutes_cfg,
+        'basis_subwindow_minutes': basis_subwindow_minutes_cfg,
+        'basis_span_window_count': span_bars,
+        'basis_subwindow_bars': subwindow_bars,
+        'basis_required_history_bars': required_history_bars,
+        'ohlc_open_bar_start_index': open_bar_start,
+        'ohlc_open_bar_end_index': current_idx - 1,
+        'basis_window_start_lo': basis_start_lo,
+        'basis_window_start_hi': basis_start_hi,
+        'basis_window_count': len(basis_windows_df),
+    }])
+
+    debug_name = 'stats ' + save_name + ' first basis snapshot.xlsx'
+    debug_dir = './result/%s long outcome/stats excel/' % file_name
+    os.makedirs(debug_dir, exist_ok=True)
+    debug_path = os.path.join(debug_dir, debug_name)
+
+    def _cell_text(value) -> str:
+        if pd.isna(value):
+            return ''
+        if isinstance(value, pd.Timestamp):
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        return str(value)
+
+    with pd.ExcelWriter(debug_path, engine='xlsxwriter') as writer:
+        summary_df.to_excel(writer, sheet_name='summary', index=False)
+        ohlc_slice.to_excel(writer, sheet_name='ohlc_open_bar', index=False)
+        basis_windows_df.to_excel(writer, sheet_name='basis_windows', index=False)
+
+        workbook = writer.book
+        center_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+        })
+        header_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'bold': True,
+        })
+
+        for sheet_name, df in {
+                'summary': summary_df,
+                'ohlc_open_bar': ohlc_slice,
+                'basis_windows': basis_windows_df,
+        }.items():
+            worksheet = writer.sheets[sheet_name]
+            worksheet.freeze_panes(1, 0)
+            worksheet.set_default_row(20)
+
+            for col_idx, column in enumerate(df.columns):
+                worksheet.write(0, col_idx, column, header_format)
+                max_len = len(str(column))
+                if not df.empty:
+                    max_len = max(
+                        max_len,
+                        max(len(_cell_text(value)) for value in df[column])
+                    )
+                worksheet.set_column(
+                    col_idx,
+                    col_idx,
+                    min(max(max_len + 2, 12), 32),
+                    center_format
+                )
+
+    print(f'[BasisDebug] saved first basis snapshot: {debug_path}')
+    return debug_path
+
+
+def build_long_param_tag(
+        threshold_mode: str,
+        open_bar: int,
+        open_threshold: float,
+        open_continous_threshold: float,
+        open_withdrawal_threshold: float,
+        close_bar: int,
+        close_threshold: float,
+        close_withdrawal_threshold: float,
+        basis_span_minutes: float | None = None,
+        basis_subwindow_minutes: float | None = None) -> str:
+    if threshold_mode == 'adaptive_directional_test':
+        return (
+            f'adt bs{basis_span_minutes:g} bw{basis_subwindow_minutes:g}'
+            + ' om' + str(round(open_bar, 4))
+            + ' opm' + str(round(open_threshold, 4))
+            + ' ocpm' + str(round(open_continous_threshold, 4))
+            + ' owm' + str(round(open_withdrawal_threshold, 4))
+            + ' cm' + str(round(close_bar, 4))
+            + ' cpm' + str(round(close_threshold, 4))
+            + ' cwm' + str(round(close_withdrawal_threshold, 4))
+        )
+
+    return (
+        'om' + str(round(open_bar, 4))
+        + ' o' + str(round(open_threshold, 4))
+        + ' oc' + str(round(open_continous_threshold, 4))
+        + ' ow' + str(round(open_withdrawal_threshold, 4))
+        + ' cm' + str(round(close_bar, 4))
+        + ' c' + str(round(close_threshold, 4))
+        + ' cw' + str(round(close_withdrawal_threshold, 4))
+    )
+
+
+def plot_long_adaptive_threshold_chart(
+        underlying1: pd.DataFrame,
+        detail_df: pd.DataFrame,
+        title: str):
+    fig = plt.figure('adaptive_thresholds', figsize=(18, 9))
+    left = 0.043
+    width = 0.943
+    bottom = 0.055
+    height = 0.9
+    rect_line = [left, bottom, width, height]
+    ax_price = fig.add_axes(rect_line)
+    ax_threshold = ax_price.twinx()
+
+    factor = underlying1['open'].iloc[0]
+    underlying_ratio = pd.DataFrame(index=underlying1.index)
+    underlying_ratio[['open', 'high', 'low', 'close']] = (
+        underlying1[['open', 'high', 'low', 'close']] / factor * 100
+    )
+
+    candlestick2_ohlc(
+        ax_price,
+        underlying_ratio.open,
+        underlying_ratio.high,
+        underlying_ratio.low,
+        underlying_ratio.close,
+        width=0.7,
+        colorup='salmon',
+        colordown='#2ca02c'
+    )
+
+    basis_series = [
+        ('pos_basis', 'pos_basis_t', '#d62728'),
+        ('neg_basis', 'neg_basis_t', '#1f77b4'),
+    ]
+
+    for col, label, color in basis_series:
+        if col not in detail_df.columns:
+            continue
+        series = pd.to_numeric(detail_df[col], errors='coerce') * 100
+        if series.notna().any():
+            ax_threshold.plot(
+                series.index,
+                series,
+                label=label,
+                linewidth=1.15,
+                color=color,
+                alpha=0.9,
+            )
+
+    ax_price.set_title(title)
+    ax_price.xaxis.set_major_locator(plt.MaxNLocator(12))
+    ax_price.spines['top'].set_visible(False)
+    ax_price.spines['right'].set_visible(False)
+    ax_threshold.spines['top'].set_visible(False)
+    ax_threshold.set_ylabel('directional basis mean (%)')
+    ax_threshold.tick_params(axis='y', colors='black')
+
+    handles_1, labels_1 = ax_price.get_legend_handles_labels()
+    handles_2, labels_2 = ax_threshold.get_legend_handles_labels()
+    if labels_1 or labels_2:
+        fig.legend(handles_1 + handles_2, labels_1 + labels_2, loc='upper left')
+
+    return fig, ax_price, ax_threshold
+
+
+def export_interactive_html_long_basis(
+        file_name: str,
+        save_name: str,
+        title: str,
+        underlying1: pd.DataFrame,
+        detail_df: pd.DataFrame,
+        factor: float):
+    if go is None or make_subplots is None:
+        print('[HTML] plotly is not installed, skip basis html export.')
+        return
+
+    def _safe_pct(pref_data, key, digits=4):
+        if isinstance(pref_data, pd.Series) and key in pref_data.index:
+            val = pref_data[key]
+        else:
+            return 'nan'
+        if pd.isna(val):
+            return 'nan'
+        try:
+            return str(round(float(val) * 100, digits))
+        except Exception:
+            return str(val)
+
+    def _safe_val(pref_data, key, digits=4):
+        if isinstance(pref_data, pd.Series) and key in pref_data.index:
+            val = pref_data[key]
+        else:
+            return 'nan'
+        if pd.isna(val):
+            return 'nan'
+        try:
+            return str(round(float(val), digits))
+        except Exception:
+            return str(val)
+
+    def _date_text(raw):
+        dt = str(raw)[:-3]
+        if len(dt) > 5:
+            return dt[:-5] + ' ' + dt[-5:]
+        return dt
+
+    def _price_text(value, digits=6):
+        if pd.isna(value):
+            return 'nan'
+        try:
+            return str(round(float(value), digits))
+        except Exception:
+            return str(value)
+
+    fig_html = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=[0.67, 0.33],
+    )
+    x_index = underlying1.index.to_numpy()
+    x_min = int(x_index[0]) if len(x_index) > 0 else 0
+    x_max = int(x_index[-1]) if len(x_index) > 0 else 1
+    x_span = max(1, x_max - x_min + 1)
+    x_left_pad = max(1, int(round(x_span * 0.006)))
+    x_right_pad = max(1, int(round(x_span * 0.010)))
+
+    # stats basis html 固定开启十字线，便于逐 bar 对照 basis 数值。
+    x_spike_cfg = {
+        'showspikes': True,
+        'spikemode': 'across',
+        'spikesnap': 'cursor',
+        'spikecolor': HTML_CROSSHAIR_COLOR,
+        'spikethickness': 1,
+        'spikedash': 'solid'
+    }
+    y_spike_cfg = {
+        'showspikes': True,
+        'spikemode': 'across',
+        'spikesnap': 'cursor',
+        'spikecolor': HTML_CROSSHAIR_COLOR,
+        'spikethickness': 1,
+        'spikedash': 'solid'
+    }
+    y2_spike_cfg = y_spike_cfg.copy()
+
+    candle_texts = []
+    for idx in underlying1.index:
+        row = underlying1.loc[idx]
+        pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+        candle_texts.append(
+            _date_text(row['Date']) + '<br>'
+            + 'open: ' + _price_text(row['open']) + '<br>'
+            + 'high: ' + _price_text(row['high']) + '<br>'
+            + 'low: ' + _price_text(row['low']) + '<br>'
+            + 'close: ' + _price_text(row['close']) + '<br>'
+            + 'pos_basis: ' + _safe_pct(pref_data, 'pos_basis') + '%' + '<br>'
+            + 'neg_basis: ' + _safe_pct(pref_data, 'neg_basis') + '%' + '<br>'
+            + 'basis_ready: ' + _safe_val(pref_data, 'basis_ready', 0) + '<br>'
+            + 'index: ' + str(idx)
+        )
+
+    fig_html.add_trace(go.Candlestick(
+        x=x_index,
+        open=underlying1['open'] / factor * 100,
+        high=underlying1['high'] / factor * 100,
+        low=underlying1['low'] / factor * 100,
+        close=underlying1['close'] / factor * 100,
+        name='price',
+        hovertext=candle_texts,
+        hoverinfo='text',
+        increasing=dict(
+            line=dict(color='salmon', width=0.8),
+            fillcolor='rgba(250, 128, 114, 0.28)'
+        ),
+        decreasing=dict(
+            line=dict(color='#2ca02c', width=0.8),
+            fillcolor='rgba(44, 160, 44, 0.28)'
+        )
+    ), row=1, col=1)
+
+    basis_configs = [
+        ('pos_basis', 'pos_basis_t', '#d62728'),
+        ('neg_basis', 'neg_basis_t', '#1f77b4'),
+    ]
+    for col, label, color in basis_configs:
+        if col not in detail_df.columns:
+            continue
+        series = pd.to_numeric(detail_df[col], errors='coerce') * 100
+        line_texts = []
+        for idx in detail_df.index:
+            pref_data = detail_df.loc[idx]
+            row = underlying1.loc[idx]
+            line_texts.append(
+                _date_text(row['Date']) + '<br>'
+                + 'open: ' + _price_text(row['open']) + '<br>'
+                + 'high: ' + _price_text(row['high']) + '<br>'
+                + 'low: ' + _price_text(row['low']) + '<br>'
+                + 'close: ' + _price_text(row['close']) + '<br>'
+                + 'pos_basis: ' + _safe_pct(pref_data, 'pos_basis') + '%' + '<br>'
+                + 'neg_basis: ' + _safe_pct(pref_data, 'neg_basis') + '%' + '<br>'
+                + 'basis_ready: ' + _safe_val(pref_data, 'basis_ready', 0) + '<br>'
+                + 'index: ' + str(idx)
+            )
+        fig_html.add_trace(go.Scatter(
+            x=detail_df.index,
+            y=series,
+            mode='lines',
+            name=label,
+            line=dict(color=color, width=1.3),
+            text=line_texts,
+            hovertemplate='%{text}<extra></extra>'
+        ), row=2, col=1)
+
+    fig_html.update_layout(
+        title=title,
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='left', x=0),
+        margin=dict(l=42, r=42, t=45, b=45, pad=0),
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.70)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+    fig_html.update_xaxes(
+        title=None,
+        tickfont=dict(size=10),
+        showgrid=False,
+        rangeslider=dict(visible=False),
+        range=[x_min - x_left_pad, x_max + x_right_pad],
+        autorange=False,
+        showticklabels=False,
+        row=1,
+        col=1,
+        **x_spike_cfg
+    )
+    fig_html.update_xaxes(
+        title=None,
+        tickfont=dict(size=10),
+        showgrid=False,
+        range=[x_min - x_left_pad, x_max + x_right_pad],
+        autorange=False,
+        row=2,
+        col=1,
+        **x_spike_cfg
+    )
+    fig_html.update_yaxes(
+        title='price (base=100)',
+        tickfont=dict(size=10),
+        showgrid=False,
+        row=1,
+        col=1,
+        **y_spike_cfg
+    )
+    fig_html.update_yaxes(
+        title='basis mean (%)',
+        tickfont=dict(size=10),
+        showgrid=False,
+        row=2,
+        col=1,
+        **y2_spike_cfg
+    )
+
+    html_dir = './result/%s long outcome/html' % file_name
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(
+        html_dir,
+        'stats ' + save_name + ' basis interactive.html'
+    )
+    html_text = fig_html.to_html(
+        include_plotlyjs=True,
+        full_html=True,
+        default_width='100vw',
+        default_height='100vh',
+        config={
+            'responsive': True,
+            'displayModeBar': False,
+            'displaylogo': False
+        }
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.70) !important;'
+        'fill-opacity:0.70 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace('<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print('\n')
+    print(f'[HTML] saved interactive basis chart: {html_path}')
+    return html_path
 
 
 def export_interactive_html_long(
@@ -582,6 +1377,12 @@ class MomentumStrategy(BaseStrategy):
             'low_date', 'low_price',
             'high_date', 'high_price',
             'last_index', 'new_opening_count',
+            'basis_ready', 'pos_basis', 'neg_basis',
+            'active_open_threshold',
+            'active_open_cont_threshold',
+            'active_open_wd_threshold',
+            'active_close_threshold',
+            'active_close_wd_threshold',
         ]
 
     def get_default_columns(self) -> dict:
@@ -598,6 +1399,80 @@ class MomentumStrategy(BaseStrategy):
         ctx.signal.at[ctx.index, 'last_index'] = self.last_index
         ctx.signal.at[ctx.index, 'new_opening_count'] = self.new_opening_count
 
+    @staticmethod
+    def _apply_min_threshold(value, min_threshold):
+        if pd.isna(value):
+            return np.nan
+        return max(float(value), float(min_threshold))
+
+    def _resolve_thresholds(self, ctx: BarContext) -> dict:
+        quote = ctx.quote
+        signal = ctx.signal
+        index = ctx.index
+        p = self.params
+
+        threshold_mode = p.get('threshold_mode', 'fixed')
+        pos_basis = np.nan
+        neg_basis = np.nan
+        basis_ready = 1
+
+        if threshold_mode == 'fixed':
+            open_threshold = p['open_threshold']
+            open_continous_threshold = p['open_continous_threshold']
+            open_withdrawal_threshold = p['open_withdrawal_threshold']
+            close_threshold = p['close_threshold']
+            close_withdrawal_threshold = p['close_withdrawal_threshold']
+        elif threshold_mode == 'adaptive_directional_test':
+            pos_basis = (
+                quote.at[index, 'adaptive_pos_basis']
+                if 'adaptive_pos_basis' in quote.columns else np.nan
+            )
+            neg_basis = (
+                quote.at[index, 'adaptive_neg_basis']
+                if 'adaptive_neg_basis' in quote.columns else np.nan
+            )
+            basis_ready = int((not pd.isna(pos_basis)) and (not pd.isna(neg_basis)))
+
+            open_threshold = self._apply_min_threshold(
+                pos_basis * p['open_threshold'],
+                p['open_min_threshold'],
+            )
+            open_continous_threshold = self._apply_min_threshold(
+                pos_basis * p['open_continous_threshold'],
+                p['open_cont_min_threshold'],
+            )
+            open_withdrawal_threshold = self._apply_min_threshold(
+                neg_basis * p['open_withdrawal_threshold'],
+                p['open_wd_min_threshold'],
+            )
+            close_threshold = self._apply_min_threshold(
+                pos_basis * p['close_threshold'],
+                p['close_min_threshold'],
+            )
+            close_withdrawal_threshold = self._apply_min_threshold(
+                neg_basis * p['close_withdrawal_threshold'],
+                p['close_wd_min_threshold'],
+            )
+        else:
+            raise ValueError(f'Unsupported threshold_mode={threshold_mode!r}')
+
+        signal.at[index, 'basis_ready'] = basis_ready
+        signal.at[index, 'pos_basis'] = pos_basis
+        signal.at[index, 'neg_basis'] = neg_basis
+        signal.at[index, 'active_open_threshold'] = open_threshold
+        signal.at[index, 'active_open_cont_threshold'] = open_continous_threshold
+        signal.at[index, 'active_open_wd_threshold'] = open_withdrawal_threshold
+        signal.at[index, 'active_close_threshold'] = close_threshold
+        signal.at[index, 'active_close_wd_threshold'] = close_withdrawal_threshold
+
+        return {
+            'open_threshold': open_threshold,
+            'open_continous_threshold': open_continous_threshold,
+            'open_withdrawal_threshold': open_withdrawal_threshold,
+            'close_threshold': close_threshold,
+            'close_withdrawal_threshold': close_withdrawal_threshold,
+        }
+
     def on_bar_idle(self, ctx: BarContext) -> OpenResult | None:
         quote = ctx.quote
         signal = ctx.signal
@@ -606,13 +1481,14 @@ class MomentumStrategy(BaseStrategy):
         p = self.params
 
         open_bar = p['open_bar']
-        open_threshold = p['open_threshold']
-        open_continous_threshold = p['open_continous_threshold']
-        open_withdrawal_threshold = p['open_withdrawal_threshold']
         close_bar = p['close_bar']
-        close_threshold = p['close_threshold']
-        close_withdrawal_threshold = p['close_withdrawal_threshold']
         open_continous_threshold2 = p['open_continous_threshold2']
+        thresholds = self._resolve_thresholds(ctx)
+        open_threshold = thresholds['open_threshold']
+        open_continous_threshold = thresholds['open_continous_threshold']
+        open_withdrawal_threshold = thresholds['open_withdrawal_threshold']
+        close_threshold = thresholds['close_threshold']
+        close_withdrawal_threshold = thresholds['close_withdrawal_threshold']
 
         # 1. last_index 赋值
         if self.new_opening:
@@ -805,9 +1681,10 @@ class MomentumStrategy(BaseStrategy):
         p = self.params
 
         close_bar = p['close_bar']
-        close_threshold = p['close_threshold']
-        close_withdrawal_threshold = p['close_withdrawal_threshold']
         open_continous_threshold2 = p['open_continous_threshold2']
+        thresholds = self._resolve_thresholds(ctx)
+        close_threshold = thresholds['close_threshold']
+        close_withdrawal_threshold = thresholds['close_withdrawal_threshold']
 
         # 初始化
         if self.new_opening:
@@ -974,10 +1851,10 @@ if __name__ == '__main__':
     file_name = DATA_FILE_NAME
 
     df, ROUND_PRECISION, BAR_SECONDS = load_data(folder_path, file_name)
-    open_bar_cfg = minutes_to_bars(OPEN_BAR_MINUTES, BAR_SECONDS, 'open_bar')
-    close_bar_cfg = minutes_to_bars(CLOSE_BAR_MINUTES, BAR_SECONDS, 'close_bar')
+    open_bar_cfg = minutes_to_bars(open_bar_minutes, BAR_SECONDS, 'open_bar')
+    close_bar_cfg = minutes_to_bars(close_bar_minutes, BAR_SECONDS, 'close_bar')
     open_bar2_cfg = minutes_to_bars_optional(
-        OPEN_BAR2_MINUTES, BAR_SECONDS, 'open_bar2'
+        open_bar2_minutes, BAR_SECONDS, 'open_bar2'
     )
 
     # 创建输出文件夹
@@ -986,10 +1863,11 @@ if __name__ == '__main__':
     os.makedirs(f'./result/{file_name} long outcome/trans', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
+    last_stats_html_path = None
 
     # 选择回测时间区间
-    startdate = START_INDEX
-    enddate = END_INDEX
+    startdate = start_index
+    enddate = end_index
 
     preview_df = df[df.index > startdate]
     if enddate != 'latest':
@@ -1006,49 +1884,95 @@ if __name__ == '__main__':
         df5 = df5[df5.index < enddate].reset_index(drop=True)
     underlying = df5.copy()
 
-    only_close = ONLY_CLOSE
-    if only_close:
+    only_close_cfg = only_close
+    if only_close_cfg:
         underlying.open = underlying.low = underlying.high = underlying.close
 
-    # --- 参数循环 ---
-    for_num_1 = FOR_NUM_1
-    for_num_2 = FOR_NUM_2
-    for_num_3 = FOR_NUM_3
-    print(for_num_1, for_num_2, for_num_3)
-    step1 = STEP1
-    step2 = STEP2
-    step3 = STEP3
+    threshold_mode = THRESHOLD_MODE
+    basis_span_minutes_cfg = basis_span_minutes
+    basis_subwindow_minutes_cfg = basis_subwindow_minutes
+    print(f'[Main] threshold mode: {threshold_mode}')
 
-    for num in range(for_num_1):
-        for i in range(for_num_2):
+    if threshold_mode == 'adaptive_directional_test':
+        underlying = precompute_long_adaptive_bases(
+            underlying,
+            BAR_SECONDS,
+            basis_span_minutes_cfg,
+            basis_subwindow_minutes_cfg,
+            aggregation_method=BASIS_AGGREGATION_METHOD,
+        )
+
+    # --- 参数循环 ---
+    for_num_1_cfg = for_num_1
+    for_num_2_cfg = for_num_2
+    for_num_3_cfg = for_num_3
+    print(for_num_1_cfg, for_num_2_cfg, for_num_3_cfg)
+    step1_cfg = step1
+    step2_cfg = step2
+    step3_cfg = step3
+
+    for num in range(for_num_1_cfg):
+        for i in range(for_num_2_cfg):
             print(f'{str(num)} {str(i)}\n')
 
             # 策略参数
             open_bar = open_bar_cfg
-            open_threshold = OPEN_THRESHOLD
-            open_withdrawal_threshold = OPEN_WITHDRAWAL_THRESHOLD
             close_bar = close_bar_cfg
-            close_threshold = CLOSE_THRESHOLD
-            open_continous_threshold = OPEN_CONTINOUS_THRESHOLD + (i * step1)
-            close_withdrawal_threshold = CLOSE_WITHDRAWAL_THRESHOLD + (num * step2)
+            if threshold_mode == 'adaptive_directional_test':
+                open_threshold = OPEN_POS_MULTIPLIER
+                open_withdrawal_threshold = OPEN_WD_NEG_MULTIPLIER
+                close_threshold = CLOSE_SPEED_POS_MULTIPLIER
+                open_continous_threshold = (
+                    OPEN_CONTINOUS_POS_MULTIPLIER + (i * step1_cfg)
+                )
+                close_withdrawal_threshold = (
+                    CLOSE_WD_NEG_MULTIPLIER + (num * step2_cfg)
+                )
+            else:
+                open_threshold = open_threshold_cfg
+                open_withdrawal_threshold = open_withdrawal_threshold_cfg
+                close_threshold = close_threshold_cfg
+                open_continous_threshold = open_continous_threshold_cfg + (i * step1_cfg)
+                close_withdrawal_threshold = (
+                    close_withdrawal_threshold_cfg + (num * step2_cfg)
+                )
             # 双策略
             open_bar2 = open_bar2_cfg
-            open_threshold2 = OPEN_THRESHOLD2
-            open_continous_threshold2 = OPEN_CONTINOUS_THRESHOLD2
-            close_withdrawal_threshold2 = CLOSE_WITHDRAWAL_THRESHOLD2 + (num * step3)
+            open_threshold2_runtime = open_threshold2_cfg
+            open_continous_threshold2_runtime = open_continous_threshold2_cfg
+            close_withdrawal_threshold2_runtime = close_withdrawal_threshold2_cfg + (num * step3_cfg)
             commision_percent = COMMISION_PERCENT
             capital = CAPITAL
 
             # 参数校验
-            if open_threshold < open_withdrawal_threshold:
-                print('open_threshold不可小于open_withdrawal_threshold')
-                continue
-            if open_continous_threshold < open_threshold:
-                print('open_continous_threshold不可小于open_threshold')
-                continue
-            if open_continous_threshold < close_withdrawal_threshold:
-                print('open_continous_threshold不可小于close_withdrawal_threshold')
-                continue
+            if threshold_mode == 'adaptive_directional_test':
+                if min(
+                    open_threshold,
+                    open_withdrawal_threshold,
+                    close_threshold,
+                    open_continous_threshold,
+                    close_withdrawal_threshold,
+                    OPEN_POS_MIN_THRESHOLD,
+                    OPEN_CONTINOUS_POS_MIN_THRESHOLD,
+                    CLOSE_SPEED_POS_MIN_THRESHOLD,
+                    OPEN_WD_NEG_MIN_THRESHOLD,
+                    CLOSE_WD_NEG_MIN_THRESHOLD,
+                ) < 0:
+                    print('adaptive multiplier/min threshold不可为负数')
+                    continue
+                if open_continous_threshold < open_threshold:
+                    print('open_continous_threshold multiplier不可小于open_threshold multiplier')
+                    continue
+            else:
+                if open_threshold < open_withdrawal_threshold:
+                    print('open_threshold不可小于open_withdrawal_threshold')
+                    continue
+                if open_continous_threshold < open_threshold:
+                    print('open_continous_threshold不可小于open_threshold')
+                    continue
+                if open_continous_threshold < close_withdrawal_threshold:
+                    print('open_continous_threshold不可小于close_withdrawal_threshold')
+                    continue
 
             # Window_Increase 预计算
             arr = underlying[['low', 'high', 'open', 'close']].to_numpy(dtype=float)
@@ -1073,14 +1997,20 @@ if __name__ == '__main__':
             # ====== 使用引擎运行回测 ======
             params = {
                 'open_bar': open_bar,
+                'threshold_mode': threshold_mode,
                 'open_threshold': open_threshold,
                 'open_continous_threshold': open_continous_threshold,
                 'open_withdrawal_threshold': open_withdrawal_threshold,
+                'open_min_threshold': OPEN_POS_MIN_THRESHOLD,
+                'open_cont_min_threshold': OPEN_CONTINOUS_POS_MIN_THRESHOLD,
+                'open_wd_min_threshold': OPEN_WD_NEG_MIN_THRESHOLD,
                 'close_bar': close_bar,
                 'close_threshold': close_threshold,
                 'close_withdrawal_threshold': close_withdrawal_threshold,
-                'open_continous_threshold2': open_continous_threshold2,
-                'close_withdrawal_threshold2': close_withdrawal_threshold2,
+                'close_min_threshold': CLOSE_SPEED_POS_MIN_THRESHOLD,
+                'close_wd_min_threshold': CLOSE_WD_NEG_MIN_THRESHOLD,
+                'open_continous_threshold2': open_continous_threshold2_runtime,
+                'close_withdrawal_threshold2': close_withdrawal_threshold2_runtime,
                 'round_precision': ROUND_PRECISION,
             }
 
@@ -1103,6 +2033,29 @@ if __name__ == '__main__':
                 Capital_outcome = 100
             perf_outcome = performance.reset_index(
                 drop=True)[['date', 'capital']]
+            param_tag = build_long_param_tag(
+                threshold_mode,
+                open_bar,
+                open_threshold,
+                open_continous_threshold,
+                open_withdrawal_threshold,
+                close_bar,
+                close_threshold,
+                close_withdrawal_threshold,
+                basis_span_minutes=(
+                    basis_span_minutes_cfg
+                    if threshold_mode == 'adaptive_directional_test' else None
+                ),
+                basis_subwindow_minutes=(
+                    basis_subwindow_minutes_cfg
+                    if threshold_mode == 'adaptive_directional_test' else None
+                ),
+            )
+            count_tag = (
+                str(round(withdrawal_close_count, 4))
+                + '+' + str(round(speed_close_count, 4))
+            )
+            result_tag = param_tag + ' ' + count_tag
 
             # 打印结果
             print(str(startdate) + '-' + str(enddate))
@@ -1112,28 +2065,25 @@ if __name__ == '__main__':
                   + str(round(withdrawal_close_count, 4)))
             print('speed close count = '
                   + str(round(speed_close_count, 4)))
-            print('om' + str(round(open_bar, 4))
-                  + ' o' + str(round(open_threshold, 4))
-                  + ' oc' + str(round(open_continous_threshold, 4))
-                  + ' cm' + str(round(close_bar, 4))
-                  + ' c' + str(round(close_threshold, 4))
-                  + ' ow' + str(round(open_withdrawal_threshold, 4))
-                  + ' cw' + str(round(close_withdrawal_threshold, 4))
-                  + ' ' + str(round(withdrawal_close_count, 4))
-                  + '+' + str(round(speed_close_count, 4)))
+            print(result_tag)
             print('profit: ' + str(round(performance.capital.iloc[-1], 2)))
 
             # ====== Plot (fig1) ======
-            save_name = (str(startdate) + '-' + str(enddate)
-                         + ' om' + str(round(open_bar, 4))
-                         + ' o' + str(round(open_threshold, 4))
-                         + ' oc' + str(round(open_continous_threshold, 4))
-                         + ' cm' + str(round(close_bar, 4))
-                         + ' c' + str(round(close_threshold, 4))
-                         + ' ow' + str(round(open_withdrawal_threshold, 4))
-                         + ' cw' + str(round(close_withdrawal_threshold, 4))
-                         + ' ' + str(round(withdrawal_close_count, 4))
-                         + '+' + str(round(speed_close_count, 4)))
+            save_name = str(startdate) + '-' + str(enddate) + ' ' + result_tag
+
+            if (
+                    threshold_mode == 'adaptive_directional_test'
+                    and EXPORT_STATS
+            ):
+                export_first_long_basis_snapshot_excel(
+                    file_name=file_name,
+                    save_name=save_name,
+                    quote=underlying,
+                    open_bar=open_bar,
+                    bar_seconds=BAR_SECONDS,
+                    basis_span_minutes_cfg=basis_span_minutes_cfg,
+                    basis_subwindow_minutes_cfg=basis_subwindow_minutes_cfg,
+                )
 
             fig1_title = str(Capital_outcome) + ' ' + save_name
             if SAVE_STATIC_PLOT:
@@ -1141,7 +2091,7 @@ if __name__ == '__main__':
                 fig1_path = ('./result/%s long outcome/' % file_name
                              + ' ' + str(Capital_outcome)
                              + save_name + f' Long.{plot_ext}')
-                close_fig = (for_num_2 != 1) or (len(transactions_df) == 0)
+                close_fig = (for_num_2_cfg != 1) or (len(transactions_df) == 0)
                 plot_backtest_chart(
                     underlying, transactions_df, perf_outcome,
                     title=fig1_title,
@@ -1165,18 +2115,24 @@ if __name__ == '__main__':
                     ['holding_wd', 'holding_inc', 'execution'],
                     axis=1, inplace=True)
 
-            perf_name = ('om' + str(round(open_bar, 4))
-                         + ' o' + str(round(open_threshold, 4))
-                         + ' oc' + str(round(open_continous_threshold, 4))
-                         + ' ow' + str(round(open_withdrawal_threshold, 4))
-                         + ' cm' + str(round(close_bar, 4))
-                         + ' c' + str(round(close_threshold, 4))
-                         + ' cw' + str(round(close_withdrawal_threshold, 4))
-                         + ' ' + str(round(withdrawal_close_count, 4))
-                         + '+' + str(round(speed_close_count, 4))
-                         + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
-                         + ' ' + str(Capital_outcome)
-                         + ' ' + 'perf.xlsx')
+            if threshold_mode == 'adaptive_directional_test' and EXPORT_STATS:
+                underlying1_stats = underlying.reset_index(drop=True)
+                factor_stats = underlying1_stats['open'].iloc[0]
+                last_stats_html_path = export_interactive_html_long_basis(
+                    file_name=file_name,
+                    save_name=save_name,
+                    title='adaptive thresholds ' + str(Capital_outcome) + ' ' + save_name,
+                    underlying1=underlying1_stats,
+                    detail_df=detail_df,
+                    factor=factor_stats,
+                )
+
+            perf_name = (
+                param_tag + ' ' + count_tag
+                + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
+                + ' ' + str(Capital_outcome)
+                + ' ' + 'perf.xlsx'
+            )
             writer1 = pd.ExcelWriter(
                 './result/%s long outcome/perf/' % file_name + perf_name,
                 engine='xlsxwriter')
@@ -1221,15 +2177,7 @@ if __name__ == '__main__':
             if len(transactions_df) != 0:
                 writer2 = pd.ExcelWriter(
                     './result/%s long outcome/trans/' % file_name
-                    + 'om' + str(round(open_bar, 4))
-                    + ' o' + str(round(open_threshold, 4))
-                    + ' oc' + str(round(open_continous_threshold, 4))
-                    + ' ow' + str(round(open_withdrawal_threshold, 4))
-                    + ' cm' + str(round(close_bar, 4))
-                    + ' c' + str(round(close_threshold, 4))
-                    + ' cw' + str(round(close_withdrawal_threshold, 4))
-                    + ' ' + str(round(withdrawal_close_count, 4))
-                    + '+' + str(round(speed_close_count, 4)) + ' '
+                    + param_tag + ' ' + count_tag + ' '
                     + 'Long ' + str(startdate) + '-' + str(enddate)
                     + ' ' + str(Capital_outcome)
                     + ' ' + 'trans.xlsx', engine='xlsxwriter')
@@ -1260,8 +2208,7 @@ if __name__ == '__main__':
                 writer2.close()
 
             # Stats
-            outcome_index = (str(round(open_continous_threshold, 4))
-                             + ' ' + str(round(close_withdrawal_threshold, 4)))
+            outcome_index = param_tag
             perf_temp = perf_outcome[-1:].capital.iloc[0] - 100
             outcome_stats.at[outcome_index, 'capital'] = perf_temp + 100
             trade_num = len(transactions_df) / 2
@@ -1274,7 +2221,7 @@ if __name__ == '__main__':
     print("\ntime = --- %s seconds ---" % (time.time() - start_time))
 
     # 多参数对比图
-    if for_num_2 > 1:
+    if for_num_2_cfg > 1:
         fig_stat_1 = plt.figure('stats', figsize=(18, 9))
         left = 0.033
         width = 0.943
@@ -1299,13 +2246,13 @@ if __name__ == '__main__':
         stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
         plt.savefig('./result/stats %s long outcome/' % file_name
                     + ' ' + save_name + ' '
-                    + str(for_num_1) + ' '
-                    + str(for_num_2) + ' '
+                    + str(for_num_1_cfg) + ' '
+                    + str(for_num_2_cfg) + ' '
                     + f'all outcome.{stats_plot_ext}', dpi=1000)
         outcome_stats.to_excel('./result/stats %s long outcome/' % file_name
                                + ' ' + save_name + ' '
-                               + str(for_num_1) + ' '
-                               + str(for_num_2) + ' '
+                               + str(for_num_1_cfg) + ' '
+                               + str(for_num_2_cfg) + ' '
                                + 'all outcome.xlsx')
     else:
         disk_path = './result/'
@@ -1315,7 +2262,7 @@ if __name__ == '__main__':
                 disk_path + '%s long outcome/perf/' % file_name + perf_name)
 
     # ====== 交互式图 (fig2) ======
-    if for_num_2 == 1:
+    if for_num_2_cfg == 1:
         fig2 = plt.figure(figsize=(18, 9))
         left = 0.043
         width = 0.943
@@ -1519,17 +2466,11 @@ if __name__ == '__main__':
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
         plt.xticks(rotation=0)
-        fig2_title = (' ' + str(round(Capital_outcome, 2))
-                      + ' om' + str(round(open_bar, 4))
-                      + ' o' + str(round(open_threshold, 4))
-                      + ' oc' + str(round(open_continous_threshold, 4))
-                      + ' cm' + str(round(close_bar, 4))
-                      + ' c' + str(round(close_threshold, 4))
-                      + ' ow' + str(round(open_withdrawal_threshold, 4))
-                      + ' cw' + str(round(close_withdrawal_threshold, 4))
-                      + ' ' + str(round(withdrawal_close_count, 4))
-                      + '+' + str(round(speed_close_count, 4))
-                      + ' ' + str(startdate) + '-' + str(enddate))
+        fig2_title = (
+            ' ' + str(round(Capital_outcome, 2))
+            + ' ' + result_tag
+            + ' ' + str(startdate) + '-' + str(enddate)
+        )
         plt.title('%s' % fig2_title)
 
         xaxis1 = detail_df.index
@@ -1573,3 +2514,12 @@ if __name__ == '__main__':
                 factor=factor
             )
         plt.show()
+
+    if EXPORT_STATS and last_stats_html_path:
+        try:
+            if hasattr(os, 'startfile'):
+                os.startfile(last_stats_html_path)
+            else:
+                print(f'[Stats] generated stats html: {last_stats_html_path}')
+        except OSError as exc:
+            print(f'[Stats] failed to open stats html: {exc}')

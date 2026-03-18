@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Long No-WD Strategy - 无回撤做多策略
 =====================================
@@ -39,7 +39,7 @@ DATA_FOLDER_PATH = r"F:\Data\XAGUSD\\"
 DATA_FILE_NAME = "xagusd_30s_all"
 
 # 回测区间
-START_INDEX = 35001
+START_INDEX = 39001
 END_INDEX = 40000  # 或 'latest'
 ONLY_CLOSE = False
 
@@ -51,9 +51,9 @@ STEP1 = 0.001
 STEP3 = 0.01
 
 # 策略参数（分钟输入，自动换算 bars）
-OPEN_BAR_MINUTES = 10.0
+OPEN_BAR_MINUTES = 15.0
 OPEN_THRESHOLD = 0.0001
-CLOSE_BAR_MINUTES = 10.0
+CLOSE_BAR_MINUTES = OPEN_BAR_MINUTES
 CLOSE_THRESHOLD = 0.001
 OPEN_CONTINOUS_THRESHOLD = 0.0013
 
@@ -380,144 +380,6 @@ def build_entry_to_max_profit_withdrawal_df(
     return pd.DataFrame(records)
 
 
-def compute_trend_stats(prices: np.ndarray):
-    """
-    对一段价格序列做 OLS 拟合 + ACF 最优时间窗口搜索。
-
-    Parameters
-    ----------
-    prices : np.ndarray
-        close 价格序列（从 low 到 high 的区间）。
-
-    Returns
-    -------
-    dict with keys:
-        ols_slope, ols_intercept, ols_r_squared,
-        optimal_w, optimal_w_cv
-    """
-    n = len(prices)
-    result = {
-        'ols_slope': np.nan,
-        'ols_intercept': np.nan,
-        'ols_r_squared': np.nan,
-        'optimal_w': np.nan,
-        'optimal_w_cv': np.nan,
-    }
-    if n < 4:
-        return result
-
-    # OLS: P(t) = a*t + b
-    t = np.arange(n, dtype=float)
-    coeffs = np.polyfit(t, prices, 1)
-    slope, intercept = coeffs[0], coeffs[1]
-    fitted = slope * t + intercept
-    ss_res = np.sum((prices - fitted) ** 2)
-    ss_tot = np.sum((prices - np.mean(prices)) ** 2)
-    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
-
-    result['ols_slope'] = slope
-    result['ols_intercept'] = intercept
-    result['ols_r_squared'] = r_squared
-
-    # 残差
-    residuals = prices - fitted
-
-    # ACF 搜索范围: [2, n//2]
-    w_min = 2
-    w_max = n // 2
-    if w_max < w_min:
-        return result
-
-    # 计算残差 ACF
-    r_var = np.var(residuals)
-    if r_var < 1e-20:
-        # 残差几乎为零 -> 完美线性趋势，任何 W 都可以
-        result['optimal_w'] = w_min
-        result['optimal_w_cv'] = 0.0
-        return result
-
-    r_mean = np.mean(residuals)
-    acf_values = np.zeros(w_max + 1)
-    for lag in range(w_min, w_max + 1):
-        cov = np.mean(
-            (residuals[:n - lag] - r_mean) * (residuals[lag:] - r_mean)
-        )
-        acf_values[lag] = cov / r_var
-
-    # 找 ACF 在 [w_min, w_max] 内的第一个局部峰值
-    best_w = np.nan
-    for lag in range(w_min + 1, w_max):
-        if (acf_values[lag] > acf_values[lag - 1]
-                and acf_values[lag] >= acf_values[lag + 1]):
-            best_w = lag
-            break
-
-    # 如果没有局部峰值，选 ACF 最大的 lag
-    if np.isnan(best_w):
-        best_w = w_min + int(np.argmax(acf_values[w_min:w_max + 1]))
-
-    result['optimal_w'] = best_w
-
-    # 计算 optimal_w 下的 CV
-    w = int(best_w)
-    drops = np.array([
-        (prices[i] - prices[i + w]) / prices[i]
-        if prices[i] != 0 else 0.0
-        for i in range(n - w)
-    ])
-    if len(drops) > 0 and np.abs(np.mean(drops)) > 1e-12:
-        result['optimal_w_cv'] = float(np.std(drops) / np.abs(np.mean(drops)))
-    else:
-        result['optimal_w_cv'] = np.nan
-
-    return result
-
-
-def build_trend_analysis_df(quote: pd.DataFrame,
-                            trade_extreme_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    遍历每笔交易，对 low -> high 区间做趋势分析。
-    low = max_loss_before_max_profit（真正的最低点）
-    high = max_profit（真正的最高点）
-    """
-    records = []
-    for idx, row in trade_extreme_df.iterrows():
-        low_idx = int(row['max_loss_before_max_profit_index'])
-        high_idx = int(row['max_profit_index'])
-        if high_idx <= low_idx:
-            continue
-
-        seg = quote.iloc[low_idx:high_idx + 1]
-        prices = seg['close'].to_numpy(dtype=float)
-        stats = compute_trend_stats(prices)
-
-        low_price = float(row['max_loss_before_max_profit_price'])
-        high_price = float(row['max_profit_price'])
-
-        records.append({
-            'trade_id': idx + 1,
-            'low_index': low_idx,
-            'low_date': str(row.get('max_loss_before_max_profit_date', '')),
-            'low_price': low_price,
-            'high_index': high_idx,
-            'high_date': str(row.get('max_profit_date', '')),
-            'high_price': high_price,
-            'duration_bars': high_idx - low_idx,
-            'total_return_pct': round(
-                (high_price / low_price - 1.0) * 100.0, 4)
-                if low_price != 0 else np.nan,
-            'ols_slope': stats['ols_slope'],
-            'ols_intercept': stats['ols_intercept'],
-            'ols_r_squared': round(stats['ols_r_squared'], 6)
-                if not np.isnan(stats['ols_r_squared']) else np.nan,
-            'optimal_w': stats['optimal_w'],
-            'optimal_w_cv': round(stats['optimal_w_cv'], 6)
-                if not np.isnan(stats['optimal_w_cv']) else np.nan,
-        })
-
-    return pd.DataFrame(records)
-
-
 def export_interactive_html_long_no_wd(
         file_name: str,
         save_name: str,
@@ -799,169 +661,6 @@ def export_interactive_html_long_no_wd(
         f.write(html_text)
     print('\n')
     print(f'[HTML] saved interactive chart: {html_path}')
-
-
-def export_trend_analysis_html(
-        file_name: str,
-        save_name: str,
-        underlying1: pd.DataFrame,
-        trend_df: pd.DataFrame,
-        factor: float):
-    """趋势分析专用 HTML：hover 显示 high/low 点，连线 low->high。"""
-    if go is None:
-        print('[HTML] plotly is not installed, skip trend html export.')
-        return
-    if len(trend_df) == 0:
-        print('[HTML] no trend data, skip trend html export.')
-        return
-
-    fig_html = go.Figure()
-    x_index = underlying1.index.to_numpy()
-    x_min = int(x_index[0]) if len(x_index) > 0 else 0
-    x_max = int(x_index[-1]) if len(x_index) > 0 else 1
-    x_span = max(1, x_max - x_min + 1)
-    x_left_pad = max(1, int(round(x_span * 0.006)))
-    x_right_pad = max(1, int(round(x_span * 0.010)))
-
-    # K 线
-    fig_html.add_trace(go.Candlestick(
-        x=x_index,
-        open=underlying1['open'] / factor * 100,
-        high=underlying1['high'] / factor * 100,
-        low=underlying1['low'] / factor * 100,
-        close=underlying1['close'] / factor * 100,
-        name='price',
-        increasing=dict(
-            line=dict(color='salmon', width=0.8),
-            fillcolor='rgba(250, 128, 114, 0.28)'
-        ),
-        decreasing=dict(
-            line=dict(color='#2ca02c', width=0.8),
-            fillcolor='rgba(44, 160, 44, 0.28)'
-        )
-    ))
-
-    # Low 点 (蓝色)
-    low_texts = []
-    for _, row in trend_df.iterrows():
-        low_texts.append(
-            f"trade: {int(row['trade_id'])}<br>"
-            f"low_date: {row['low_date']}<br>"
-            f"low_price: {row['low_price']}<br>"
-            f"index: {int(row['low_index'])}"
-        )
-    fig_html.add_trace(go.Scatter(
-        x=trend_df['low_index'].astype(int).tolist(),
-        y=(trend_df['low_price'] / factor * 100).tolist(),
-        mode='markers',
-        marker=dict(color='#1F77B4', size=5),
-        name='low',
-        text=low_texts,
-        hovertemplate='%{text}<extra></extra>'
-    ))
-
-    # High 点 (橙色)
-    high_texts = []
-    for _, row in trend_df.iterrows():
-        ols_r2 = f"{row['ols_r_squared']:.4f}" if pd.notna(row['ols_r_squared']) else 'nan'
-        opt_w = f"{int(row['optimal_w'])}" if pd.notna(row['optimal_w']) else 'nan'
-        opt_cv = f"{row['optimal_w_cv']:.4f}" if pd.notna(row['optimal_w_cv']) else 'nan'
-        high_texts.append(
-            f"trade: {int(row['trade_id'])}<br>"
-            f"high_date: {row['high_date']}<br>"
-            f"high_price: {row['high_price']}<br>"
-            f"duration: {int(row['duration_bars'])} bars<br>"
-            f"return: {row['total_return_pct']:.4f}%<br>"
-            f"R²: {ols_r2}<br>"
-            f"optimal_w: {opt_w}<br>"
-            f"CV: {opt_cv}<br>"
-            f"index: {int(row['high_index'])}"
-        )
-    fig_html.add_trace(go.Scatter(
-        x=trend_df['high_index'].astype(int).tolist(),
-        y=(trend_df['high_price'] / factor * 100).tolist(),
-        mode='markers',
-        marker=dict(color='orange', size=5),
-        name='high',
-        text=high_texts,
-        hovertemplate='%{text}<extra></extra>'
-    ))
-
-    # 连线 low -> high
-    line_x = []
-    line_y = []
-    for _, row in trend_df.iterrows():
-        line_x.extend([int(row['low_index']), int(row['high_index']), None])
-        line_y.extend([
-            row['low_price'] / factor * 100,
-            row['high_price'] / factor * 100,
-            None
-        ])
-    fig_html.add_trace(go.Scatter(
-        x=line_x, y=line_y,
-        mode='lines',
-        line=dict(color=ACCENT_BLUE, width=2),
-        name='trend_link',
-        hoverinfo='skip'
-    ))
-
-    fig_html.update_layout(
-        title=None,
-        template='plotly_white',
-        autosize=True,
-        hovermode='closest',
-        legend=dict(orientation='h', yanchor='bottom', y=1.01,
-                    xanchor='left', x=0),
-        xaxis=dict(
-            title=None, tickfont=dict(size=10), showgrid=False,
-            rangeslider=dict(visible=False),
-            range=[x_min - x_left_pad, x_max + x_right_pad],
-            autorange=False, showspikes=False
-        ),
-        yaxis=dict(
-            title=None, tickfont=dict(size=10), showgrid=False,
-            showspikes=False
-        ),
-        margin=dict(l=42, r=25, t=38, b=45, pad=0),
-        hoverlabel=dict(
-            bgcolor='rgba(255, 255, 255, 0.50)',
-            bordercolor='rgba(0, 0, 0, 0.45)',
-            font=dict(color='black')
-        )
-    )
-
-    html_dir = './result/%s long no wd outcome/html' % file_name
-    os.makedirs(html_dir, exist_ok=True)
-    html_path = os.path.join(
-        html_dir, save_name + ' trend_analysis interactive.html')
-    html_text = fig_html.to_html(
-        include_plotlyjs=True, full_html=True,
-        default_width='100vw', default_height='100vh',
-        config={'responsive': True, 'displayModeBar': False,
-                'displaylogo': False}
-    )
-    html_text = html_text.replace(
-        '<head>',
-        '<head><style>'
-        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
-        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
-        '.hoverlayer .hovertext .bg,'
-        '.hoverlayer .hovertext rect,'
-        '.hoverlayer .hovertext path{'
-        'fill:rgba(255,255,255,0.50) !important;'
-        'fill-opacity:0.50 !important;'
-        'stroke:rgba(0,0,0,0.45) !important;'
-        'stroke-opacity:0.45 !important;}'
-        '.hoverlayer .hovertext{opacity:1 !important;}'
-        '.hoverlayer .hovertext text{fill:#000 !important;}'
-        '</style>',
-        1
-    )
-    html_text = html_text.replace(
-        '<body>', '<body style="margin:0;overflow:hidden;">', 1)
-    with open(html_path, 'w', encoding='utf-8') as f:
-        f.write(html_text)
-    print(f'[HTML] saved trend analysis chart: {html_path}')
 
 
 # ============================================================
@@ -1261,7 +960,6 @@ if __name__ == '__main__':
     os.makedirs(f'./result/{file_name} long no wd outcome/perf', exist_ok=True)
     os.makedirs(f'./result/{file_name} long no wd outcome/trans', exist_ok=True)
     os.makedirs(f'./result/{file_name} long no wd outcome/trade_stats', exist_ok=True)
-    os.makedirs(f'./result/{file_name} long no wd outcome/trend_stats', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
 
@@ -1358,10 +1056,6 @@ if __name__ == '__main__':
                 underlying, df_signal, capital, commision_percent)
             trade_extreme_df = build_trade_extreme_stats_long(
                 underlying, transactions_df)
-            trend_analysis_df = build_trend_analysis_df(
-                underlying, trade_extreme_df)
-            print(f'[Trend] trade_extreme_df rows: {len(trade_extreme_df)}, '
-                  f'trend_analysis_df rows: {len(trend_analysis_df)}')
             entry_to_max_profit_wd_df = build_entry_to_max_profit_withdrawal_df(
                 underlying, transactions_df)
 
@@ -1534,59 +1228,6 @@ if __name__ == '__main__':
             entry_to_max_profit_wd_df.to_excel(
                 writer3, sheet_name='entry_to_max_profit_wd', index=False)
             writer3.close()
-
-            # Trend analysis Excel
-            if len(trend_analysis_df) > 0:
-                trend_stats_name = ('om' + str(round(open_bar, 4))
-                                    + ' o' + str(round(open_threshold, 4))
-                                    + ' oc' + str(round(open_continous_threshold, 4))
-                                    + ' cm' + str(round(close_bar, 4))
-                                    + ' c' + str(round(close_threshold, 4))
-                                    + ' ' + str(round(withdrawal_close_count, 4))
-                                    + '+' + str(round(speed_close_count, 4))
-                                    + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
-                                    + ' ' + str(Capital_outcome)
-                                    + ' ' + 'trend_stats.xlsx')
-                writer_trend = pd.ExcelWriter(
-                    './result/%s long no wd outcome/trend_stats/' % file_name
-                    + trend_stats_name,
-                    engine='xlsxwriter')
-                trend_analysis_df.to_excel(
-                    writer_trend, sheet_name='trend_analysis', index=False)
-                wb_t = writer_trend.book
-                ws_t = writer_trend.sheets['trend_analysis']
-                ws_t.set_default_row(15)
-                fmt_t = wb_t.add_format()
-                fmt_t.set_font_name('Microsoft YaHei UI Light')
-                fmt_t.set_align('center')
-                fmt_t.set_align('vcenter')
-                fmt_t.set_font_size(12)
-                fmt_t_int = wb_t.add_format({'num_format': '0'})
-                fmt_t_int.set_font_name('Microsoft YaHei UI Light')
-                fmt_t_int.set_align('center')
-                fmt_t_int.set_align('vcenter')
-                # A=trade_id B=low_index C=low_date D=low_price
-                # E=high_index F=high_date G=high_price
-                # H=duration_bars I=total_return_pct
-                # J=ols_slope K=ols_intercept L=ols_r_squared
-                # M=optimal_w N=optimal_w_cv
-                ws_t.set_column('A:A', 8, fmt_t_int)    # trade_id
-                ws_t.set_column('B:B', 10, fmt_t_int)   # low_index
-                ws_t.set_column('C:C', 19, fmt_t)       # low_date
-                ws_t.set_column('D:D', 11, fmt_t)       # low_price
-                ws_t.set_column('E:E', 10, fmt_t_int)   # high_index
-                ws_t.set_column('F:F', 19, fmt_t)       # high_date
-                ws_t.set_column('G:G', 11, fmt_t)       # high_price
-                ws_t.set_column('H:H', 12, fmt_t_int)   # duration_bars
-                ws_t.set_column('I:I', 14, fmt_t)       # total_return_pct
-                ws_t.set_column('J:J', 12, fmt_t)       # ols_slope
-                ws_t.set_column('K:K', 13, fmt_t)       # ols_intercept
-                ws_t.set_column('L:L', 12, fmt_t)       # ols_r_squared
-                ws_t.set_column('M:M', 10, fmt_t_int)   # optimal_w
-                ws_t.set_column('N:N', 13, fmt_t)       # optimal_w_cv
-                ws_t.freeze_panes(1, 0)
-                writer_trend.close()
-                print(f'[Excel] saved trend stats: {trend_stats_name}')
 
             # 排序柱状图：每笔交易一根柱（按回撤比例从大到小）
             if len(entry_to_max_profit_wd_df) > 0:
@@ -2127,12 +1768,4 @@ if __name__ == '__main__':
                 transactions_df=transactions_df,
                 factor=factor
             )
-            if len(trend_analysis_df) > 0:
-                export_trend_analysis_html(
-                    file_name=file_name,
-                    save_name=save_name,
-                    underlying1=underlying1,
-                    trend_df=trend_analysis_df,
-                    factor=factor
-                )
         plt.show()

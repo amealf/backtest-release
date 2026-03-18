@@ -21,25 +21,30 @@ from urllib.parse import parse_qs, unquote, urlparse
 # ------------------------------------------------------------
 # Config
 # ------------------------------------------------------------
+# Project root = parent of dashboard/ folder
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 HOST = "127.0.0.1"
 PORT = 8765
-AUTO_OPEN_BROWSER = True
+AUTO_OPEN_BROWSER = False
 
-# Set this to your result folder. Relative path is based on project root.
-# Default scans all html files under ./result
-HTML_SOURCE_FOLDER = "result"
+# Set this to the folder you want the dashboard to scan.
+# You can use either:
+# 1. a relative path based on PROJECT_ROOT, for example: r"result"
+# 2. an absolute path, for example: r"F:\Backtest\result"
+SCAN_FOLDER_PATH = (
+    r"Backtest v2 ratio\result\xagusd_30s_all long no wd outcome"
+    r"\trend test case html"
+)
 
 IGNORE_DIR_NAMES = {".git", "__pycache__"}
 MIN_SIDEBAR_WIDTH = 240
 MAX_SIDEBAR_WIDTH = 760
 DEFAULT_SIDEBAR_WIDTH = 320
 
-# Project root = parent of dashboard/ folder
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
 
 def _resolve_scan_root() -> Path:
-    folder = (HTML_SOURCE_FOLDER or "").strip()
+    folder = (SCAN_FOLDER_PATH or "").strip()
     if not folder:
         return PROJECT_ROOT.resolve()
     path = Path(folder)
@@ -383,6 +388,42 @@ DASHBOARD_HTML = f"""<!doctype html>
       background: #fff;
     }}
 
+    .fullscreen-overlay {{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      grid-template-rows: 40px minmax(0, 1fr);
+      background: #fff;
+    }}
+
+    .fullscreen-overlay.active {{
+      display: grid;
+    }}
+
+    .fullscreen-header {{
+      border-bottom: 1px solid #e5e7eb;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+      color: #374151;
+      background: #fff;
+      min-width: 0;
+    }}
+
+    .fullscreen-viewer {{
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: #fff;
+    }}
+
     .empty {{
       width: 100%;
       height: 100%;
@@ -422,6 +463,16 @@ DASHBOARD_HTML = f"""<!doctype html>
     </main>
   </div>
 
+  <div id=\"fullscreenOverlay\" class=\"fullscreen-overlay\">
+    <div class=\"fullscreen-header\">
+      <button id=\"closeFullscreenBtn\" class=\"btn\">Show list</button>
+      <div id=\"fullscreenHeaderPath\" class=\"path-text\">No file selected</div>
+    </div>
+    <div id=\"fullscreenViewer\" class=\"fullscreen-viewer\">
+      <div class=\"empty\">No file selected</div>
+    </div>
+  </div>
+
   <script>
     const MIN_SIDEBAR_WIDTH = {MIN_SIDEBAR_WIDTH};
     const MAX_SIDEBAR_WIDTH = {MAX_SIDEBAR_WIDTH};
@@ -437,6 +488,10 @@ DASHBOARD_HTML = f"""<!doctype html>
     const fileListEl = document.getElementById("fileList");
     const mainHeaderPathEl = document.getElementById("mainHeaderPath");
     const viewerWrapEl = document.getElementById("viewerWrap");
+    const fullscreenOverlayEl = document.getElementById("fullscreenOverlay");
+    const fullscreenViewerEl = document.getElementById("fullscreenViewer");
+    const fullscreenHeaderPathEl = document.getElementById("fullscreenHeaderPath");
+    const closeFullscreenBtn = document.getElementById("closeFullscreenBtn");
 
     let files = [];
     let filtered = [];
@@ -451,6 +506,8 @@ DASHBOARD_HTML = f"""<!doctype html>
     const preloadQueue = [];
     const preloadSet = new Set();
     let preloadInFlightCount = 0;
+    let fullscreenFrame = null;
+    let fullscreenToken = "";
 
     const hoverDelayMs = 35;
 
@@ -463,6 +520,10 @@ DASHBOARD_HTML = f"""<!doctype html>
       sidebarHidden = hidden;
       appEl.classList.toggle("sidebar-hidden", hidden);
       toggleSidebarBtn.textContent = hidden ? "Show list" : "Hide list";
+      fullscreenOverlayEl.classList.toggle("active", hidden);
+      if (hidden) {{
+        showFullscreenFrame(selectedToken);
+      }}
     }}
 
     function escapeHtml(s) {{
@@ -569,6 +630,33 @@ DASHBOARD_HTML = f"""<!doctype html>
       return frame;
     }}
 
+    function showFullscreenFrame(token) {{
+      if (!token) {{
+        fullscreenToken = "";
+        fullscreenFrame = null;
+        fullscreenHeaderPathEl.textContent = "No file selected";
+        fullscreenViewerEl.innerHTML = `<div class="empty">No file selected</div>`;
+        return;
+      }}
+
+      const f = files.find((x) => x.token === token);
+      fullscreenHeaderPathEl.textContent = f
+        ? `${{f.folder ? f.folder + " / " : ""}}${{displayName(f.name)}}`
+        : token;
+
+      if (fullscreenToken === token && fullscreenFrame && fullscreenFrame.isConnected) {{
+        return;
+      }}
+
+      fullscreenViewerEl.innerHTML = "";
+      fullscreenFrame = createIframe(token);
+      fullscreenFrame.style.visibility = "visible";
+      fullscreenFrame.style.pointerEvents = "auto";
+      fullscreenFrame.style.zIndex = "1";
+      fullscreenViewerEl.appendChild(fullscreenFrame);
+      fullscreenToken = token;
+    }}
+
     function getOrCreateFrame(token) {{
       if (iframeCache.has(token)) {{
         return iframeCache.get(token);
@@ -656,6 +744,9 @@ DASHBOARD_HTML = f"""<!doctype html>
       showFrame(frame);
       touchCache(token);
       enforceCacheLimit();
+      if (sidebarHidden) {{
+        showFullscreenFrame(token);
+      }}
     }}
 
     async function fetchFiles() {{
@@ -700,6 +791,9 @@ DASHBOARD_HTML = f"""<!doctype html>
         mainHeaderPathEl.textContent = f ? `${{f.folder ? f.folder + " / " : ""}}${{displayName(f.name)}}` : selectedToken;
         const frame = iframeCache.get(selectedToken) || getOrCreateFrame(selectedToken);
         showFrame(frame);
+        if (sidebarHidden) {{
+          showFullscreenFrame(selectedToken);
+        }}
       }}
     }}
 
@@ -723,6 +817,10 @@ DASHBOARD_HTML = f"""<!doctype html>
 
     toggleSidebarBtn.addEventListener("click", () => {{
       setSidebarHidden(!sidebarHidden);
+    }});
+
+    closeFullscreenBtn.addEventListener("click", () => {{
+      setSidebarHidden(false);
     }});
 
     fileListEl.addEventListener("scroll", loadMoreIfNeeded);

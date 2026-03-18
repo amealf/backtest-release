@@ -1,0 +1,3909 @@
+# -*- coding: utf-8 -*-
+"""
+Long No-WD Strategy - 无回撤做多策略
+=====================================
+策略入口脚本：包含 LongNoWDStrategy 类、参数循环、绘图、Excel 输出。
+依赖 backtest_main.py 中的通用框架。
+"""
+
+import pandas as pd
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.widgets import Cursor
+import matplotlib.ticker as ticker
+from mplfinance.original_flavor import candlestick2_ohlc
+import time, os
+import socket
+import subprocess
+try:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+except ImportError:
+    go = None
+    make_subplots = None
+
+import sys, os as _os
+from urllib.parse import urlparse
+sys.path.insert(0, _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..')))
+from backtest_main import (
+    BacktestEngine, BaseStrategy,
+    BarContext, OpenResult, CloseResult,
+    generate_performance, load_data,
+    plot_backtest_chart,
+)
+
+start_time = time.time()
+
+
+# ============================================================
+# User Config
+# ============================================================
+
+# 数据
+DATA_FOLDER_PATH = r"F:\Data\XAGUSD\\"
+DATA_FILE_NAME = "xagusd_30s_all"
+
+# 回测区间
+START_INDEX = 39001
+END_INDEX = 45000  # 或 'latest'
+ONLY_CLOSE = False
+
+# 参数循环
+FOR_NUM_1 = 1
+FOR_NUM_2 = 1
+FOR_NUM_3 = 1
+STEP1 = 0.001
+STEP3 = 0.01
+
+# 重采样设置：
+# 设为 '' 表示直接使用当前原始周期
+# 例如可设为 '1min' / '5min' / '15min' / '1H'
+# 策略参数：直接用 bar 数，单位是当前实际回测周期
+RESAMPLE_RULE = ''
+OPEN_BAR = 60
+OPEN_THRESHOLD = 0.0001
+CLOSE_BAR = OPEN_BAR
+CLOSE_THRESHOLD = 0.001
+OPEN_CONTINOUS_THRESHOLD = 0.0013
+
+# 双策略参数（保留）
+OPEN_BAR2 = np.nan  # np.nan 表示不启用
+OPEN_THRESHOLD2 = np.nan
+OPEN_CONTINOUS_THRESHOLD2 = 0.003
+
+COMMISION_PERCENT = 0.000
+CAPITAL = 100.0
+TREND_W_MIN_BARS = 5
+TREND_W_MAX_BARS = 60
+TREND_MIN_PROGRESS_SAMPLES = 3
+TREND_IMPROVEMENT_CAPTURE_TARGET = 0.85
+TREND_TEST_MODE = True
+TREND_TEST_CASE_INDEX = 0
+TREND_TEST_CASE_COUNT = 10
+TREND_TEST_WINDOWS = [5, 7, 15]
+TREND_TEST_NEAR_BAND = 1
+TREND_TEST_BIG_DROP_RATIO = 2.0
+# 仅用于柱图可视化：把 segment_withdrawal=0 的柱子显示为最小高度（不改原始数据）
+ZERO_BAR_VISUAL_FLOOR_PCT = 0.0001
+EXPORT_INTERACTIVE_HTML = True
+ACCENT_BLUE = '#1F77B4'
+SELL_WD_COLOR = 'green'
+SELL_SPEED_COLOR = 'black'
+HTML_CROSSHAIR_ENABLED = False
+HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
+HTML_SHOW_TRADE_COUNT_BADGE = False
+SAVE_STATIC_PLOT = False
+# 当 SAVE_STATIC_PLOT=True 时决定保存为 PDF 或 PNG
+SAVE_PLOT_AS_PDF = False
+SHOW_MATPLOTLIB_PLOTS = False
+AUTO_OPEN_TREND_HTML = True
+AUTO_OPEN_DASHBOARD = True
+DASHBOARD_URL = 'http://127.0.0.1:8765'
+BACKTEST_HTML_FOLDER = 'backtest html'
+TREND_ANALYSIS_HTML_FOLDER = 'trend analysis html'
+TREND_TEST_CASE_HTML_FOLDER = 'trend test case html'
+
+
+def minutes_to_bars(minutes: float, bar_seconds: int, name: str) -> int:
+    raw = (minutes * 60.0) / bar_seconds
+    bars = max(1, int(round(raw)))
+    if not np.isclose(raw, bars):
+        print(f'[Config] {name}: {minutes}min -> {raw:.4f} bars, rounded to {bars}')
+    return bars
+
+
+def minutes_to_bars_optional(minutes: float, bar_seconds: int, name: str):
+    if pd.isna(minutes):
+        return np.nan
+    return minutes_to_bars(minutes, bar_seconds, name)
+
+
+def detect_bar_seconds_from_df(df: pd.DataFrame) -> int:
+    dates = pd.to_datetime(df['Date'], errors='coerce')
+    diffs = dates.diff().dropna()
+    if len(diffs) > 50:
+        diffs = diffs.iloc[:50]
+    median_delta = diffs.median()
+    if pd.isna(median_delta):
+        raise ValueError('无法识别当前数据周期：Date 列无法计算相邻时间差。')
+    total_seconds = int(median_delta.total_seconds())
+    if total_seconds <= 0:
+        raise ValueError(f'识别到非法周期秒数：{total_seconds}')
+    return total_seconds
+
+
+def resample_ohlc_df(df: pd.DataFrame, rule: str):
+    resample_rule = (rule or '').strip()
+    if not resample_rule:
+        return df.copy(), detect_bar_seconds_from_df(df)
+
+    temp = df.copy()
+    temp['Date'] = pd.to_datetime(temp['Date'], errors='coerce')
+    temp = temp.dropna(subset=['Date']).sort_values('Date')
+    temp = temp.set_index('Date')
+    agg = {
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+    }
+    if 'vol' in temp.columns:
+        agg['vol'] = 'sum'
+    temp = temp.resample(resample_rule).agg(agg)
+    temp = temp.dropna(subset=['open', 'high', 'low', 'close']).reset_index()
+    temp['Date'] = temp['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    if 'vol' not in temp.columns:
+        temp['vol'] = 0.0
+    return temp, detect_bar_seconds_from_df(temp)
+
+
+def get_html_output_dir(file_name: str, folder_name: str) -> str:
+    return './result/%s long no wd outcome/%s' % (file_name, folder_name)
+
+
+def is_tcp_port_open(host: str, port: int, timeout: float = 0.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def ensure_dashboard_server_running(url: str,
+                                    wait_timeout: float = 6.0) -> bool:
+    parsed = urlparse(url)
+    host = parsed.hostname or '127.0.0.1'
+    port = parsed.port or 80
+    if is_tcp_port_open(host, port):
+        return True
+
+    dashboard_script = _os.path.abspath(
+        _os.path.join(_os.path.dirname(__file__), '..', 'dashboard', 'dashboard.py')
+    )
+    if not _os.path.exists(dashboard_script):
+        print(f'[Dashboard] script not found: {dashboard_script}')
+        return False
+
+    creationflags = 0
+    if os.name == 'nt':
+        creationflags = getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(
+            subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+
+    try:
+        subprocess.Popen(
+            [sys.executable, dashboard_script],
+            cwd=_os.path.dirname(dashboard_script),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+    except Exception as exc:
+        print(f'[Dashboard] failed to start server: {exc}')
+        return False
+
+    deadline = time.time() + wait_timeout
+    while time.time() < deadline:
+        if is_tcp_port_open(host, port):
+            return True
+        time.sleep(0.2)
+
+    print(f'[Dashboard] server did not become ready: {url}')
+    return False
+
+
+# ============================================================
+# Utility Functions
+# ============================================================
+
+def get_increase(df):
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan
+    if df.iloc[0]['open'] >= df.iloc[0]['close']:
+        low = df.iloc[0]['low']
+        high = df.iloc[0]['high']
+    else:
+        low = df.iloc[0]['low']
+        high = df.iloc[0]['close']
+    increase = 0
+    for index, row in df.iterrows():
+        if row['low'] <= low:
+            high = row['close']
+            low = row['low']
+        elif row['high'] > high:
+            high = row['high']
+        increase = high - low
+    return increase
+
+
+def get_increase_with_base(df):
+    """
+    返回涨幅及其对应的真实基准 low。
+    注意：基准 low 可能不是窗口第一根 bar 的 low。
+    """
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan, np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan, np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan, np.nan
+    if df.iloc[0]['open'] >= df.iloc[0]['close']:
+        low = df.iloc[0]['low']
+        high = df.iloc[0]['high']
+    else:
+        low = df.iloc[0]['low']
+        high = df.iloc[0]['close']
+    increase = 0
+    for index, row in df.iterrows():
+        if row['low'] <= low:
+            high = row['close']
+            low = row['low']
+        elif row['high'] > high:
+            high = row['high']
+        increase = high - low
+    return increase, low
+
+
+def get_analysis_increase(df):
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan
+    if len(df) == 1:
+        return 0.0
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan
+    low = df.iloc[0]['close']
+    high = df.iloc[1:].high.max()
+    analysis_increase = high - low
+    return analysis_increase
+
+
+def get_withdrawal(df):
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan
+    initialized = False
+    with_high = 0
+    with_low = 0
+    withdrawal = 0
+    for index, row in df.iterrows():
+        if not initialized:
+            with_high = row['close']
+            with_low = row['close']
+            withdrawal = with_high - with_low
+            initialized = True
+        else:
+            if row['high'] > with_high:
+                with_high = row['high']
+                with_low = row['close']
+            elif row['low'] < with_low:
+                with_low = row['low']
+            withdrawal = with_high - with_low
+    return with_high, withdrawal
+
+
+def get_max_wd(df, assumebarwithdrawal=True):
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan
+    initialized = False
+    with_high = 0
+    with_low = 0
+    withdrawal = 0
+    max_wd = 0
+    for index, row in df.iterrows():
+        if not initialized:
+            with_high = row['high']
+            with_low = row['close']
+            initialized = True
+        else:
+            if row['high'] > with_high:
+                with_high = row['high']
+                with_low = row['close']
+            elif row['low'] < with_low:
+                with_low = row['low']
+            withdrawal = (with_high - with_low) / with_high
+        if withdrawal > max_wd:
+            max_wd = withdrawal
+    return max_wd
+
+
+def get_outcome_withdrawal(sers):
+    initialized = False
+    with_high = 0
+    with_low = 0
+    withdrawal = 0
+    for row in sers:
+        if not initialized:
+            with_high = row
+            with_low = row
+            withdrawal = with_high - with_low
+            initialized = True
+        else:
+            if row > with_high:
+                with_high = row
+                with_low = row
+            elif row < with_low:
+                with_low = row
+            withdrawal = with_high - with_low
+    return with_high, withdrawal
+
+
+# 每笔交易统计：最大收益、最大收益前最大亏损
+def build_trade_extreme_stats_long(quote: pd.DataFrame,
+                                   transactions_df: pd.DataFrame) -> pd.DataFrame:
+    records = []
+    tr = transactions_df[transactions_df['Type'].isin(['long', 'sell'])].sort_index()
+    current_entry = None
+
+    for idx, row in tr.iterrows():
+        if row['Type'] == 'long':
+            current_entry = (int(idx), row)
+            continue
+
+        if row['Type'] == 'sell' and current_entry is not None:
+            entry_idx, entry_row = current_entry
+            exit_idx = int(idx)
+            if exit_idx < entry_idx:
+                current_entry = None
+                continue
+
+            entry_price = float(entry_row['Price'])
+            exit_price = float(row['Price'])
+            trade_slice = quote.iloc[entry_idx:exit_idx + 1].copy()
+            if len(trade_slice) == 0:
+                current_entry = None
+                continue
+
+            max_profit_bar_idx = int(trade_slice['high'].idxmax())
+            max_profit_price = float(quote.loc[max_profit_bar_idx, 'high'])
+            max_profit_pct = (max_profit_price / entry_price - 1.0) * 100.0
+
+            pre_slice = quote.iloc[entry_idx:max_profit_bar_idx + 1].copy()
+            max_loss_bar_idx = int(pre_slice['low'].idxmin())
+            max_loss_price = float(quote.loc[max_loss_bar_idx, 'low'])
+            max_loss_before_max_profit_pct = (max_loss_price / entry_price - 1.0) * 100.0
+
+            realized_pct = (exit_price / entry_price - 1.0) * 100.0
+            holding_bars = exit_idx - entry_idx + 1
+
+            records.append({
+                'entry_index': entry_idx,
+                'entry_date': quote.loc[entry_idx, 'Date'],
+                'entry_price': entry_price,
+                'exit_index': exit_idx,
+                'exit_date': quote.loc[exit_idx, 'Date'],
+                'exit_price': exit_price,
+                'holding_bars': holding_bars,
+                'realized_pct': realized_pct,
+                'max_profit_pct': max_profit_pct,
+                'max_profit_index': max_profit_bar_idx,
+                'max_profit_date': quote.loc[max_profit_bar_idx, 'Date'],
+                'max_profit_price': max_profit_price,
+                'max_loss_before_max_profit_pct': max_loss_before_max_profit_pct,
+                'max_loss_before_max_profit_index': max_loss_bar_idx,
+                'max_loss_before_max_profit_date': quote.loc[max_loss_bar_idx, 'Date'],
+                'max_loss_before_max_profit_price': max_loss_price,
+            })
+
+            current_entry = None
+
+    return pd.DataFrame(records)
+
+
+def build_entry_to_max_profit_withdrawal_df(
+        quote: pd.DataFrame,
+        transactions_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    逐笔统计：从开仓到「该笔最大盈利点」这段区间的最大回撤比例。
+    回撤比例口径 = withdrawal / with_high（%）。
+    """
+    records = []
+    tr = transactions_df[transactions_df['Type'].isin(['long', 'sell'])].sort_index()
+    current_entry = None
+    trade_id = 0
+
+    for idx, row in tr.iterrows():
+        if row['Type'] == 'long':
+            current_entry = (int(idx), row)
+            continue
+
+        if row['Type'] == 'sell' and current_entry is not None:
+            trade_id += 1
+            entry_idx, entry_row = current_entry
+            exit_idx = int(idx)
+            if exit_idx < entry_idx:
+                current_entry = None
+                continue
+
+            trade_slice = quote.iloc[entry_idx:exit_idx + 1].copy()
+            if len(trade_slice) == 0:
+                current_entry = None
+                continue
+
+            # 该笔交易的最大盈利点（long口径：最高点）
+            max_profit_idx = int(trade_slice['high'].idxmax())
+            entry_price = float(entry_row['Price'])
+            max_profit_price = float(quote.loc[max_profit_idx, 'high'])
+            max_profit_pct = (max_profit_price / entry_price - 1.0) * 100.0
+
+            # 开仓 -> 最大盈利点
+            seg_slice = quote.iloc[entry_idx:max_profit_idx + 1].copy()
+            if len(seg_slice) == 0:
+                current_entry = None
+                continue
+
+            with_high, withdrawal = get_withdrawal(seg_slice)
+            max_withdrawal_to_max_profit_pct = (
+                (withdrawal / with_high) * 100.0
+                if (pd.notna(with_high) and with_high != 0)
+                else np.nan
+            )
+
+            records.append({
+                'trade_id': trade_id,
+                'entry_index': entry_idx,
+                'entry_date': quote.loc[entry_idx, 'Date'],
+                'entry_price': entry_price,
+                'max_profit_index': max_profit_idx,
+                'max_profit_date': quote.loc[max_profit_idx, 'Date'],
+                'max_profit_pct': max_profit_pct,
+                'segment_bars': max_profit_idx - entry_idx + 1,
+                'segment_with_high': with_high,
+                'segment_withdrawal': withdrawal,
+                'max_withdrawal_to_max_profit_pct': max_withdrawal_to_max_profit_pct,
+            })
+
+            current_entry = None
+
+    return pd.DataFrame(records)
+
+
+def legacy_compute_trend_stats(prices: np.ndarray):
+    """
+    对一段价格序列做 OLS 拟合 + ACF 最优时间窗口搜索。
+
+    Parameters
+    ----------
+    prices : np.ndarray
+        close 价格序列（从 low 到 high 的区间）。
+
+    Returns
+    -------
+    dict with keys:
+        ols_slope, ols_intercept, ols_r_squared,
+        optimal_w_bars, optimal_w_cv
+    """
+    n = len(prices)
+    result = {
+        'ols_slope': np.nan,
+        'ols_intercept': np.nan,
+        'ols_r_squared': np.nan,
+        'optimal_w_bars': np.nan,
+        'optimal_w_cv': np.nan,
+    }
+    if n < 4:
+        return result
+
+    # OLS: P(t) = a*t + b
+    t = np.arange(n, dtype=float)
+    coeffs = np.polyfit(t, prices, 1)
+    slope, intercept = coeffs[0], coeffs[1]
+    fitted = slope * t + intercept
+    ss_res = np.sum((prices - fitted) ** 2)
+    ss_tot = np.sum((prices - np.mean(prices)) ** 2)
+    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
+
+    result['ols_slope'] = slope
+    result['ols_intercept'] = intercept
+    result['ols_r_squared'] = r_squared
+
+    # 残差
+    residuals = prices - fitted
+
+    # ACF 搜索范围: [2, n//2]
+    w_min = 2
+    w_max = n // 2
+    if w_max < w_min:
+        return result
+
+    # 计算残差 ACF
+    r_var = np.var(residuals)
+    if r_var < 1e-20:
+        # 残差几乎为零 -> 完美线性趋势，任何 W 都可以
+        result['optimal_w_bars'] = w_min
+        result['optimal_w_cv'] = 0.0
+        return result
+
+    r_mean = np.mean(residuals)
+    acf_values = np.zeros(w_max + 1)
+    for lag in range(w_min, w_max + 1):
+        cov = np.mean(
+            (residuals[:n - lag] - r_mean) * (residuals[lag:] - r_mean)
+        )
+        acf_values[lag] = cov / r_var
+
+    # 找 ACF 在 [w_min, w_max] 内的第一个局部峰值
+    best_w = np.nan
+    for lag in range(w_min + 1, w_max):
+        if (acf_values[lag] > acf_values[lag - 1]
+                and acf_values[lag] >= acf_values[lag + 1]):
+            best_w = lag
+            break
+
+    # 如果没有局部峰值，选 ACF 最大的 lag
+    if np.isnan(best_w):
+        best_w = w_min + int(np.argmax(acf_values[w_min:w_max + 1]))
+
+    result['optimal_w_bars'] = best_w
+
+    # 计算 optimal_w_bars 下的 CV
+    w = int(best_w)
+    drops = np.array([
+        (prices[i] - prices[i + w]) / prices[i]
+        if prices[i] != 0 else 0.0
+        for i in range(n - w)
+    ])
+    if len(drops) > 0 and np.abs(np.mean(drops)) > 1e-12:
+        result['optimal_w_cv'] = float(np.std(drops) / np.abs(np.mean(drops)))
+    else:
+        result['optimal_w_cv'] = np.nan
+
+    return result
+
+
+def legacy_build_trend_analysis_df(quote: pd.DataFrame,
+                                   trade_extreme_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    遍历每笔交易，对 low -> high 区间做趋势分析。
+    low: 在 [prev_max_profit, curr_max_profit] 范围内搜索真正的最低点
+    high: trade[i].max_profit（真正的最高点）
+    """
+    records = []
+    prev_max_profit_idx = None
+
+    for idx, row in trade_extreme_df.iterrows():
+        high_idx = int(row['max_profit_index'])
+
+        # 确定 low 搜索起点
+        if prev_max_profit_idx is None:
+            search_start = int(row['entry_index'])
+        else:
+            search_start = prev_max_profit_idx
+
+        # 在 [search_start, high_idx] 范围内找最低 low
+        search_slice = quote.iloc[search_start:high_idx + 1]
+        if len(search_slice) == 0:
+            prev_max_profit_idx = high_idx
+            continue
+
+        low_bar_idx = int(search_slice['low'].idxmin())
+        low_price = float(quote.loc[low_bar_idx, 'low'])
+        high_price = float(row['max_profit_price'])
+
+        # 更新 prev_max_profit_idx（无论是否写入 records）
+        prev_max_profit_idx = high_idx
+
+        if high_idx <= low_bar_idx:
+            continue
+
+        seg = quote.iloc[low_bar_idx:high_idx + 1]
+        prices = seg['close'].to_numpy(dtype=float)
+        stats = legacy_compute_trend_stats(prices)
+
+        duration = high_idx - low_bar_idx
+        # OLS 拟合线两端的值
+        ols_fitted_start = stats['ols_intercept']
+        ols_fitted_end = (stats['ols_slope'] * duration + stats['ols_intercept']
+                          if not np.isnan(stats['ols_slope']) else np.nan)
+
+        records.append({
+            'trade_id': idx + 1,
+            'entry_index': int(row['entry_index']),
+            'entry_date': str(row.get('entry_date', '')),
+            'exit_index': int(row['exit_index']),
+            'exit_date': str(row.get('exit_date', '')),
+            'search_start': search_start,
+            'low_index': low_bar_idx,
+            'low_date': str(quote.loc[low_bar_idx, 'Date']),
+            'low_price': low_price,
+            'high_index': high_idx,
+            'high_date': str(row.get('max_profit_date', '')),
+            'high_price': high_price,
+            'duration_bars': duration,
+            'total_return_pct': round(
+                (high_price / low_price - 1.0) * 100.0, 4)
+                if low_price != 0 else np.nan,
+            'ols_slope': stats['ols_slope'],
+            'ols_intercept': stats['ols_intercept'],
+            'ols_r_squared': round(stats['ols_r_squared'], 6)
+                if not np.isnan(stats['ols_r_squared']) else np.nan,
+            'optimal_w_bars': stats['optimal_w_bars'],
+            'optimal_w_cv': round(stats['optimal_w_cv'], 6)
+                if not np.isnan(stats['optimal_w_cv']) else np.nan,
+            'ols_fitted_start': ols_fitted_start,
+            'ols_fitted_end': ols_fitted_end,
+        })
+
+    return pd.DataFrame(records)
+
+
+def round_or_nan(value, digits: int = 6):
+    if value is None or pd.isna(value) or not np.isfinite(value):
+        return np.nan
+    return round(float(value), digits)
+
+
+def legacy_compute_optimal_window_stats_long(seg: pd.DataFrame,
+                                             w_min: int,
+                                             w_max: int,
+                                             min_samples: int,
+                                             stability_tol_ratio: float):
+    result = {
+        'optimal_w_bars': np.nan,
+        'min_progress_pct': np.nan,
+        'mean_progress_pct': np.nan,
+        'max_progress_pct': np.nan,
+        'std_progress_pct': np.nan,
+        'std_to_min_ratio': np.nan,
+        'range_to_min_ratio': np.nan,
+        'progress_count': np.nan,
+        'optimal_window_valid': 0,
+        'optimal_window_invalid_reason': '',
+    }
+    scan_records = []
+
+    if w_min > w_max:
+        result['optimal_window_invalid_reason'] = 'invalid_window_range'
+        return result, scan_records
+
+    n = len(seg)
+    highs = seg['high'].to_numpy(dtype=float)
+    lows = seg['low'].to_numpy(dtype=float)
+    cummax = np.maximum.accumulate(highs) if n > 0 else np.array([])
+
+    has_candidate = False
+    valid_rows = []
+
+    for w in range(int(w_min), int(w_max) + 1):
+        scan = {
+            'w_bars': int(w),
+            'window_valid': 0,
+            'invalid_reason': '',
+            'min_progress_pct': np.nan,
+            'mean_progress_pct': np.nan,
+            'max_progress_pct': np.nan,
+            'std_progress_pct': np.nan,
+            'range_above_min_pct': np.nan,
+            'std_to_min_ratio': np.nan,
+            'range_to_min_ratio': np.nan,
+            'progress_count': 0,
+        }
+
+        if w >= n:
+            scan['invalid_reason'] = 'segment_too_short'
+            scan_records.append(scan)
+            continue
+
+        if (n - w) < min_samples:
+            scan['invalid_reason'] = 'insufficient_samples'
+            scan_records.append(scan)
+            continue
+
+        has_candidate = True
+        progress_values = []
+        invalid_reason = ''
+
+        for t in range(w, n):
+            base_price = lows[t - w + 1]
+            if (not np.isfinite(base_price)) or base_price <= 0:
+                invalid_reason = 'non_positive_base'
+                break
+
+            prev_max = cummax[t - w]
+            curr_max = cummax[t]
+            progress_pct = 100.0 * (curr_max - prev_max) / base_price
+
+            if not np.isfinite(progress_pct):
+                invalid_reason = 'invalid_progress'
+                break
+            if progress_pct <= 0:
+                invalid_reason = 'non_positive_progress'
+                break
+            progress_values.append(progress_pct)
+
+        if invalid_reason:
+            scan['invalid_reason'] = invalid_reason
+            scan_records.append(scan)
+            continue
+
+        arr = np.asarray(progress_values, dtype=float)
+        min_progress = float(arr.min())
+        mean_progress = float(arr.mean())
+        max_progress = float(arr.max())
+        std_progress = float(arr.std(ddof=0))
+        range_above_min = max_progress - min_progress
+        std_to_min = std_progress / min_progress
+        range_to_min = range_above_min / min_progress
+
+        scan.update({
+            'window_valid': 1,
+            'min_progress_pct': min_progress,
+            'mean_progress_pct': mean_progress,
+            'max_progress_pct': max_progress,
+            'std_progress_pct': std_progress,
+            'range_above_min_pct': range_above_min,
+            'std_to_min_ratio': std_to_min,
+            'range_to_min_ratio': range_to_min,
+            'progress_count': int(len(arr)),
+        })
+        scan_records.append(scan)
+        valid_rows.append(scan)
+
+    if not has_candidate:
+        result['optimal_window_invalid_reason'] = 'segment_too_short'
+        return result, scan_records
+
+    if len(valid_rows) == 0:
+        result['optimal_window_invalid_reason'] = 'no_valid_window'
+        return result, scan_records
+
+    best_std_to_min = min(row['std_to_min_ratio'] for row in valid_rows)
+    tol_limit = best_std_to_min * (1.0 + stability_tol_ratio)
+    stable_rows = [
+        row for row in valid_rows
+        if row['std_to_min_ratio'] <= tol_limit + 1e-12
+    ]
+    stable_rows.sort(key=lambda row: (
+        row['w_bars'],
+        row['range_to_min_ratio'],
+        -row['min_progress_pct'],
+    ))
+    best_row = stable_rows[0]
+
+    result.update({
+        'optimal_w_bars': int(best_row['w_bars']),
+        'min_progress_pct': float(best_row['min_progress_pct']),
+        'mean_progress_pct': float(best_row['mean_progress_pct']),
+        'max_progress_pct': float(best_row['max_progress_pct']),
+        'std_progress_pct': float(best_row['std_progress_pct']),
+        'std_to_min_ratio': float(best_row['std_to_min_ratio']),
+        'range_to_min_ratio': float(best_row['range_to_min_ratio']),
+        'progress_count': int(best_row['progress_count']),
+        'optimal_window_valid': 1,
+        'optimal_window_invalid_reason': '',
+    })
+    return result, scan_records
+
+
+def compute_progress_scan_long(seg: pd.DataFrame, w: int):
+    n = len(seg)
+    if w <= 0 or w >= n:
+        return (
+            np.array([], dtype=int),
+            np.array([], dtype=int),
+            np.array([], dtype=float),
+            'segment_too_short',
+        )
+
+    highs = seg['high'].to_numpy(dtype=float)
+    lows = seg['low'].to_numpy(dtype=float)
+    x_values = seg.index.to_numpy(dtype=int)
+    cummax = np.maximum.accumulate(highs)
+    progress_offsets = []
+    progress_x = []
+    progress_y = []
+
+    for t in range(w, n):
+        base_price = lows[t - w + 1]
+        if (not np.isfinite(base_price)) or base_price <= 0:
+            return (
+                np.array([], dtype=int),
+                np.array([], dtype=int),
+                np.array([], dtype=float),
+                'non_positive_base',
+            )
+
+        progress_pct = 100.0 * (cummax[t] - cummax[t - w]) / base_price
+        if not np.isfinite(progress_pct):
+            return (
+                np.array([], dtype=int),
+                np.array([], dtype=int),
+                np.array([], dtype=float),
+                'invalid_progress',
+            )
+
+        progress_offsets.append(int(t))
+        progress_x.append(int(x_values[t]))
+        progress_y.append(float(progress_pct))
+
+    return (
+        np.asarray(progress_offsets, dtype=int),
+        np.asarray(progress_x, dtype=int),
+        np.asarray(progress_y, dtype=float),
+        '',
+    )
+
+
+def compute_progress_pct_series_long(seg: pd.DataFrame,
+                                     w: int,
+                                     require_positive: bool = False):
+    _, progress_x, progress_y, invalid_reason = compute_progress_scan_long(seg, w)
+    if invalid_reason:
+        return np.array([], dtype=int), np.array([], dtype=float), invalid_reason
+    if require_positive and len(progress_y) > 0 and np.any(progress_y <= 0):
+        return (
+            np.array([], dtype=int),
+            np.array([], dtype=float),
+            'non_positive_progress',
+        )
+    return progress_x, progress_y, ''
+
+
+def legacy_build_trend_analysis_df_v2(quote: pd.DataFrame,
+                                      trade_extreme_df: pd.DataFrame,
+                                      w_min: int,
+                                      w_max: int,
+                                      min_samples: int,
+                                      stability_tol_ratio: float):
+    records = []
+    window_scan_records = []
+    prev_max_profit_idx = None
+
+    for idx, row in trade_extreme_df.iterrows():
+        high_idx = int(row['max_profit_index'])
+
+        if prev_max_profit_idx is None:
+            search_start = int(row['entry_index'])
+        else:
+            search_start = prev_max_profit_idx
+
+        search_slice = quote.iloc[search_start:high_idx + 1]
+        if len(search_slice) == 0:
+            prev_max_profit_idx = high_idx
+            continue
+
+        low_bar_idx = int(search_slice['low'].idxmin())
+        low_price = float(quote.loc[low_bar_idx, 'low'])
+        high_price = float(row['max_profit_price'])
+        prev_max_profit_idx = high_idx
+
+        if high_idx <= low_bar_idx:
+            continue
+
+        seg = quote.iloc[low_bar_idx:high_idx + 1]
+        stats, scan_rows = legacy_compute_optimal_window_stats_long(
+            seg=seg,
+            w_min=w_min,
+            w_max=w_max,
+            min_samples=min_samples,
+            stability_tol_ratio=stability_tol_ratio,
+        )
+
+        trade_id = idx + 1
+        duration = high_idx - low_bar_idx
+
+        for scan_row in scan_rows:
+            window_scan_records.append({
+                'trade_id': trade_id,
+                'entry_index': int(row['entry_index']),
+                'entry_date': str(row.get('entry_date', '')),
+                'low_index': low_bar_idx,
+                'high_index': high_idx,
+                'duration_bars': duration,
+                'w_bars': int(scan_row['w_bars']),
+                'window_valid': int(scan_row['window_valid']),
+                'invalid_reason': scan_row['invalid_reason'],
+                'min_progress_pct': round_or_nan(scan_row['min_progress_pct']),
+                'mean_progress_pct': round_or_nan(scan_row['mean_progress_pct']),
+                'max_progress_pct': round_or_nan(scan_row['max_progress_pct']),
+                'std_progress_pct': round_or_nan(scan_row['std_progress_pct']),
+                'range_above_min_pct': round_or_nan(scan_row['range_above_min_pct']),
+                'std_to_min_ratio': round_or_nan(scan_row['std_to_min_ratio']),
+                'range_to_min_ratio': round_or_nan(scan_row['range_to_min_ratio']),
+                'progress_count': int(scan_row['progress_count']),
+            })
+
+        records.append({
+            'trade_id': trade_id,
+            'entry_index': int(row['entry_index']),
+            'entry_date': str(row.get('entry_date', '')),
+            'exit_index': int(row['exit_index']),
+            'exit_date': str(row.get('exit_date', '')),
+            'search_start': search_start,
+            'low_index': low_bar_idx,
+            'low_date': str(quote.loc[low_bar_idx, 'Date']),
+            'low_price': low_price,
+            'high_index': high_idx,
+            'high_date': str(row.get('max_profit_date', '')),
+            'high_price': high_price,
+            'duration_bars': duration,
+            'total_return_pct': round(
+                (high_price / low_price - 1.0) * 100.0, 4)
+                if low_price != 0 else np.nan,
+            'optimal_w_bars': (
+                int(stats['optimal_w_bars'])
+                if pd.notna(stats['optimal_w_bars']) else np.nan
+            ),
+            'min_progress_pct': round_or_nan(stats['min_progress_pct']),
+            'mean_progress_pct': round_or_nan(stats['mean_progress_pct']),
+            'max_progress_pct': round_or_nan(stats['max_progress_pct']),
+            'std_progress_pct': round_or_nan(stats['std_progress_pct']),
+            'std_to_min_ratio': round_or_nan(stats['std_to_min_ratio']),
+            'range_to_min_ratio': round_or_nan(stats['range_to_min_ratio']),
+            'progress_count': (
+                int(stats['progress_count'])
+                if pd.notna(stats['progress_count']) else np.nan
+            ),
+            'optimal_window_valid': int(stats['optimal_window_valid']),
+            'optimal_window_invalid_reason': (
+                stats['optimal_window_invalid_reason']
+            ),
+        })
+
+    return pd.DataFrame(records), pd.DataFrame(window_scan_records)
+
+
+def get_reference_speed_from_row(row) -> float:
+    if isinstance(row, pd.Series):
+        ref = row.get('reference_speed_pct_per_bar', np.nan)
+        trend_speed = row.get('trend_line_speed_pct_per_bar', np.nan)
+        segment_speed = row.get('segment_speed_pct_per_bar', np.nan)
+    else:
+        ref = getattr(row, 'reference_speed_pct_per_bar', np.nan)
+        trend_speed = getattr(row, 'trend_line_speed_pct_per_bar', np.nan)
+        segment_speed = getattr(row, 'segment_speed_pct_per_bar', np.nan)
+    if pd.notna(ref):
+        return float(ref)
+    if pd.notna(trend_speed):
+        return float(trend_speed)
+    if pd.notna(segment_speed):
+        return float(segment_speed)
+    return np.nan
+
+
+def get_trend_test_case_data(trend_df: pd.DataFrame,
+                             window_scan_df: pd.DataFrame,
+                             test_case_index: int,
+                             requested_windows: list[int]):
+    if len(trend_df) == 0:
+        return None, pd.DataFrame(), []
+    safe_index = min(max(int(test_case_index), 0), len(trend_df) - 1)
+    case_row = trend_df.iloc[safe_index].copy()
+    trade_id = int(case_row['trade_id'])
+    case_scan = window_scan_df[
+        window_scan_df['trade_id'] == trade_id
+    ].copy().sort_values('w_bars').reset_index(drop=True)
+    windows = []
+    optimal_w = (
+        int(case_row['optimal_w_bars'])
+        if pd.notna(case_row['optimal_w_bars']) else None
+    )
+    for w in list(requested_windows) + ([optimal_w] if optimal_w is not None else []):
+        if w is None or pd.isna(w):
+            continue
+        w_int = int(w)
+        if w_int not in windows:
+            windows.append(w_int)
+    return case_row, case_scan, windows
+
+
+def print_trend_test_case_summary(trend_df: pd.DataFrame,
+                                  window_scan_df: pd.DataFrame,
+                                  test_case_index: int,
+                                  test_windows: list[int],
+                                  improvement_capture_target: float,
+                                  near_band: int,
+                                  big_drop_ratio: float):
+    case_row, case_scan, display_windows = get_trend_test_case_data(
+        trend_df, window_scan_df, test_case_index, test_windows)
+    if case_row is None or len(case_scan) == 0:
+        print('[TestMode] no trend test case available.')
+        return
+
+    lookup = {
+        int(row['w_bars']): row
+        for _, row in case_scan.iterrows()
+    }
+
+    print('\n[TestMode] ===== Case Summary =====')
+    print(
+        f"[TestMode] trade_id={int(case_row['trade_id'])}, "
+        f"low={int(case_row['low_index'])} ({case_row['low_date']}) @ {case_row['low_price']}, "
+        f"high={int(case_row['high_index'])} ({case_row['high_date']}) @ {case_row['high_price']}"
+    )
+    print(
+        f"[TestMode] duration_bars={int(case_row['duration_bars'])}, "
+        f"speed_reference_source={case_row['speed_reference_source']}, "
+        f"reference_speed_pct_per_bar={round_or_nan(case_row['reference_speed_pct_per_bar'])}"
+    )
+    print(
+        f"[TestMode] first_feasible_w={case_row['first_feasible_w_bars']}, "
+        f"best_offset_w={case_row['best_offset_w_bars']}, "
+        f"optimal_w={case_row['optimal_w_bars']}"
+    )
+
+    candidate_rows = []
+    for w in display_windows:
+        scan_row = lookup.get(int(w))
+        if scan_row is None:
+            candidate_rows.append({
+                'w_bars': int(w),
+                'window_valid': 0,
+                'invalid_reason': 'not_scanned',
+                'offset_score': np.nan,
+                'improvement_capture': np.nan,
+                'fit_y_pct': np.nan,
+                'y_speed_pct_per_bar': np.nan,
+                'fit_entry_index': np.nan,
+                'entry_delay_bars': np.nan,
+                'fitted_return_pct': np.nan,
+                'capture_ratio': np.nan,
+                'selected_flag': 0,
+            })
+            continue
+        candidate_rows.append({
+            'w_bars': int(scan_row['w_bars']),
+            'window_valid': int(scan_row['window_valid']),
+            'invalid_reason': scan_row['invalid_reason'],
+            'offset_score': round_or_nan(scan_row['offset_score']),
+            'improvement_capture': round_or_nan(scan_row['improvement_capture']),
+            'fit_y_pct': round_or_nan(scan_row['fit_y_pct']),
+            'y_speed_pct_per_bar': round_or_nan(
+                scan_row['y_speed_pct_per_bar']),
+            'fit_entry_index': (
+                int(scan_row['fit_entry_index'])
+                if pd.notna(scan_row['fit_entry_index']) else np.nan
+            ),
+            'entry_delay_bars': (
+                int(scan_row['entry_delay_bars'])
+                if pd.notna(scan_row['entry_delay_bars']) else np.nan
+            ),
+            'fitted_return_pct': round_or_nan(scan_row['fitted_return_pct']),
+            'capture_ratio': round_or_nan(scan_row['capture_ratio']),
+            'selected_flag': int(scan_row['selected_flag']),
+        })
+
+    print('\n[TestMode] ===== Candidate Table =====')
+    print(pd.DataFrame(candidate_rows).to_string(index=False))
+
+    sampled_cols = [
+        'w_bars', 'window_valid', 'offset_score', 'improvement_capture',
+        'fit_y_pct', 'y_speed_pct_per_bar', 'entry_delay_bars',
+        'fitted_return_pct', 'capture_ratio', 'selected_flag'
+    ]
+    sampled_scan = case_scan[sampled_cols].copy()
+    print('\n[TestMode] ===== Sampled Window Scan =====')
+    print(sampled_scan.to_string(index=False))
+
+    def _valid_row(w: int):
+        row = lookup.get(int(w))
+        if row is None or int(row['window_valid']) != 1:
+            return None
+        return row
+
+    row5 = _valid_row(5)
+    row7 = _valid_row(7)
+    row15 = _valid_row(15)
+    optimal_w = int(case_row['optimal_w_bars']) if pd.notna(case_row['optimal_w_bars']) else None
+
+    print('\n[TestMode] ===== Explicit Checks =====')
+
+    if row5 is None or row7 is None:
+        print('[TestMode][Check-1] w=5 or w=7 invalid -> SKIP')
+    else:
+        delta = float(row5['offset_score']) - float(row7['offset_score'])
+        status = 'PASS' if float(row7['offset_score']) < float(row5['offset_score']) else 'FAIL'
+        print(
+            f"[TestMode][Check-1] offset_5={float(row5['offset_score']):.6f}, "
+            f"offset_7={float(row7['offset_score']):.6f}, "
+            f"delta_5_7={delta:.6f} -> {status}"
+        )
+
+    if row5 is None or row7 is None or row15 is None:
+        print('[TestMode][Check-2] w=5 or w=7 or w=15 invalid -> SKIP')
+    else:
+        delta_5_7 = float(row5['offset_score']) - float(row7['offset_score'])
+        delta_7_15 = float(row7['offset_score']) - float(row15['offset_score'])
+        if delta_7_15 <= 0:
+            ratio_text = 'inf'
+            status = 'PASS'
+        else:
+            ratio = delta_5_7 / delta_7_15
+            ratio_text = f'{ratio:.6f}'
+            status = 'PASS' if ratio >= big_drop_ratio else 'FAIL'
+        print(
+            f"[TestMode][Check-2] delta_5_7={delta_5_7:.6f}, "
+            f"delta_7_15={delta_7_15:.6f}, ratio={ratio_text}, "
+            f"threshold={big_drop_ratio:.2f} -> {status}"
+        )
+
+    if row7 is None:
+        print('[TestMode][Check-3] w=7 invalid -> SKIP')
+    else:
+        capture = float(row7['improvement_capture'])
+        status = 'PASS' if capture >= improvement_capture_target else 'FAIL'
+        print(
+            f"[TestMode][Check-3] improvement_capture_7={capture:.6f}, "
+            f"threshold={improvement_capture_target:.2f} -> {status}"
+        )
+
+    if optimal_w is None:
+        print('[TestMode][Check-4] optimal_w unavailable -> SKIP')
+    else:
+        lower = 7 - int(near_band)
+        upper = 7 + int(near_band)
+        status = 'PASS' if lower <= optimal_w <= upper else 'FAIL'
+        print(
+            f"[TestMode][Check-4] optimal_w={optimal_w}, "
+            f"acceptable_range=[{lower}, {upper}] -> {status}"
+        )
+
+
+def export_trend_test_case_html(file_name: str,
+                                save_name: str,
+                                underlying1: pd.DataFrame,
+                                trend_df: pd.DataFrame,
+                                window_scan_df: pd.DataFrame,
+                                factor: float,
+                                test_case_index: int,
+                                test_windows: list[int],
+                                improvement_capture_target: float):
+    if go is None or make_subplots is None:
+        print('[HTML] plotly is not installed, skip trend test html export.')
+        return
+
+    case_row, case_scan, display_windows = get_trend_test_case_data(
+        trend_df, window_scan_df, test_case_index, test_windows)
+    if case_row is None or len(case_scan) == 0:
+        print('[HTML] no trend test case data, skip test html export.')
+        return
+
+    lookup = {
+        int(row['w_bars']): row
+        for _, row in case_scan.iterrows()
+    }
+    optimal_w = (
+        int(case_row['optimal_w_bars'])
+        if pd.notna(case_row['optimal_w_bars']) else None
+    )
+    optimal_row = lookup.get(optimal_w) if optimal_w is not None else None
+    low_idx = int(case_row['low_index'])
+    high_idx = int(case_row['high_index'])
+    seg = underlying1.iloc[low_idx:high_idx + 1].copy()
+    ref_speed = get_reference_speed_from_row(case_row)
+    x_left = low_idx
+    x_right = high_idx
+    view = underlying1.iloc[x_left:x_right + 1]
+
+    fig_html = make_subplots(
+        rows=4,
+        cols=1,
+        shared_xaxes=False,
+        specs=[
+            [{}],
+            [{'secondary_y': True}],
+            [{}],
+            [{}],
+        ],
+        vertical_spacing=0.06,
+        row_heights=[0.42, 0.22, 0.16, 0.20],
+        subplot_titles=(
+            'Case Price',
+            'Offset Score And Improvement Capture',
+            'Valid Window Mean Speed',
+            'Selected Window Progress',
+        ),
+    )
+
+    fig_html.add_trace(go.Candlestick(
+        x=view.index.to_numpy(),
+        open=view['open'] / factor * 100,
+        high=view['high'] / factor * 100,
+        low=view['low'] / factor * 100,
+        close=view['close'] / factor * 100,
+        name='price',
+        increasing=dict(
+            line=dict(color='salmon', width=0.8),
+            fillcolor='rgba(250, 128, 114, 0.28)'
+        ),
+        decreasing=dict(
+            line=dict(color='#2ca02c', width=0.8),
+            fillcolor='rgba(44, 160, 44, 0.28)'
+        )
+    ), row=1, col=1)
+
+    if len(seg) >= 2:
+        t = np.arange(len(seg), dtype=float)
+        fitted = case_row['ols_slope'] * t + case_row['ols_intercept']
+        fig_html.add_trace(go.Scatter(
+            x=seg.index.to_list(),
+            y=(fitted / factor * 100).tolist(),
+            mode='lines',
+            line=dict(color=ACCENT_BLUE, width=2),
+            name='trend_line',
+            hoverinfo='skip',
+        ), row=1, col=1)
+
+    fig_html.add_trace(go.Scatter(
+        x=[low_idx],
+        y=[float(case_row['low_price']) / factor * 100],
+        mode='markers',
+        marker=dict(color='#1F77B4', size=6),
+        name='low',
+        hovertemplate=(
+            'low point<br>'
+            f"index: {low_idx}<br>"
+            f"date: {case_row['low_date']}<br>"
+            f"price: {case_row['low_price']}<extra></extra>"
+        ),
+    ), row=1, col=1)
+    fig_html.add_trace(go.Scatter(
+        x=[high_idx],
+        y=[float(case_row['high_price']) / factor * 100],
+        mode='markers',
+        marker=dict(color='orange', size=6),
+        name='high',
+        hovertemplate=(
+            'high point<br>'
+            f"index: {high_idx}<br>"
+            f"date: {case_row['high_date']}<br>"
+            f"price: {case_row['high_price']}<extra></extra>"
+        ),
+    ), row=1, col=1)
+
+    optimal_color = '#2ca02c'
+    if optimal_row is not None and int(optimal_row['window_valid']) == 1:
+        hover_text = (
+            f"optimal_w: {int(optimal_w)}<br>"
+            "fit entry marker<br>"
+            f"fit_entry_index: {int(optimal_row['fit_entry_index'])}<br>"
+            f"fit_entry_price: {float(optimal_row['fit_entry_price']):.4f}<br>"
+            f"offset_score: {float(optimal_row['offset_score']):.6f}<br>"
+            f"improvement_capture: {float(optimal_row['improvement_capture']):.6f}<br>"
+            f"fitted_return_pct: {float(optimal_row['fitted_return_pct']):.4f}<br>"
+            f"capture_ratio: {float(optimal_row['capture_ratio']):.4f}"
+        )
+        fig_html.add_trace(go.Scatter(
+            x=[int(optimal_row['fit_entry_index'])],
+            y=[float(optimal_row['fit_entry_price']) / factor * 100],
+            mode='markers',
+            marker=dict(color=optimal_color, size=8, symbol='triangle-up'),
+            name=f'optimal_w={int(optimal_w)}',
+            legendgroup='optimal_w',
+            showlegend=True,
+            text=[hover_text],
+            hovertemplate='%{text}<extra></extra>',
+        ), row=1, col=1)
+
+    valid_scan = case_scan[case_scan['window_valid'] == 1].copy()
+    if len(valid_scan) > 0:
+        valid_scan['mean_speed_pct_per_bar'] = (
+            valid_scan['mean_progress_pct'].astype(float)
+            / valid_scan['w_bars'].astype(float)
+        )
+        fig_html.add_trace(go.Scatter(
+            x=valid_scan['w_bars'].astype(int).tolist(),
+            y=valid_scan['offset_score'].astype(float).tolist(),
+            mode='lines+markers',
+            line=dict(color='rgba(60,60,60,0.85)', width=2),
+            marker=dict(size=5),
+            name='offset_score',
+            hovertemplate=(
+                'offset_score: mean abs relative speed deviation<br>'
+                'w: %{x}<br>'
+                'offset_score: %{y:.6f}<extra></extra>'
+            ),
+        ), row=2, col=1, secondary_y=False)
+
+        fig_html.add_trace(go.Scatter(
+            x=valid_scan['w_bars'].astype(int).tolist(),
+            y=valid_scan['improvement_capture'].astype(float).tolist(),
+            mode='lines+markers',
+            line=dict(color='rgba(20,120,80,0.85)', width=2),
+            marker=dict(size=5),
+            name='improvement_capture',
+            hovertemplate=(
+                'improvement_capture: captured share of total offset improvement<br>'
+                'w: %{x}<br>'
+                'improvement_capture: %{y:.6f}<extra></extra>'
+            ),
+        ), row=2, col=1, secondary_y=True)
+
+        fig_html.add_trace(go.Scatter(
+            x=valid_scan['w_bars'].astype(int).tolist(),
+            y=valid_scan['mean_speed_pct_per_bar'].astype(float).tolist(),
+            mode='lines+markers',
+            line=dict(color='rgba(31,119,180,0.85)', width=2),
+            marker=dict(size=5),
+            name='mean_speed_pct_per_bar',
+            hovertemplate=(
+                'mean_speed_pct_per_bar: mean progress divided by window size<br>'
+                'w: %{x}<br>'
+                'mean_speed_pct_per_bar: %{y:.6f}<extra></extra>'
+            ),
+        ), row=3, col=1)
+
+        if np.isfinite(ref_speed):
+            fig_html.add_trace(go.Scatter(
+                x=valid_scan['w_bars'].astype(int).tolist(),
+                y=[float(ref_speed)] * len(valid_scan),
+                mode='lines',
+                line=dict(color='rgba(0,0,0,0.35)', width=1.2, dash='dash'),
+                name='reference_speed',
+                hovertemplate=(
+                    'reference_speed_pct_per_bar: trend-line reference speed<br>'
+                    f'value: {float(ref_speed):.6f}<extra></extra>'
+                ),
+            ), row=3, col=1)
+
+    if optimal_row is not None and int(optimal_row['window_valid']) == 1:
+        marker_text = (
+            f"optimal_w: {int(optimal_w)}<br>"
+            f"offset_score: {float(optimal_row['offset_score']):.6f}<br>"
+            f"improvement_capture: {float(optimal_row['improvement_capture']):.6f}<br>"
+            f"fit_y_pct: {float(optimal_row['fit_y_pct']):.4f}<br>"
+            f"y_speed_pct_per_bar: {float(optimal_row['y_speed_pct_per_bar']):.4f}<br>"
+            f"entry_delay_bars: {int(optimal_row['entry_delay_bars'])}<br>"
+            f"fitted_return_pct: {float(optimal_row['fitted_return_pct']):.4f}"
+        )
+        for field in ['offset_score', 'improvement_capture']:
+            fig_html.add_trace(go.Scatter(
+                x=[int(optimal_row['w_bars'])],
+                y=[float(optimal_row[field])],
+                mode='markers',
+                marker=dict(color=optimal_color, size=9),
+                name=f'optimal_w={int(optimal_w)}',
+                legendgroup='optimal_w',
+                showlegend=False,
+                text=[marker_text],
+                hovertemplate='%{text}<extra></extra>',
+            ), row=2, col=1, secondary_y=(field == 'improvement_capture'))
+
+        mean_speed_value = (
+            float(optimal_row['mean_progress_pct']) / float(optimal_row['w_bars'])
+        )
+        mean_speed_text = (
+            f"optimal_w: {int(optimal_w)}<br>"
+            f"mean_speed_pct_per_bar: {mean_speed_value:.6f}<br>"
+            f"reference_speed_pct_per_bar: {float(ref_speed):.6f}<br>"
+            f"fit_y_pct: {float(optimal_row['fit_y_pct']):.4f}<br>"
+            f"y_speed_pct_per_bar: {float(optimal_row['y_speed_pct_per_bar']):.6f}"
+        )
+        fig_html.add_trace(go.Scatter(
+            x=[int(optimal_row['w_bars'])],
+            y=[mean_speed_value],
+            mode='markers',
+            marker=dict(color=optimal_color, size=9),
+            name=f'optimal_w={int(optimal_w)}',
+            legendgroup='optimal_w',
+            showlegend=False,
+            text=[mean_speed_text],
+            hovertemplate='%{text}<extra></extra>',
+        ), row=3, col=1)
+
+    if len(valid_scan) > 0:
+        fig_html.add_trace(go.Scatter(
+            x=valid_scan['w_bars'].astype(int).tolist(),
+            y=[improvement_capture_target] * len(valid_scan),
+            mode='lines',
+            line=dict(color='rgba(0,0,0,0.35)', width=1.2, dash='dash'),
+            name='capture_target',
+            hovertemplate=(
+                'improvement_capture target<br>'
+                f"value: {improvement_capture_target:.2f}<extra></extra>"
+            ),
+        ), row=2, col=1, secondary_y=True)
+
+    if optimal_row is not None and int(optimal_row['window_valid']) == 1:
+        progress_x, progress_y, invalid_reason = compute_progress_pct_series_long(
+            seg, int(optimal_w), require_positive=True)
+        if len(progress_x) == 0:
+            progress_x = np.array([], dtype=int)
+            progress_y = np.array([], dtype=float)
+        expected_progress = (
+            ref_speed * int(optimal_w) if np.isfinite(ref_speed) else np.nan
+        )
+        fit_y_value = float(optimal_row['fit_y_pct'])
+        hover_texts = []
+        for px, py in zip(progress_x, progress_y):
+            hover_texts.append(
+                f"optimal_w: {int(optimal_w)}<br>"
+                "progress series point<br>"
+                f"bar_index: {int(px)}<br>"
+                f"progress_pct: {float(py):.4f}<br>"
+                f"expected_progress_pct: {expected_progress:.4f}<br>"
+                f"fit_y_pct: {fit_y_value:.4f}"
+            )
+
+        if len(progress_x) > 0:
+            fig_html.add_trace(go.Scatter(
+                x=progress_x.tolist(),
+                y=progress_y.tolist(),
+                mode='lines',
+                line=dict(color=optimal_color, width=2),
+                opacity=0.8,
+                name='selected_progress',
+                legendgroup='optimal_w',
+                showlegend=False,
+                text=hover_texts,
+                hovertemplate='%{text}<extra></extra>',
+            ), row=4, col=1)
+            if np.isfinite(expected_progress):
+                fig_html.add_trace(go.Scatter(
+                    x=[x_left, x_right],
+                    y=[expected_progress, expected_progress],
+                    mode='lines',
+                    line=dict(color='rgba(0,0,0,0.45)', width=1.2, dash='dash'),
+                    name='expected_progress',
+                    legendgroup='expected_progress',
+                    showlegend=False,
+                    hovertemplate=(
+                        'expected_progress_pct: trend-line expected progress for selected window<br>'
+                        f"value: {expected_progress:.4f}<extra></extra>"
+                    ),
+                ), row=4, col=1)
+            fig_html.add_trace(go.Scatter(
+                x=[x_left, x_right],
+                y=[fit_y_value, fit_y_value],
+                mode='lines',
+                line=dict(color='rgba(80,80,80,0.55)', width=1.0, dash='dot'),
+                name='fit_y',
+                legendgroup='fit_y',
+                showlegend=False,
+                hovertemplate=(
+                    'fit_y_pct: minimum actual progress under selected window<br>'
+                    f"value: {fit_y_value:.4f}<extra></extra>"
+                ),
+            ), row=4, col=1)
+
+    fig_html.update_layout(
+        title=(
+            f"Trend Test Case trade {int(case_row['trade_id'])}: "
+            f"offset / capture / speed sampling"
+        ),
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02,
+                    xanchor='left', x=0),
+        margin=dict(l=42, r=25, t=90, b=45, pad=0),
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.50)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+    for row_no in [1, 2, 3, 4]:
+        fig_html.update_xaxes(
+            showgrid=False,
+            showline=True,
+            linewidth=1,
+            linecolor='rgba(0,0,0,0.35)',
+            tickfont=dict(size=10),
+            row=row_no,
+            col=1,
+        )
+        fig_html.update_yaxes(
+            showgrid=False,
+            showline=True,
+            linewidth=1,
+            linecolor='rgba(0,0,0,0.35)',
+            tickfont=dict(size=10),
+            row=row_no,
+            col=1,
+        )
+    fig_html.update_xaxes(rangeslider=dict(visible=False), row=1, col=1)
+    fig_html.update_xaxes(
+        range=[x_left, x_right],
+        autorange=False,
+        row=1,
+        col=1,
+    )
+    fig_html.update_xaxes(
+        range=[x_left, x_right],
+        autorange=False,
+        row=4,
+        col=1,
+    )
+    fig_html.update_yaxes(title='price %', row=1, col=1)
+    fig_html.update_yaxes(title='offset_score', row=2, col=1, secondary_y=False)
+    fig_html.update_yaxes(
+        title='improvement_capture', row=2, col=1, secondary_y=True)
+    fig_html.update_yaxes(
+        showgrid=False,
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(0,0,0,0.35)',
+        tickfont=dict(size=10),
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+    fig_html.update_yaxes(title='mean_speed_pct_per_bar', row=3, col=1)
+    fig_html.update_yaxes(title='progress %', row=4, col=1)
+
+    html_dir = get_html_output_dir(file_name, TREND_TEST_CASE_HTML_FOLDER)
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(
+        html_dir, save_name + ' trend_test_case interactive.html')
+    html_text = fig_html.to_html(
+        include_plotlyjs=True, full_html=True,
+        default_width='100vw', default_height='100vh',
+        config={'responsive': True, 'displayModeBar': False,
+                'displaylogo': False}
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.50) !important;'
+        'fill-opacity:0.50 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace(
+        '<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print(f'[HTML] saved trend test chart: {html_path}')
+
+
+def compute_ols_trend_line_stats_long(seg: pd.DataFrame):
+    result = {
+        'ols_slope': np.nan,
+        'ols_intercept': np.nan,
+        'ols_r_squared': np.nan,
+        'trend_line_speed_pct_per_bar': np.nan,
+        'segment_speed_pct_per_bar': np.nan,
+        'trend_total_return_pct': np.nan,
+    }
+    n = len(seg)
+    if n < 2:
+        return result
+
+    close_prices = seg['close'].to_numpy(dtype=float)
+    low_price = float(seg['low'].iloc[0])
+    high_price = float(seg['high'].iloc[-1])
+    t = np.arange(n, dtype=float)
+    slope, intercept = np.polyfit(t, close_prices, 1)
+    fitted = slope * t + intercept
+    ss_res = np.sum((close_prices - fitted) ** 2)
+    ss_tot = np.sum((close_prices - np.mean(close_prices)) ** 2)
+    fitted_start = float(fitted[0])
+    result.update({
+        'ols_slope': float(slope),
+        'ols_intercept': float(intercept),
+        'ols_r_squared': (
+            float(1.0 - ss_res / ss_tot) if ss_tot > 0 else np.nan
+        ),
+        'trend_line_speed_pct_per_bar': (
+            float(100.0 * slope / fitted_start)
+            if np.isfinite(fitted_start) and abs(fitted_start) > 1e-12
+            else np.nan
+        ),
+        'trend_total_return_pct': (
+            float((high_price / low_price - 1.0) * 100.0)
+            if low_price != 0 else np.nan
+        ),
+        'segment_speed_pct_per_bar': (
+            float(((high_price / low_price - 1.0) * 100.0) / (n - 1))
+            if low_price != 0 and n > 1 else np.nan
+        ),
+    })
+    return result
+
+
+def compute_optimal_window_stats_long(seg: pd.DataFrame,
+                                      w_min: int,
+                                      w_max: int,
+                                      min_samples: int,
+                                      improvement_capture_target: float):
+    ols_stats = compute_ols_trend_line_stats_long(seg)
+    reference_speed = ols_stats['trend_line_speed_pct_per_bar']
+    speed_reference_source = 'ols'
+    if (not np.isfinite(reference_speed)) or reference_speed <= 0:
+        reference_speed = ols_stats['segment_speed_pct_per_bar']
+        speed_reference_source = 'segment_avg'
+
+    result = {
+        **ols_stats,
+        'speed_reference_source': speed_reference_source,
+        'reference_speed_pct_per_bar': (
+            float(reference_speed) if np.isfinite(reference_speed) else np.nan
+        ),
+        'first_feasible_w_bars': np.nan,
+        'best_offset_w_bars': np.nan,
+        'best_offset_score': np.nan,
+        'optimal_w_bars': np.nan,
+        'offset_score': np.nan,
+        'improvement_capture': np.nan,
+        'fit_y_pct': np.nan,
+        'y_speed_pct_per_bar': np.nan,
+        'fit_entry_index': np.nan,
+        'fit_entry_date': '',
+        'fit_entry_price': np.nan,
+        'entry_delay_bars': np.nan,
+        'fitted_return_pct': np.nan,
+        'capture_ratio': np.nan,
+        'progress_count': np.nan,
+        'mean_progress_pct': np.nan,
+        'max_progress_pct': np.nan,
+        'std_progress_pct': np.nan,
+        'std_to_y_ratio': np.nan,
+        'range_to_y_ratio': np.nan,
+        'optimal_window_valid': 0,
+        'optimal_window_invalid_reason': '',
+    }
+    scan_records = []
+
+    if w_min > w_max:
+        result['optimal_window_invalid_reason'] = 'invalid_window_range'
+        return result, scan_records
+
+    n = len(seg)
+    if n < 2:
+        result['optimal_window_invalid_reason'] = 'segment_too_short'
+        return result, scan_records
+
+    if (not np.isfinite(reference_speed)) or reference_speed <= 0:
+        result['optimal_window_invalid_reason'] = 'invalid_reference_speed'
+        return result, scan_records
+
+    seg_dates = seg['Date'].to_numpy()
+    seg_close = seg['close'].to_numpy(dtype=float)
+    low_price = float(seg['low'].iloc[0])
+    high_price = float(seg['high'].iloc[-1])
+    price_span = high_price - low_price
+
+    has_candidate = False
+    valid_rows = []
+
+    for w in range(int(w_min), int(w_max) + 1):
+        scan = {
+            **ols_stats,
+            'speed_reference_source': speed_reference_source,
+            'reference_speed_pct_per_bar': float(reference_speed),
+            'w_bars': int(w),
+            'window_valid': 0,
+            'invalid_reason': '',
+            'offset_score': np.nan,
+            'improvement_capture': np.nan,
+            'first_feasible_flag': 0,
+            'best_offset_flag': 0,
+            'selected_flag': 0,
+            'fit_y_pct': np.nan,
+            'y_speed_pct_per_bar': np.nan,
+            'fit_entry_index': np.nan,
+            'fit_entry_date': '',
+            'fit_entry_price': np.nan,
+            'entry_delay_bars': np.nan,
+            'fitted_return_pct': np.nan,
+            'capture_ratio': np.nan,
+            'progress_count': 0,
+            'mean_progress_pct': np.nan,
+            'max_progress_pct': np.nan,
+            'std_progress_pct': np.nan,
+            'range_above_y_pct': np.nan,
+            'std_to_y_ratio': np.nan,
+            'range_to_y_ratio': np.nan,
+        }
+
+        if w >= n:
+            scan['invalid_reason'] = 'segment_too_short'
+            scan_records.append(scan)
+            continue
+        if (n - w) < min_samples:
+            scan['invalid_reason'] = 'insufficient_samples'
+            scan_records.append(scan)
+            continue
+
+        has_candidate = True
+        progress_offsets, progress_x, progress_values, invalid_reason = (
+            compute_progress_scan_long(seg, w)
+        )
+        if invalid_reason:
+            scan['invalid_reason'] = invalid_reason
+            scan_records.append(scan)
+            continue
+        if len(progress_values) < min_samples:
+            scan['invalid_reason'] = 'insufficient_samples'
+            scan_records.append(scan)
+            continue
+        if np.any(progress_values <= 0):
+            scan['invalid_reason'] = 'non_positive_progress'
+            scan_records.append(scan)
+            continue
+
+        fit_y_pct = float(progress_values.min())
+        if (not np.isfinite(fit_y_pct)) or fit_y_pct <= 0:
+            scan['invalid_reason'] = 'non_positive_fit_y'
+            scan_records.append(scan)
+            continue
+
+        fit_entry_offset = int(progress_offsets[0])
+        fit_entry_index = int(progress_x[0])
+        fit_entry_price = float(seg_close[fit_entry_offset])
+        fitted_return_pct = (
+            (high_price / fit_entry_price - 1.0) * 100.0
+            if fit_entry_price != 0 else np.nan
+        )
+        capture_ratio = (
+            (high_price - fit_entry_price) / price_span
+            if price_span > 0 else np.nan
+        )
+        if not np.isfinite(capture_ratio):
+            scan['invalid_reason'] = 'invalid_capture_ratio'
+            scan_records.append(scan)
+            continue
+
+        mean_progress = float(progress_values.mean())
+        max_progress = float(progress_values.max())
+        std_progress = float(progress_values.std(ddof=0))
+        range_above_y = max_progress - fit_y_pct
+        std_to_y = std_progress / fit_y_pct
+        range_to_y = range_above_y / fit_y_pct
+        y_speed_pct_per_bar = fit_y_pct / float(w)
+        offset_values = np.abs((progress_values / float(w)) / reference_speed - 1.0)
+        offset_score = float(offset_values.mean())
+
+        scan.update({
+            'window_valid': 1,
+            'offset_score': offset_score,
+            'fit_y_pct': fit_y_pct,
+            'y_speed_pct_per_bar': y_speed_pct_per_bar,
+            'fit_entry_index': fit_entry_index,
+            'fit_entry_date': str(seg_dates[fit_entry_offset]),
+            'fit_entry_price': fit_entry_price,
+            'entry_delay_bars': int(fit_entry_offset),
+            'fitted_return_pct': fitted_return_pct,
+            'capture_ratio': capture_ratio,
+            'progress_count': int(len(progress_values)),
+            'mean_progress_pct': mean_progress,
+            'max_progress_pct': max_progress,
+            'std_progress_pct': std_progress,
+            'range_above_y_pct': range_above_y,
+            'std_to_y_ratio': std_to_y,
+            'range_to_y_ratio': range_to_y,
+        })
+        scan_records.append(scan)
+        valid_rows.append(scan)
+
+    if not has_candidate:
+        result['optimal_window_invalid_reason'] = 'segment_too_short'
+        return result, scan_records
+
+    if len(valid_rows) == 0:
+        result['optimal_window_invalid_reason'] = 'no_valid_window'
+        return result, scan_records
+
+    first_feasible_row = min(valid_rows, key=lambda row: row['w_bars'])
+    best_offset_row = min(
+        valid_rows,
+        key=lambda row: (row['offset_score'], row['w_bars'])
+    )
+    total_improvement = (
+        first_feasible_row['offset_score'] - best_offset_row['offset_score']
+    )
+    if total_improvement <= 1e-12:
+        for row in valid_rows:
+            row['improvement_capture'] = 1.0
+    else:
+        for row in valid_rows:
+            row['improvement_capture'] = (
+                (first_feasible_row['offset_score'] - row['offset_score'])
+                / total_improvement
+            )
+
+    for row in valid_rows:
+        row['first_feasible_flag'] = int(
+            row['w_bars'] == first_feasible_row['w_bars']
+        )
+        row['best_offset_flag'] = int(
+            row['w_bars'] == best_offset_row['w_bars']
+        )
+
+    candidate_rows = [
+        row for row in valid_rows
+        if row['improvement_capture'] >= improvement_capture_target - 1e-12
+    ]
+    if len(candidate_rows) == 0:
+        candidate_rows = [best_offset_row]
+
+    candidate_rows.sort(key=lambda row: (
+        row['w_bars'],
+        row['offset_score'],
+        -row['fit_y_pct'],
+    ))
+    best_row = candidate_rows[0]
+    best_row['selected_flag'] = 1
+
+    result.update({
+        'speed_reference_source': speed_reference_source,
+        'reference_speed_pct_per_bar': float(reference_speed),
+        'first_feasible_w_bars': int(first_feasible_row['w_bars']),
+        'best_offset_w_bars': int(best_offset_row['w_bars']),
+        'best_offset_score': float(best_offset_row['offset_score']),
+        'optimal_w_bars': int(best_row['w_bars']),
+        'offset_score': float(best_row['offset_score']),
+        'improvement_capture': float(best_row['improvement_capture']),
+        'fit_y_pct': float(best_row['fit_y_pct']),
+        'y_speed_pct_per_bar': float(best_row['y_speed_pct_per_bar']),
+        'fit_entry_index': int(best_row['fit_entry_index']),
+        'fit_entry_date': best_row['fit_entry_date'],
+        'fit_entry_price': float(best_row['fit_entry_price']),
+        'entry_delay_bars': int(best_row['entry_delay_bars']),
+        'fitted_return_pct': float(best_row['fitted_return_pct']),
+        'capture_ratio': float(best_row['capture_ratio']),
+        'progress_count': int(best_row['progress_count']),
+        'mean_progress_pct': float(best_row['mean_progress_pct']),
+        'max_progress_pct': float(best_row['max_progress_pct']),
+        'std_progress_pct': float(best_row['std_progress_pct']),
+        'std_to_y_ratio': float(best_row['std_to_y_ratio']),
+        'range_to_y_ratio': float(best_row['range_to_y_ratio']),
+        'optimal_window_valid': 1,
+        'optimal_window_invalid_reason': '',
+    })
+    return result, scan_records
+
+
+def build_trend_analysis_df(quote: pd.DataFrame,
+                            trade_extreme_df: pd.DataFrame,
+                            w_min: int,
+                            w_max: int,
+                            min_samples: int,
+                            improvement_capture_target: float):
+    records = []
+    window_scan_records = []
+    prev_max_profit_idx = None
+
+    for idx, row in trade_extreme_df.iterrows():
+        high_idx = int(row['max_profit_index'])
+
+        if prev_max_profit_idx is None:
+            search_start = int(row['entry_index'])
+        else:
+            search_start = prev_max_profit_idx
+
+        search_slice = quote.iloc[search_start:high_idx + 1]
+        if len(search_slice) == 0:
+            prev_max_profit_idx = high_idx
+            continue
+
+        low_bar_idx = int(search_slice['low'].idxmin())
+        low_price = float(quote.loc[low_bar_idx, 'low'])
+        high_price = float(row['max_profit_price'])
+        prev_max_profit_idx = high_idx
+
+        if high_idx <= low_bar_idx:
+            continue
+
+        fit_seg = quote.iloc[low_bar_idx:high_idx + 1]
+        stats, scan_rows = compute_optimal_window_stats_long(
+            seg=fit_seg,
+            w_min=w_min,
+            w_max=w_max,
+            min_samples=min_samples,
+            improvement_capture_target=improvement_capture_target,
+        )
+
+        trade_id = idx + 1
+        duration = high_idx - low_bar_idx
+        fit_segment_bars = high_idx - low_bar_idx + 1
+
+        for scan_row in scan_rows:
+            window_scan_records.append({
+                'trade_id': trade_id,
+                'entry_index': int(row['entry_index']),
+                'entry_date': str(row.get('entry_date', '')),
+                'low_index': low_bar_idx,
+                'high_index': high_idx,
+                'exit_index': int(row['exit_index']),
+                'duration_bars': duration,
+                'fit_segment_bars': fit_segment_bars,
+                'ols_slope': round_or_nan(scan_row['ols_slope']),
+                'ols_intercept': round_or_nan(scan_row['ols_intercept']),
+                'ols_r_squared': round_or_nan(scan_row['ols_r_squared']),
+                'speed_reference_source': scan_row['speed_reference_source'],
+                'reference_speed_pct_per_bar': round_or_nan(
+                    scan_row['reference_speed_pct_per_bar']),
+                'trend_line_speed_pct_per_bar': round_or_nan(
+                    scan_row['trend_line_speed_pct_per_bar']),
+                'segment_speed_pct_per_bar': round_or_nan(
+                    scan_row['segment_speed_pct_per_bar']),
+                'w_bars': int(scan_row['w_bars']),
+                'window_valid': int(scan_row['window_valid']),
+                'invalid_reason': scan_row['invalid_reason'],
+                'offset_score': round_or_nan(scan_row['offset_score']),
+                'improvement_capture': round_or_nan(
+                    scan_row['improvement_capture']),
+                'first_feasible_flag': int(scan_row['first_feasible_flag']),
+                'best_offset_flag': int(scan_row['best_offset_flag']),
+                'selected_flag': int(scan_row['selected_flag']),
+                'fit_y_pct': round_or_nan(scan_row['fit_y_pct']),
+                'y_speed_pct_per_bar': round_or_nan(
+                    scan_row['y_speed_pct_per_bar']),
+                'fit_entry_index': (
+                    int(scan_row['fit_entry_index'])
+                    if pd.notna(scan_row['fit_entry_index']) else np.nan
+                ),
+                'fit_entry_date': scan_row['fit_entry_date'],
+                'fit_entry_price': round_or_nan(scan_row['fit_entry_price']),
+                'entry_delay_bars': (
+                    int(scan_row['entry_delay_bars'])
+                    if pd.notna(scan_row['entry_delay_bars']) else np.nan
+                ),
+                'fitted_return_pct': round_or_nan(scan_row['fitted_return_pct']),
+                'capture_ratio': round_or_nan(scan_row['capture_ratio']),
+                'progress_count': int(scan_row['progress_count']),
+                'mean_progress_pct': round_or_nan(scan_row['mean_progress_pct']),
+                'max_progress_pct': round_or_nan(scan_row['max_progress_pct']),
+                'std_progress_pct': round_or_nan(scan_row['std_progress_pct']),
+                'range_above_y_pct': round_or_nan(scan_row['range_above_y_pct']),
+                'std_to_y_ratio': round_or_nan(scan_row['std_to_y_ratio']),
+                'range_to_y_ratio': round_or_nan(scan_row['range_to_y_ratio']),
+            })
+
+        records.append({
+            'trade_id': trade_id,
+            'entry_index': int(row['entry_index']),
+            'entry_date': str(row.get('entry_date', '')),
+            'exit_index': int(row['exit_index']),
+            'exit_date': str(row.get('exit_date', '')),
+            'search_start': search_start,
+            'low_index': low_bar_idx,
+            'low_date': str(quote.loc[low_bar_idx, 'Date']),
+            'low_price': low_price,
+            'high_index': high_idx,
+            'high_date': str(row.get('max_profit_date', '')),
+            'high_price': high_price,
+            'duration_bars': duration,
+            'fit_segment_bars': fit_segment_bars,
+            'total_return_pct': round(
+                (high_price / low_price - 1.0) * 100.0, 4)
+                if low_price != 0 else np.nan,
+            'optimal_w_bars': (
+                int(stats['optimal_w_bars'])
+                if pd.notna(stats['optimal_w_bars']) else np.nan
+            ),
+            'ols_slope': round_or_nan(stats['ols_slope']),
+            'ols_intercept': round_or_nan(stats['ols_intercept']),
+            'ols_r_squared': round_or_nan(stats['ols_r_squared']),
+            'speed_reference_source': stats['speed_reference_source'],
+            'reference_speed_pct_per_bar': round_or_nan(
+                stats['reference_speed_pct_per_bar']),
+            'trend_line_speed_pct_per_bar': round_or_nan(
+                stats['trend_line_speed_pct_per_bar']),
+            'segment_speed_pct_per_bar': round_or_nan(
+                stats['segment_speed_pct_per_bar']),
+            'first_feasible_w_bars': (
+                int(stats['first_feasible_w_bars'])
+                if pd.notna(stats['first_feasible_w_bars']) else np.nan
+            ),
+            'best_offset_w_bars': (
+                int(stats['best_offset_w_bars'])
+                if pd.notna(stats['best_offset_w_bars']) else np.nan
+            ),
+            'best_offset_score': round_or_nan(stats['best_offset_score']),
+            'offset_score': round_or_nan(stats['offset_score']),
+            'improvement_capture': round_or_nan(stats['improvement_capture']),
+            'fit_y_pct': round_or_nan(stats['fit_y_pct']),
+            'y_speed_pct_per_bar': round_or_nan(
+                stats['y_speed_pct_per_bar']),
+            'fit_entry_index': (
+                int(stats['fit_entry_index'])
+                if pd.notna(stats['fit_entry_index']) else np.nan
+            ),
+            'fit_entry_date': stats['fit_entry_date'],
+            'fit_entry_price': round_or_nan(stats['fit_entry_price']),
+            'entry_delay_bars': (
+                int(stats['entry_delay_bars'])
+                if pd.notna(stats['entry_delay_bars']) else np.nan
+            ),
+            'fitted_return_pct': round_or_nan(stats['fitted_return_pct']),
+            'capture_ratio': round_or_nan(stats['capture_ratio']),
+            'progress_count': (
+                int(stats['progress_count'])
+                if pd.notna(stats['progress_count']) else np.nan
+            ),
+            'mean_progress_pct': round_or_nan(stats['mean_progress_pct']),
+            'max_progress_pct': round_or_nan(stats['max_progress_pct']),
+            'std_progress_pct': round_or_nan(stats['std_progress_pct']),
+            'std_to_y_ratio': round_or_nan(stats['std_to_y_ratio']),
+            'range_to_y_ratio': round_or_nan(stats['range_to_y_ratio']),
+            'optimal_window_valid': int(stats['optimal_window_valid']),
+            'optimal_window_invalid_reason': (
+                stats['optimal_window_invalid_reason']
+            ),
+        })
+
+    return pd.DataFrame(records), pd.DataFrame(window_scan_records)
+
+
+def export_interactive_html_long_no_wd(
+        file_name: str,
+        save_name: str,
+        title: str,
+        underlying1: pd.DataFrame,
+        detail_df: pd.DataFrame,
+        transactions_df: pd.DataFrame,
+        factor: float):
+    if go is None:
+        print('[HTML] plotly is not installed, skip html export.')
+        return
+
+    def _safe_val(pref_data, key, digits=None):
+        if isinstance(pref_data, pd.Series) and key in pref_data.index:
+            val = pref_data[key]
+        else:
+            return 'nan'
+        if pd.isna(val):
+            return 'nan'
+        if digits is not None:
+            try:
+                return str(round(float(val), digits))
+            except Exception:
+                return str(val)
+        return str(val)
+
+    def _date_text(raw):
+        dt = str(raw)[:-3]
+        if len(dt) > 5:
+            return dt[:-5] + ' ' + dt[-5:]
+        return dt
+
+    fig_html = go.Figure()
+    x_index = underlying1.index.to_numpy()
+    x_min = int(x_index[0]) if len(x_index) > 0 else 0
+    x_max = int(x_index[-1]) if len(x_index) > 0 else 1
+    x_span = max(1, x_max - x_min + 1)
+    x_left_pad = max(1, int(round(x_span * 0.006)))
+    x_right_pad = max(1, int(round(x_span * 0.010)))
+
+    x_spike_cfg = {'showspikes': False}
+    y_spike_cfg = {'showspikes': False}
+    if HTML_CROSSHAIR_ENABLED:
+        x_spike_cfg = {
+            'showspikes': True,
+            'spikemode': 'across',
+            'spikesnap': 'cursor',
+            'spikecolor': HTML_CROSSHAIR_COLOR,
+            'spikethickness': 1,
+            'spikedash': 'solid'
+        }
+        y_spike_cfg = {
+            'showspikes': True,
+            'spikemode': 'across',
+            'spikesnap': 'cursor',
+            'spikecolor': HTML_CROSSHAIR_COLOR,
+            'spikethickness': 1,
+            'spikedash': 'solid'
+        }
+
+    fig_html.add_trace(go.Candlestick(
+        x=x_index,
+        open=underlying1['open'] / factor * 100,
+        high=underlying1['high'] / factor * 100,
+        low=underlying1['low'] / factor * 100,
+        close=underlying1['close'] / factor * 100,
+        name='price',
+        increasing=dict(
+            line=dict(color='salmon', width=0.8),
+            fillcolor='rgba(250, 128, 114, 0.28)'
+        ),
+        decreasing=dict(
+            line=dict(color='#2ca02c', width=0.8),
+            fillcolor='rgba(44, 160, 44, 0.28)'
+        )
+    ))
+
+    long_record = transactions_df.copy()
+    long_record['target'] = long_record['Price'] / factor * 100
+    long_record = long_record[long_record.Type == 'long']
+    if len(long_record) != 0:
+        long_texts = []
+        for idx, row in long_record.iterrows():
+            pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+            long_texts.append(
+                _date_text(row['Date']) + '<br>'
+                + 'high: ' + _safe_val(pref_data, 'high') + '<br>'
+                + 'total_inc: ' + _safe_val(pref_data, 't_inc_per', 2) + '%' + '<br>'
+                + 'execution: ' + _safe_val(pref_data, 'execution') + '<br>'
+                + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                + 'low_price: ' + _safe_val(pref_data, 'low_price') + '<br>'
+                + 'new_opening_count: ' + _safe_val(pref_data, 'new_opening_count') + '<br>'
+                + 'index: ' + str(idx)
+            )
+        fig_html.add_trace(go.Scatter(
+            x=long_record.index,
+            y=long_record['target'],
+            mode='markers',
+            marker=dict(color='red', size=4),
+            name='long',
+            text=long_texts,
+            hovertemplate='%{text}<extra></extra>'
+        ))
+
+    sell_record = transactions_df.copy()
+    sell_record['target'] = sell_record['Price'] / factor * 100
+    sell_record = sell_record[sell_record.Type == 'sell']
+    sell_1_count = 0
+    sell_2_count = 0
+    if len(sell_record) != 0:
+        close_type_1_df = sell_record[sell_record['Close_type'] == 1]
+        sell_1_count = int(len(close_type_1_df))
+        if len(close_type_1_df) != 0:
+            sell_1_texts = []
+            for idx, row in close_type_1_df.iterrows():
+                pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+                sell_1_texts.append(
+                    _date_text(row['Date']) + '<br>'
+                    + 'low: ' + _safe_val(pref_data, 'low') + '<br>'
+                    + 'hld_wd_per: ' + _safe_val(pref_data, 'hld_wd_per', 2) + '%' + '<br>'
+                    + 'holding_inc: ' + _safe_val(pref_data, 'holding_inc', 2) + '<br>'
+                    + 'max_inc: ' + _safe_val(pref_data, 'max_inc', 2) + '%' + '<br>'
+                    + 'max_wd: ' + _safe_val(pref_data, 'max_wd', 2) + '%' + '<br>'
+                    + 'execution2: ' + _safe_val(pref_data, 'execution') + '<br>'
+                    + 'period: ' + _safe_val(pref_data, 'period') + '<br>'
+                    + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                    + 'high_date: ' + _safe_val(pref_data, 'high_date') + '<br>'
+                    + 'high_price: ' + _safe_val(pref_data, 'high_price') + '<br>'
+                    + 'index: ' + str(idx)
+                )
+            fig_html.add_trace(go.Scatter(
+                x=close_type_1_df.index,
+                y=close_type_1_df['target'],
+                mode='markers',
+                marker=dict(color=SELL_WD_COLOR, size=4),
+                name='sell_1',
+                text=sell_1_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ))
+
+        close_type_2_df = sell_record[sell_record['Close_type'] == 2]
+        sell_2_count = int(len(close_type_2_df))
+        if len(close_type_2_df) != 0:
+            sell_2_texts = []
+            for idx, row in close_type_2_df.iterrows():
+                pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+                sell_2_texts.append(
+                    _date_text(row['Date']) + '<br>'
+                    + 'low: ' + _safe_val(pref_data, 'low') + '<br>'
+                    + 'hld_wd_per: ' + _safe_val(pref_data, 'hld_wd_per', 2) + '%' + '<br>'
+                    + 'max_inc: ' + _safe_val(pref_data, 'max_inc', 2) + '%' + '<br>'
+                    + 'max_wd: ' + _safe_val(pref_data, 'max_wd', 2) + '%' + '<br>'
+                    + 'execution2: ' + _safe_val(pref_data, 'execution') + '<br>'
+                    + 'period: ' + _safe_val(pref_data, 'period') + '<br>'
+                    + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                    + 'high_date: ' + _safe_val(pref_data, 'high_date') + '<br>'
+                    + 'high_price: ' + _safe_val(pref_data, 'high_price') + '<br>'
+                    + 'index: ' + str(idx)
+                )
+            fig_html.add_trace(go.Scatter(
+                x=close_type_2_df.index,
+                y=close_type_2_df['target'],
+                mode='markers',
+                marker=dict(color=SELL_SPEED_COLOR, size=4),
+                name='sell_2',
+                text=sell_2_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ))
+
+    trade_seq = transactions_df[
+        transactions_df['Type'].isin(['long', 'sell'])].copy()
+    trade_seq = trade_seq.sort_index()
+    trade_seq['target'] = trade_seq['Price'] / factor * 100
+    line_x = []
+    line_y = []
+    buy_idx = None
+    buy_y = None
+    for idx, row in trade_seq.iterrows():
+        if row['Type'] == 'long':
+            buy_idx = idx
+            buy_y = row['target']
+        elif row['Type'] == 'sell' and buy_idx is not None:
+            line_x.extend([buy_idx, idx, None])
+            line_y.extend([buy_y, row['target'], None])
+            buy_idx = None
+            buy_y = None
+    if len(line_x) > 0:
+        fig_html.add_trace(go.Scatter(
+            x=line_x,
+            y=line_y,
+            mode='lines',
+            line=dict(color=ACCENT_BLUE, width=2),
+            name='trade_link',
+            hoverinfo='skip'
+        ))
+
+    trade_count_annotation = []
+    if HTML_SHOW_TRADE_COUNT_BADGE:
+        total_trade_count = sell_1_count + sell_2_count
+        trade_count_annotation = [dict(
+            x=0.995, y=0.995,
+            xref='paper', yref='paper',
+            xanchor='right', yanchor='top',
+            align='right',
+            showarrow=False,
+            text=(
+                f"trades: {total_trade_count}"
+                + "<br>"
+                + f"sell_1: {sell_1_count}"
+                + "<br>"
+                + f"sell_2: {sell_2_count}"
+            ),
+            font=dict(size=11, color='black')
+        )]
+
+    fig_html.update_layout(
+        title=None,
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='left', x=0),
+        xaxis=dict(
+            title=None,
+            tickfont=dict(size=10),
+            showgrid=False,
+            rangeslider=dict(visible=False),
+            range=[x_min - x_left_pad, x_max + x_right_pad],
+            autorange=False,
+            **x_spike_cfg
+        ),
+        yaxis=dict(
+            title=None,
+            tickfont=dict(size=10),
+            showgrid=False,
+            **y_spike_cfg
+        ),
+        margin=dict(l=42, r=25, t=38, b=45, pad=0),
+        annotations=trade_count_annotation,
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.50)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+
+    html_dir = get_html_output_dir(file_name, BACKTEST_HTML_FOLDER)
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(html_dir, save_name + ' LongNoWD interactive.html')
+    html_text = fig_html.to_html(
+        include_plotlyjs=True,
+        full_html=True,
+        default_width='100vw',
+        default_height='100vh',
+        config={
+            'responsive': True,
+            'displayModeBar': False,
+            'displaylogo': False
+        }
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.50) !important;'
+        'fill-opacity:0.50 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace('<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print('\n')
+    print(f'[HTML] saved interactive chart: {html_path}')
+
+
+def legacy_export_trend_analysis_html(
+        file_name: str,
+        save_name: str,
+        underlying1: pd.DataFrame,
+        trend_df: pd.DataFrame,
+        factor: float):
+    """趋势分析专用 HTML：hover 显示 high/low 点，连线 low->high。"""
+    if go is None:
+        print('[HTML] plotly is not installed, skip trend html export.')
+        return
+    if len(trend_df) == 0:
+        print('[HTML] no trend data, skip trend html export.')
+        return
+
+    fig_html = go.Figure()
+    x_index = underlying1.index.to_numpy()
+    x_min = int(x_index[0]) if len(x_index) > 0 else 0
+    x_max = int(x_index[-1]) if len(x_index) > 0 else 1
+    x_span = max(1, x_max - x_min + 1)
+    x_left_pad = max(1, int(round(x_span * 0.006)))
+    x_right_pad = max(1, int(round(x_span * 0.010)))
+
+    # K 线
+    fig_html.add_trace(go.Candlestick(
+        x=x_index,
+        open=underlying1['open'] / factor * 100,
+        high=underlying1['high'] / factor * 100,
+        low=underlying1['low'] / factor * 100,
+        close=underlying1['close'] / factor * 100,
+        name='price',
+        increasing=dict(
+            line=dict(color='salmon', width=0.8),
+            fillcolor='rgba(250, 128, 114, 0.28)'
+        ),
+        decreasing=dict(
+            line=dict(color='#2ca02c', width=0.8),
+            fillcolor='rgba(44, 160, 44, 0.28)'
+        )
+    ))
+
+    # Low 点 (蓝色)
+    low_texts = []
+    for _, row in trend_df.iterrows():
+        low_texts.append(
+            f"trade: {int(row['trade_id'])}<br>"
+            f"low_date: {row['low_date']}<br>"
+            f"low_price: {row['low_price']}<br>"
+            f"low_index: {int(row['low_index'])}<br>"
+            f"---<br>"
+            f"search_start: {int(row['search_start'])}<br>"
+            f"trade_entry: {int(row['entry_index'])} ({row['entry_date'][:16]})<br>"
+            f"trade_exit: {int(row['exit_index'])} ({row['exit_date'][:16]})"
+        )
+    fig_html.add_trace(go.Scatter(
+        x=trend_df['low_index'].astype(int).tolist(),
+        y=(trend_df['low_price'] / factor * 100).tolist(),
+        mode='markers',
+        marker=dict(color='#1F77B4', size=5),
+        name='low',
+        text=low_texts,
+        hovertemplate='%{text}<extra></extra>'
+    ))
+
+    # High 点 (橙色)
+    high_texts = []
+    for _, row in trend_df.iterrows():
+        opt_w = (
+            f"{int(row['optimal_w_bars'])}"
+            if pd.notna(row['optimal_w_bars']) else 'nan'
+        )
+        min_progress = (
+            f"{row['min_progress_pct']:.4f}"
+            if pd.notna(row['min_progress_pct']) else 'nan'
+        )
+        mean_progress = (
+            f"{row['mean_progress_pct']:.4f}"
+            if pd.notna(row['mean_progress_pct']) else 'nan'
+        )
+        max_progress = (
+            f"{row['max_progress_pct']:.4f}"
+            if pd.notna(row['max_progress_pct']) else 'nan'
+        )
+        std_progress = (
+            f"{row['std_progress_pct']:.4f}"
+            if pd.notna(row['std_progress_pct']) else 'nan'
+        )
+        std_to_min = (
+            f"{row['std_to_min_ratio']:.4f}"
+            if pd.notna(row['std_to_min_ratio']) else 'nan'
+        )
+        range_to_min = (
+            f"{row['range_to_min_ratio']:.4f}"
+            if pd.notna(row['range_to_min_ratio']) else 'nan'
+        )
+        progress_count = (
+            f"{int(row['progress_count'])}"
+            if pd.notna(row['progress_count']) else 'nan'
+        )
+        valid_flag = int(row['optimal_window_valid'])
+        invalid_reason = row['optimal_window_invalid_reason'] or ''
+        high_texts.append(
+            f"trade: {int(row['trade_id'])}<br>"
+            f"high_date: {row['high_date']}<br>"
+            f"high_price: {row['high_price']}<br>"
+            f"high_index: {int(row['high_index'])}<br>"
+            f"duration: {int(row['duration_bars'])} bars<br>"
+            f"return: {row['total_return_pct']:.4f}%<br>"
+            f"optimal_w_bars: {opt_w}<br>"
+            f"min_progress_pct: {min_progress}<br>"
+            f"mean_progress_pct: {mean_progress}<br>"
+            f"max_progress_pct: {max_progress}<br>"
+            f"std_progress_pct: {std_progress}<br>"
+            f"std_to_min_ratio: {std_to_min}<br>"
+            f"range_to_min_ratio: {range_to_min}<br>"
+            f"progress_count: {progress_count}<br>"
+            f"window_valid: {valid_flag}<br>"
+            f"invalid_reason: {invalid_reason}<br>"
+            f"---<br>"
+            f"trade_entry: {int(row['entry_index'])} ({row['entry_date'][:16]})<br>"
+            f"trade_exit: {int(row['exit_index'])} ({row['exit_date'][:16]})"
+        )
+    fig_html.add_trace(go.Scatter(
+        x=trend_df['high_index'].astype(int).tolist(),
+        y=(trend_df['high_price'] / factor * 100).tolist(),
+        mode='markers',
+        marker=dict(color='orange', size=5),
+        name='high',
+        text=high_texts,
+        hovertemplate='%{text}<extra></extra>'
+    ))
+
+    # Entry/Exit 点 (50% 透明黑色小点)
+    entry_x = trend_df['entry_index'].astype(int).tolist()
+    exit_x = trend_df['exit_index'].astype(int).tolist()
+    # entry 价格: quote 在 entry_index 的 open
+    entry_y = []
+    exit_y = []
+    for _, row in trend_df.iterrows():
+        ei = int(row['entry_index'])
+        xi = int(row['exit_index'])
+        entry_y.append(float(underlying1.loc[ei, 'open']) / factor * 100)
+        exit_y.append(float(underlying1.loc[xi, 'close']) / factor * 100)
+    fig_html.add_trace(go.Scatter(
+        x=entry_x, y=entry_y,
+        mode='markers',
+        marker=dict(color='rgba(0,0,0,0.5)', size=4),
+        name='entry',
+        hoverinfo='skip'
+    ))
+    fig_html.add_trace(go.Scatter(
+        x=exit_x, y=exit_y,
+        mode='markers',
+        marker=dict(color='rgba(0,0,0,0.5)', size=4,
+                    symbol='x'),
+        name='exit',
+        hoverinfo='skip'
+    ))
+
+    # Entry 点 (蓝色小点 50% 透明)
+    entry_x = trend_df['entry_index'].astype(int).tolist()
+    entry_y = [float(underlying1.loc[int(r['entry_index']), 'open']) / factor * 100
+               for _, r in trend_df.iterrows()]
+    fig_html.add_trace(go.Scatter(
+        x=entry_x, y=entry_y,
+        mode='markers',
+        marker=dict(color='rgba(31,119,180,0.5)', size=4),
+        name='entry',
+        hoverinfo='skip'
+    ))
+
+    # Exit 点 (黑色小点 50% 透明)
+    exit_x = trend_df['exit_index'].astype(int).tolist()
+    exit_y = [float(underlying1.loc[int(r['exit_index']), 'close']) / factor * 100
+              for _, r in trend_df.iterrows()]
+    fig_html.add_trace(go.Scatter(
+        x=exit_x, y=exit_y,
+        mode='markers',
+        marker=dict(color='rgba(0,0,0,0.5)', size=4, symbol='x'),
+        name='exit',
+        hoverinfo='skip'
+    ))
+
+    # OLS 拟合线
+    fig_html.update_layout(
+        title=None,
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01,
+                    xanchor='left', x=0),
+        xaxis=dict(
+            title=None, tickfont=dict(size=10), showgrid=False,
+            rangeslider=dict(visible=False),
+            range=[x_min - x_left_pad, x_max + x_right_pad],
+            autorange=False, showspikes=False
+        ),
+        yaxis=dict(
+            title=None, tickfont=dict(size=10), showgrid=False,
+            showspikes=False
+        ),
+        margin=dict(l=42, r=25, t=38, b=45, pad=0),
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.50)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+
+    html_dir = get_html_output_dir(file_name, TREND_ANALYSIS_HTML_FOLDER)
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(
+        html_dir, save_name + ' trend_analysis interactive.html')
+    html_text = fig_html.to_html(
+        include_plotlyjs=True, full_html=True,
+        default_width='100vw', default_height='100vh',
+        config={'responsive': True, 'displayModeBar': False,
+                'displaylogo': False}
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.50) !important;'
+        'fill-opacity:0.50 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace(
+        '<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print(f'[HTML] saved trend analysis chart: {html_path}')
+
+
+def export_trend_analysis_html(
+        file_name: str,
+        save_name: str,
+        underlying1: pd.DataFrame,
+        trend_df: pd.DataFrame,
+        factor: float):
+    if go is None or make_subplots is None:
+        print('[HTML] plotly is not installed, skip trend html export.')
+        return
+    if len(trend_df) == 0:
+        print('[HTML] no trend data, skip trend html export.')
+        return
+
+    fig_html = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        row_heights=[0.78, 0.22],
+    )
+    x_index = underlying1.index.to_numpy()
+    x_min = int(x_index[0]) if len(x_index) > 0 else 0
+    x_max = int(x_index[-1]) if len(x_index) > 0 else 1
+    x_span = max(1, x_max - x_min + 1)
+    x_left_pad = max(1, int(round(x_span * 0.006)))
+    x_right_pad = max(1, int(round(x_span * 0.010)))
+
+    fig_html.add_trace(go.Candlestick(
+        x=x_index,
+        open=underlying1['open'] / factor * 100,
+        high=underlying1['high'] / factor * 100,
+        low=underlying1['low'] / factor * 100,
+        close=underlying1['close'] / factor * 100,
+        name='price',
+        increasing=dict(
+            line=dict(color='salmon', width=0.8),
+            fillcolor='rgba(250, 128, 114, 0.28)'
+        ),
+        decreasing=dict(
+            line=dict(color='#2ca02c', width=0.8),
+            fillcolor='rgba(44, 160, 44, 0.28)'
+        )
+    ), row=1, col=1)
+
+    low_texts = []
+    high_texts = []
+    trend_line_x = []
+    trend_line_y = []
+    progress_legend_added = False
+    expected_legend_added = False
+    fit_y_legend_added = False
+
+    for _, row in trend_df.iterrows():
+        low_texts.append(
+            f"trade: {int(row['trade_id'])}<br>"
+            f"low_date: {row['low_date']}<br>"
+            f"low_price: {row['low_price']}<br>"
+            f"low_index: {int(row['low_index'])}<br>"
+            f"fit_entry_index: "
+            f"{(int(row['fit_entry_index']) if pd.notna(row['fit_entry_index']) else 'nan')}<br>"
+            f"fit_entry_price: "
+            f"{(f'{row['fit_entry_price']:.4f}' if pd.notna(row['fit_entry_price']) else 'nan')}"
+        )
+
+        trend_seg = underlying1.iloc[int(row['low_index']):int(row['high_index']) + 1]
+        if len(trend_seg) >= 2 and pd.notna(row['ols_slope']) and pd.notna(row['ols_intercept']):
+            t = np.arange(len(trend_seg), dtype=float)
+            fitted = row['ols_slope'] * t + row['ols_intercept']
+            trend_line_x.extend([int(row['low_index']), int(row['high_index']), None])
+            trend_line_y.extend([
+                fitted[0] / factor * 100,
+                fitted[-1] / factor * 100,
+                None,
+            ])
+
+        high_texts.append(
+            f"trade: {int(row['trade_id'])}<br>"
+            f"high_date: {row['high_date']}<br>"
+            f"high_price: {row['high_price']}<br>"
+            f"high_index: {int(row['high_index'])}<br>"
+            f"duration_bars: {int(row['duration_bars'])}<br>"
+            f"total_return_pct: {row['total_return_pct']:.4f}%<br>"
+            f"speed_reference_source: {row['speed_reference_source']}<br>"
+            f"reference_speed_pct_per_bar: "
+            f"{(f'{row['reference_speed_pct_per_bar']:.4f}' if pd.notna(row['reference_speed_pct_per_bar']) else 'nan')}<br>"
+            f"trend_line_speed_pct_per_bar: "
+            f"{(f'{row['trend_line_speed_pct_per_bar']:.4f}' if pd.notna(row['trend_line_speed_pct_per_bar']) else 'nan')}<br>"
+            f"segment_speed_pct_per_bar: "
+            f"{(f'{row['segment_speed_pct_per_bar']:.4f}' if pd.notna(row['segment_speed_pct_per_bar']) else 'nan')}<br>"
+            f"first_feasible_w_bars: "
+            f"{(int(row['first_feasible_w_bars']) if pd.notna(row['first_feasible_w_bars']) else 'nan')}<br>"
+            f"best_offset_w_bars: "
+            f"{(int(row['best_offset_w_bars']) if pd.notna(row['best_offset_w_bars']) else 'nan')}<br>"
+            f"best_offset_score: "
+            f"{(f'{row['best_offset_score']:.6f}' if pd.notna(row['best_offset_score']) else 'nan')}<br>"
+            f"optimal_w_bars: "
+            f"{(int(row['optimal_w_bars']) if pd.notna(row['optimal_w_bars']) else 'nan')}<br>"
+            f"offset_score: "
+            f"{(f'{row['offset_score']:.6f}' if pd.notna(row['offset_score']) else 'nan')}<br>"
+            f"improvement_capture: "
+            f"{(f'{row['improvement_capture']:.6f}' if pd.notna(row['improvement_capture']) else 'nan')}<br>"
+            f"fit_y_pct: {(f'{row['fit_y_pct']:.4f}' if pd.notna(row['fit_y_pct']) else 'nan')}<br>"
+            f"y_speed_pct_per_bar: {(f'{row['y_speed_pct_per_bar']:.4f}' if pd.notna(row['y_speed_pct_per_bar']) else 'nan')}<br>"
+            f"fit_entry_index: {(int(row['fit_entry_index']) if pd.notna(row['fit_entry_index']) else 'nan')}<br>"
+            f"fit_entry_date: {row['fit_entry_date']}<br>"
+            f"fit_entry_price: {(f'{row['fit_entry_price']:.4f}' if pd.notna(row['fit_entry_price']) else 'nan')}<br>"
+            f"entry_delay_bars: {(int(row['entry_delay_bars']) if pd.notna(row['entry_delay_bars']) else 'nan')}<br>"
+            f"fitted_return_pct: {(f'{row['fitted_return_pct']:.4f}' if pd.notna(row['fitted_return_pct']) else 'nan')}<br>"
+            f"capture_ratio: {(f'{row['capture_ratio']:.4f}' if pd.notna(row['capture_ratio']) else 'nan')}<br>"
+            f"window_valid: {int(row['optimal_window_valid'])}<br>"
+            f"invalid_reason: {row['optimal_window_invalid_reason'] or ''}"
+        )
+
+        if int(row['optimal_window_valid']) == 1 and pd.notna(row['optimal_w_bars']):
+            progress_x, progress_y, invalid_progress_reason = compute_progress_pct_series_long(
+                trend_seg, int(row['optimal_w_bars']), require_positive=True)
+            expected_progress = (
+                get_reference_speed_from_row(row) * int(row['optimal_w_bars'])
+            )
+            if len(progress_x) > 0:
+                progress_hover = [
+                    (
+                        f"trade: {int(row['trade_id'])}<br>"
+                        "window_progress: actual progress series under selected window<br>"
+                        f"optimal_w_bars: {int(row['optimal_w_bars'])}<br>"
+                        f"bar_index: {int(px)}<br>"
+                        f"progress_pct: {float(py):.4f}%<br>"
+                        f"expected_progress_pct: {expected_progress:.4f}%<br>"
+                        f"fit_y_pct: {float(row['fit_y_pct']):.4f}%<br>"
+                        f"offset_score: {float(row['offset_score']):.6f}<br>"
+                        f"improvement_capture: {float(row['improvement_capture']):.6f}"
+                    )
+                    for px, py in zip(progress_x, progress_y)
+                ]
+                fig_html.add_trace(go.Scatter(
+                    x=progress_x.tolist(),
+                    y=progress_y.tolist(),
+                    mode='lines',
+                    line=dict(width=1.8),
+                    opacity=0.5,
+                    name='window_progress',
+                    legendgroup='window_progress',
+                    showlegend=not progress_legend_added,
+                    text=progress_hover,
+                    hovertemplate='%{text}<extra></extra>',
+                ), row=2, col=1)
+                progress_legend_added = True
+                if np.isfinite(expected_progress):
+                    fig_html.add_trace(go.Scatter(
+                        x=[int(progress_x[0]), int(progress_x[-1])],
+                        y=[expected_progress, expected_progress],
+                        mode='lines',
+                        line=dict(color='rgba(30,30,30,0.45)', width=1.2, dash='dash'),
+                        name='expected_progress',
+                        legendgroup='expected_progress',
+                        showlegend=not expected_legend_added,
+                        hovertemplate=(
+                            'expected_progress_pct: trend-line expected progress for selected window'
+                            f'<br>value: {expected_progress:.4f}%<extra></extra>'
+                        ),
+                    ), row=2, col=1)
+                    expected_legend_added = True
+                if pd.notna(row['fit_y_pct']):
+                    fig_html.add_trace(go.Scatter(
+                        x=[int(progress_x[0]), int(progress_x[-1])],
+                        y=[float(row['fit_y_pct']), float(row['fit_y_pct'])],
+                        mode='lines',
+                        line=dict(color='rgba(80,80,80,0.55)', width=1.2, dash='dot'),
+                        name='fit_y',
+                        legendgroup='fit_y',
+                        showlegend=not fit_y_legend_added,
+                        hovertemplate=(
+                            'fit_y_pct: minimum actual progress under selected window'
+                            f'<br>value: {float(row["fit_y_pct"]):.4f}%<extra></extra>'
+                        ),
+                    ), row=2, col=1)
+                    fit_y_legend_added = True
+            elif invalid_progress_reason:
+                high_texts[-1] += f"<br>progress_series_error: {invalid_progress_reason}"
+
+    fig_html.add_trace(go.Scatter(
+        x=trend_df['low_index'].astype(int).tolist(),
+        y=(trend_df['low_price'] / factor * 100).tolist(),
+        mode='markers',
+        marker=dict(color='#1F77B4', size=5),
+        name='low',
+        text=low_texts,
+        hovertemplate='%{text}<extra></extra>'
+    ), row=1, col=1)
+
+    fig_html.add_trace(go.Scatter(
+        x=trend_df['high_index'].astype(int).tolist(),
+        y=(trend_df['high_price'] / factor * 100).tolist(),
+        mode='markers',
+        marker=dict(color='orange', size=5),
+        name='high',
+        text=high_texts,
+        hovertemplate='%{text}<extra></extra>'
+    ), row=1, col=1)
+
+    fit_entry_df = trend_df[trend_df['fit_entry_index'].notna()]
+    if len(fit_entry_df) > 0:
+        fig_html.add_trace(go.Scatter(
+            x=fit_entry_df['fit_entry_index'].astype(int).tolist(),
+            y=[float(v) / factor * 100 for v in fit_entry_df['fit_entry_price']],
+            mode='markers',
+            marker=dict(color='rgba(31,119,180,0.70)', size=6, symbol='triangle-up'),
+            name='fit_entry',
+            hoverinfo='skip'
+        ), row=1, col=1)
+
+    if len(trend_line_x) > 0:
+        fig_html.add_trace(go.Scatter(
+            x=trend_line_x,
+            y=trend_line_y,
+            mode='lines',
+            line=dict(color=ACCENT_BLUE, width=2),
+            name='trend_line',
+            hoverinfo='skip'
+        ), row=1, col=1)
+
+    for trade_idx, row in enumerate(trend_df.itertuples(index=False), start=0):
+        if pd.isna(row.optimal_w_bars):
+            continue
+        fig_html.add_annotation(
+            x=(int(row.low_index) + int(row.high_index)) / 2.0,
+            y=1.02 + (0.02 * (trade_idx % 2)),
+            xref='x',
+            yref='paper',
+            text=f"{int(row.optimal_w_bars)}",
+            showarrow=False,
+            font=dict(size=11, color='rgba(40,40,40,0.95)'),
+            bgcolor='rgba(255,255,255,0.72)',
+            bordercolor='rgba(0,0,0,0.18)',
+            borderwidth=1,
+            yanchor='bottom',
+        )
+
+    fig_html.update_layout(
+        title=None,
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        legend=dict(orientation='h', yanchor='bottom', y=1.01,
+                    xanchor='left', x=0),
+        margin=dict(l=42, r=25, t=72, b=45, pad=0),
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.50)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+    fig_html.update_xaxes(
+        title=None,
+        tickfont=dict(size=10),
+        showgrid=False,
+        range=[x_min - x_left_pad, x_max + x_right_pad],
+        autorange=False,
+        showspikes=False,
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(0,0,0,0.35)',
+        row=1,
+        col=1,
+    )
+    fig_html.update_xaxes(
+        title=None,
+        tickfont=dict(size=10),
+        showgrid=False,
+        showspikes=False,
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(0,0,0,0.50)',
+        mirror=True,
+        ticks='outside',
+        row=2,
+        col=1,
+    )
+    fig_html.update_yaxes(
+        title=None,
+        tickfont=dict(size=10),
+        showgrid=False,
+        showspikes=False,
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(0,0,0,0.35)',
+        row=1,
+        col=1,
+    )
+    fig_html.update_yaxes(
+        title='progress %',
+        tickfont=dict(size=10),
+        showgrid=False,
+        showspikes=False,
+        zeroline=True,
+        zerolinecolor='rgba(0,0,0,0.25)',
+        showline=True,
+        linewidth=1,
+        linecolor='rgba(0,0,0,0.50)',
+        ticks='outside',
+        row=2,
+        col=1,
+    )
+    fig_html.update_xaxes(rangeslider=dict(visible=False), row=1, col=1)
+
+    html_dir = get_html_output_dir(file_name, TREND_ANALYSIS_HTML_FOLDER)
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(
+        html_dir, save_name + ' trend_analysis interactive.html')
+    html_text = fig_html.to_html(
+        include_plotlyjs=True, full_html=True,
+        default_width='100vw', default_height='100vh',
+        config={'responsive': True, 'displayModeBar': False,
+                'displaylogo': False}
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.50) !important;'
+        'fill-opacity:0.50 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace(
+        '<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print(f'[HTML] saved trend analysis chart: {html_path}')
+
+
+# ============================================================
+# Momentum Strategy
+# ============================================================
+
+class LongNoWDStrategy(BaseStrategy):
+    """无回撤版本：空仓即开仓，持仓仅速度平仓。"""
+
+    def __init__(self, params: dict):
+        super().__init__(params)
+        # 策略内部状态
+        self.var0 = 0
+        self.new_opening = False
+        self.new_opening_count = 0
+        self.last_index = 0
+        self.low_index = 0
+        self.start_index = 0
+        self.recent_low_index = 0
+        self.first_cond1_price = 0
+        self.analysis_increase = 0
+        self.holding_start_index = 0
+        self.increase_start_index = 0
+        self.holding_increase_percent = np.nan
+        self.HIGH_MATCH_EPS = 1e-10
+
+    def get_extra_columns(self) -> list:
+        return [
+            'withdrawal', 'wd_per', 'wd_signal',
+            'increase', 'inc_per', 'inc_signal',
+            'ana_inc', 'a_inc_per',
+            'total_inc', 't_inc_per', 'total_inc_signal',
+            'max_inc', 'max_wd',
+            'holding_wd', 'hld_wd_per', 'holding_wd_signal',
+            'holding_inc', 'speed_close_signal',
+            'var0', 'period',
+            'low_index', 'high_index',
+            'low_date', 'low_price',
+            'high_date', 'high_price',
+            'last_index', 'new_opening_count',
+        ]
+
+    def get_default_columns(self) -> dict:
+        return {
+            'wd_signal': 0.0,
+            'inc_signal': 0.0,
+            'total_inc_signal': 0.0,
+            'holding_wd_signal': 0.0,
+            'speed_close_signal': 0.0,
+        }
+
+    def on_bar_record(self, ctx: BarContext):
+        """每根K线记录策略状态到signal"""
+        ctx.signal.at[ctx.index, 'last_index'] = self.last_index
+        ctx.signal.at[ctx.index, 'new_opening_count'] = self.new_opening_count
+
+    def on_bar_idle(self, ctx: BarContext) -> OpenResult | None:
+        quote = ctx.quote
+        signal = ctx.signal
+        index = ctx.index
+        ii = ctx.integer_index
+        p = self.params
+        open_bar = p['open_bar']
+
+        # 空仓时每根bar直接开仓（当根开盘价）
+        if open_bar > 1 and ii + 1 >= open_bar:
+            open_slice = quote.iloc[ii + 1 - open_bar:ii + 1]
+            open_increase, inc_base = get_increase_with_base(open_slice)
+            t_inc_per = (open_increase / inc_base * 100) if inc_base != 0 else 0.0
+            signal.at[index, 'total_inc'] = open_increase
+            signal.at[index, 't_inc_per'] = round(t_inc_per, 4)
+        else:
+            signal.at[index, 'total_inc'] = 0.0
+            signal.at[index, 't_inc_per'] = 0.0
+
+        signal.at[index, 'total_inc_signal'] = 1.0
+        signal.at[index, 'inc_signal'] = 1.0
+        signal.at[index, 'wd_signal'] = 1.0
+
+        self.low_index = ii
+        self.start_index = ii
+        self.first_cond1_price = float(quote.loc[index, 'open'])
+        self.new_opening_count = 1
+        self.new_opening = True
+
+        signal.at[index, 'low_index'] = self.low_index
+        signal.at[index, 'period'] = 1
+
+        return OpenResult(
+            execution_price=round(self.first_cond1_price, self.params['round_precision']),
+            low_index=self.low_index,
+            low_price=self.first_cond1_price,
+            start_index=self.start_index,
+        )
+
+    def on_position_opened(self, ctx: BarContext, result):
+        """开仓后记录开仓信息并重置策略状态"""
+        signal = ctx.signal
+        index = ctx.index
+        # 记录开仓相关字段
+        signal.at[index, 'low_price'] = result.low_price
+        signal.at[index, 'low_index'] = result.low_index
+        signal.at[index, 'low_date'] = str(
+            signal.at[result.low_index, 'date']).removesuffix('.0')
+        # 重置策略状态
+        self.new_opening_count = 1
+        self.var0 = 0
+        self.new_opening = True
+
+    def adjust_and_validate_open_execution(self, ctx: BarContext,
+                                           result: OpenResult,
+                                           execution_price: float) -> float:
+        """做多开仓执行价校正与校验。"""
+        quote = ctx.quote
+        index = ctx.index
+        exec_price = execution_price
+
+        # 跳空上开: 若期望买价低于开盘，按开盘成交
+        if exec_price < quote.loc[index, 'open']:
+            exec_price = quote.loc[index, 'open']
+
+        if exec_price > quote.loc[index, 'high']:
+            print('long open execution price > high, plz check.')
+            print(f'idx={index}, low_price={result.low_price}, '
+                  f'exec={exec_price}, '
+                  f'open={quote.loc[index, "open"]}, '
+                  f'high={quote.loc[index, "high"]}, '
+                  f'low={quote.loc[index, "low"]}')
+            print('error index', index)
+            print('\n')
+        if exec_price < quote.loc[index, 'low']:
+            print('long open execution price < low, plz check.')
+            print(result.low_price, exec_price)
+            print('error index', index)
+
+        return exec_price
+
+    def on_bar_holding(self, ctx: BarContext) -> CloseResult | None:
+        quote = ctx.quote
+        signal = ctx.signal
+        index = ctx.index
+        ii = ctx.integer_index
+        p = self.params
+
+        close_bar = p['close_bar']
+        close_threshold = p['close_threshold']
+
+        # 初始化
+        if self.new_opening:
+            self.last_index = self.low_index
+            self.increase_start_index = self.low_index
+            self.holding_start_index = ii
+            self.new_opening = False
+
+        window_ready = (self.new_opening_count >= close_bar)
+        if window_ready:
+            self.last_index = ii - close_bar
+        self.new_opening_count += 1
+
+        analysis_slice = quote.iloc[self.last_index + 1:ii + 1]
+        holding_slice = quote.iloc[self.increase_start_index:ii + 1]
+
+        # 速度条件（唯一平仓条件）
+        if window_ready:
+            ana_inc_slice_1 = quote.iloc[self.low_index:ii + 1]
+            ana_inc_slice_2 = quote.iloc[
+                self.low_index:ii + 1 - close_bar]
+            holding_increase = (
+                ana_inc_slice_1.high.max() - ana_inc_slice_2.high.max())
+            holding_base = analysis_slice['low'].iloc[0]
+            self.holding_increase_percent = (
+                holding_increase / holding_base if holding_base != 0 else 0.0)
+            signal.at[index, 'holding_inc'] = holding_increase
+            if self.holding_increase_percent < close_threshold:
+                signal.at[index, 'speed_close_signal'] = 1
+
+        # 回撤仅记录，不参与平仓
+        with_high, holding_withdrawal = get_withdrawal(holding_slice)
+        holding_withdrawal_percent = (
+            holding_withdrawal / with_high if with_high != 0 else 0)
+        signal.at[index, 'holding_wd'] = holding_withdrawal
+        signal.at[index, 'hld_wd_per'] = round(
+            holding_withdrawal_percent * 100, 4)
+        signal.at[index, 'holding_wd_signal'] = 0.0
+
+        period = ii - self.holding_start_index + 1
+        signal.at[index, 'high_price'] = max(holding_slice['high'])
+
+        # 速度平仓
+        if signal.at[index, 'speed_close_signal'] == 1:
+            return CloseResult(
+                close_type=2,
+                execution_price=round(
+                    quote.loc[index]['close'],
+                    self.params['round_precision']),
+                start_index=self.start_index,
+                low_index=self.low_index,
+                period=period,
+            )
+
+        return None
+
+    def on_position_closed(self, ctx: BarContext, result):
+        """平仓后记录平仓信息并重置策略状态"""
+        signal = ctx.signal
+        index = ctx.index
+        # 记录平仓相关字段
+        signal.at[index, 'period'] = result.period
+        signal.at[index, 'type'] = result.close_type
+        # 重置策略状态
+        self.new_opening = True
+        self.new_opening_count = 0
+
+    def on_trade_stats(self, ctx: BarContext,
+                        start_index: int, low_index: int):
+        """平仓后的交易统计: high_index, max_wd, max_inc"""
+        quote = ctx.quote
+        signal = ctx.signal
+        index = ctx.index
+        ii = ctx.integer_index
+
+        increase3_slice = quote.iloc[start_index:ii + 1]
+        increase3 = get_analysis_increase(increase3_slice)
+        high_index = start_index
+        for i in range(start_index + 1, ii + 2):
+            high_index_slice = quote.iloc[start_index:i]
+            increase4 = get_analysis_increase(high_index_slice)
+            if np.isclose(increase4, increase3,
+                          rtol=0.0, atol=self.HIGH_MATCH_EPS):
+                high_index = i - 1
+                break
+
+        max_slice = quote.iloc[low_index:high_index + 1]
+        max_wd = get_max_wd(max_slice)
+        max_inc, inc_base = get_increase_with_base(max_slice)
+        max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
+        signal.at[index, 'max_inc'] = round(max_inc_percent * 100, 4)
+        signal.at[index, 'max_wd'] = round(max_wd * 100, 4)
+        signal.at[index, 'high_index'] = high_index
+        signal.at[index, 'high_date'] = str(
+            signal.at[high_index, 'date']).removesuffix('.0')
+        # 持仓平仓时也记录 high_price
+        holding_slice = quote.iloc[
+            self.increase_start_index:ii + 1]
+        signal.at[index, 'high_price'] = max(holding_slice['high'])
+        signal.at[index, 'low_index'] = low_index
+        signal.at[index, 'low_date'] = str(
+            signal.at[low_index, 'date']).removesuffix('.0')
+
+    def _do_idle_stats(self, quote, signal, index, ii, stat_type):
+        """未开仓时的 reset 统计（var0=3 或 var0=4）"""
+        increase3_slice = quote.iloc[self.start_index:ii + 1]
+        increase3 = get_analysis_increase(increase3_slice)
+        high_index = self.start_index
+        for i in range(self.start_index + 1, ii + 2):
+            high_index_slice = quote.iloc[self.start_index:i]
+            increase4 = get_analysis_increase(high_index_slice)
+            if np.isclose(increase4, increase3,
+                          rtol=0.0, atol=self.HIGH_MATCH_EPS):
+                high_index = i - 1
+                break
+        max_slice = quote.iloc[self.low_index:high_index + 1]
+        max_wd = get_max_wd(max_slice)
+        max_inc, inc_base = get_increase_with_base(max_slice)
+        max_inc_percent = max_inc / inc_base if inc_base != 0 else 0
+        signal.at[index, 'max_inc'] = round(max_inc_percent * 100, 4)
+        signal.at[index, 'max_wd'] = round(max_wd * 100, 4)
+        signal.at[index, 'high_index'] = high_index
+        signal.at[index, 'high_date'] = str(
+            signal.at[high_index, 'date']).removesuffix('.0')
+        signal.at[index, 'low_index'] = self.low_index
+        signal.at[index, 'low_date'] = str(
+            signal.at[self.low_index, 'date']).removesuffix('.0')
+        signal.at[index, 'period'] = self.new_opening_count
+        signal.at[index, 'type'] = stat_type
+
+
+# ============================================================
+# Main Script
+# ============================================================
+
+if __name__ == '__main__':
+
+    # --- 数据加载 ---
+    folder_path = DATA_FOLDER_PATH
+    file_name = DATA_FILE_NAME
+
+    df, ROUND_PRECISION, BAR_SECONDS = load_data(folder_path, file_name)
+    if (RESAMPLE_RULE or '').strip():
+        df, BAR_SECONDS = resample_ohlc_df(df, RESAMPLE_RULE)
+        print(f'[Data] resampled to {RESAMPLE_RULE}  |  bar period: {BAR_SECONDS}s')
+    else:
+        print(f'[Data] using native period  |  bar period: {BAR_SECONDS}s')
+    open_bar_cfg = int(OPEN_BAR)
+    close_bar_cfg = int(CLOSE_BAR)
+    open_bar2_cfg = np.nan if pd.isna(OPEN_BAR2) else int(OPEN_BAR2)
+
+    # 创建输出文件夹
+    os.makedirs('./result', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/perf', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/trans', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/trade_stats', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long no wd outcome/trend_stats', exist_ok=True)
+
+    outcome_stats = pd.DataFrame()
+
+    # 选择回测时间区间
+    startdate = START_INDEX
+    enddate = END_INDEX
+
+    preview_df = df[df.index > startdate]
+    if enddate != 'latest':
+        preview_df = preview_df[preview_df.index < enddate]
+    if len(preview_df) == 0:
+        raise ValueError(
+            f'No data in selected range: START_INDEX={startdate}, END_INDEX={enddate}'
+        )
+    print(f'[Main] backtest index range: ({startdate}, {enddate})')
+    print(f'[Main] backtest time range: {preview_df.iloc[0]["Date"]} -> {preview_df.iloc[-1]["Date"]}')
+
+    df5 = df[df.index > startdate]
+    if enddate != 'latest':
+        df5 = df5[df5.index < enddate].reset_index(drop=True)
+    underlying = df5.copy()
+
+    only_close = ONLY_CLOSE
+    if only_close:
+        underlying.open = underlying.low = underlying.high = underlying.close
+
+    # --- 参数循环 ---
+    for_num_1 = FOR_NUM_1
+    for_num_2 = FOR_NUM_2
+    for_num_3 = FOR_NUM_3
+    print(for_num_1, for_num_2, for_num_3)
+    step1 = STEP1
+    step3 = STEP3
+
+    for num in range(for_num_1):
+        for i in range(for_num_2):
+            print(f'{str(num)} {str(i)}\n')
+
+            # 策略参数
+            open_bar = open_bar_cfg
+            open_threshold = OPEN_THRESHOLD
+            close_bar = close_bar_cfg
+            close_threshold = CLOSE_THRESHOLD
+            open_continous_threshold = OPEN_CONTINOUS_THRESHOLD + (i * step1)
+            # 双策略
+            open_bar2 = open_bar2_cfg
+            open_threshold2 = OPEN_THRESHOLD2
+            open_continous_threshold2 = OPEN_CONTINOUS_THRESHOLD2
+            commision_percent = COMMISION_PERCENT
+            capital = CAPITAL
+
+            # 无回撤策略下，回撤阈值参数已移除
+
+            # Window_Increase 预计算
+            arr = underlying[['low', 'high', 'open', 'close']].to_numpy(dtype=float)
+            n = arr.shape[0]
+            win = open_bar
+            window_increase = np.full(n, np.nan, dtype=float)
+            for end in range(win - 1, n):
+                start = end - win + 1
+                w = arr[start:end + 1]
+                win_low = w[0, 0]
+                win_high = w[0, 1] if w[0, 2] >= w[0, 3] else w[0, 3]
+                for j in range(1, win):
+                    low_j, high_j, close_j = w[j, 0], w[j, 1], w[j, 3]
+                    if low_j <= win_low:
+                        win_low = low_j
+                        win_high = close_j
+                    elif high_j > win_high:
+                        win_high = high_j
+                window_increase[end] = win_high - win_low
+            underlying['Window_Increase'] = window_increase
+
+            # ====== 使用引擎运行回测 ======
+            params = {
+                'open_bar': open_bar,
+                'open_threshold': open_threshold,
+                'open_continous_threshold': open_continous_threshold,
+                'close_bar': close_bar,
+                'close_threshold': close_threshold,
+                'open_continous_threshold2': open_continous_threshold2,
+                'round_precision': ROUND_PRECISION,
+            }
+
+            strategy = LongNoWDStrategy(params)
+            engine = BacktestEngine(
+                underlying, strategy, capital,
+                ROUND_PRECISION, commision_percent)
+            (df_signal, signal, close_counts) = engine.run()
+            withdrawal_close_count = close_counts.get(1, 0)
+            speed_close_count = close_counts.get(2, 0)
+
+            performance, transactions_df = generate_performance(
+                underlying, df_signal, capital, commision_percent)
+            trade_extreme_df = build_trade_extreme_stats_long(
+                underlying, transactions_df)
+            trend_analysis_df, window_scan_df = build_trend_analysis_df(
+                underlying,
+                trade_extreme_df,
+                w_min=TREND_W_MIN_BARS,
+                w_max=TREND_W_MAX_BARS,
+                min_samples=TREND_MIN_PROGRESS_SAMPLES,
+                improvement_capture_target=TREND_IMPROVEMENT_CAPTURE_TARGET,
+            )
+            print(f'[Trend] trade_extreme_df rows: {len(trade_extreme_df)}, '
+                  f'trend_analysis_df rows: {len(trend_analysis_df)}, '
+                  f'window_scan_df rows: {len(window_scan_df)}')
+            if TREND_TEST_MODE and len(trend_analysis_df) > 0:
+                print_trend_test_case_summary(
+                    trend_df=trend_analysis_df,
+                    window_scan_df=window_scan_df,
+                    test_case_index=TREND_TEST_CASE_INDEX,
+                    test_windows=TREND_TEST_WINDOWS,
+                    improvement_capture_target=(
+                        TREND_IMPROVEMENT_CAPTURE_TARGET
+                    ),
+                    near_band=TREND_TEST_NEAR_BAND,
+                    big_drop_ratio=TREND_TEST_BIG_DROP_RATIO,
+                )
+            entry_to_max_profit_wd_df = build_entry_to_max_profit_withdrawal_df(
+                underlying, transactions_df)
+
+            open_count = int((df_signal['signal'] == 1.0).sum())
+            idle_count = int((signal['have_holding'] == 0).sum())
+
+            if len(transactions_df) > 1:
+                Capital_outcome = round(
+                    transactions_df[
+                        transactions_df.Type != 'long'].Capital.iloc[-1], 2)
+            else:
+                Capital_outcome = 100
+            perf_outcome = performance.reset_index(
+                drop=True)[['date', 'capital']]
+
+            # 打印结果
+            print(str(startdate) + '-' + str(enddate))
+            print('total close count = '
+                  + str(withdrawal_close_count + speed_close_count))
+            print('withdrawal close count = '
+                  + str(round(withdrawal_close_count, 4)))
+            print('speed close count = '
+                  + str(round(speed_close_count, 4)))
+            print(
+                f'{startdate}-{enddate} '
+                f'close_{int(withdrawal_close_count)}+{int(speed_close_count)}'
+            )
+            print('profit: ' + str(round(performance.capital.iloc[-1], 2)))
+            print(f'[Check-1] withdrawal close count (should be 0): {withdrawal_close_count}')
+            print(f'[Check-2] open-on-idle count: open={open_count}, idle={idle_count}')
+            print(f'[Check-3] trade extreme stats rows: {len(trade_extreme_df)}')
+            print(f'[Check-4] entry->max-profit wd rows: {len(entry_to_max_profit_wd_df)}')
+            if len(entry_to_max_profit_wd_df) > 0:
+                print(entry_to_max_profit_wd_df.head(5))
+
+            # ====== 命名（fig1 已移除） ======
+            run_name = (
+                f'w{TREND_W_MIN_BARS}-{TREND_W_MAX_BARS} '
+                f'{startdate}-{enddate} '
+                f'close_{int(withdrawal_close_count)}+{int(speed_close_count)}'
+            )
+            report_name = f'LongNoWD {run_name}'
+            save_name = run_name
+
+            # ====== Perf & Excel ======
+            detail_df = pd.concat([signal, df5], axis=1, join='inner')
+            detail_df = pd.concat(
+                [detail_df, perf_outcome.capital], axis=1, join='inner')
+            detail_df.drop(
+                ['holding_signal', 'inc_signal', 'wd_signal',
+                 'holding_wd_signal', 'total_inc_signal',
+                 'speed_close_signal', 'have_holding'],
+                axis=1, inplace=True)
+            detail_df.drop(
+                ['var0', 'low_index', 'high_index'],
+                axis=1, inplace=True)
+            if len(detail_df) == 0:
+                detail_df.drop(
+                    ['holding_wd', 'holding_inc', 'execution'],
+                    axis=1, inplace=True)
+
+            perf_name = f'{report_name} capital_{Capital_outcome} perf.xlsx'
+            writer1 = pd.ExcelWriter(
+                './result/%s long no wd outcome/perf/' % file_name + perf_name,
+                engine='xlsxwriter')
+            detail_df.to_excel(writer1, sheet_name='stats')
+            workbook = writer1.book
+            worksheet = writer1.sheets['stats']
+            worksheet.set_default_row(15)
+            fmt = workbook.add_format()
+            fmt.set_font_name('Microsoft YaHei UI Light')
+            fmt.set_align('justify')
+            fmt.set_align('center')
+            fmt.set_align('vjustify')
+            fmt.set_align('vcenter')
+            fmt.set_font_size(12)
+            fmt1 = workbook.add_format({'num_format': '0'})
+            fmt1.set_font_name('Microsoft YaHei UI Light')
+            fmt1.set_align('justify')
+            fmt1.set_align('center')
+            fmt1.set_align('vjustify')
+            fmt1.set_align('vcenter')
+            worksheet.set_column('A:A', 7, fmt1)
+            worksheet.set_column('B:B', 18.5, fmt1)
+            worksheet.set_column('C:C', 12, fmt)
+            worksheet.set_column('D:D', 10, fmt)
+            worksheet.set_column('E:E', 9, fmt)
+            worksheet.set_column('F:F', 12, fmt)
+            worksheet.set_column('G:G', 11, fmt)
+            worksheet.set_column('H:H', 11, fmt)
+            worksheet.set_column('I:I', 11, fmt)
+            worksheet.set_column('J:J', 13, fmt)
+            worksheet.set_column('K:K', 9, fmt1)
+            worksheet.set_column('L:L', 8, fmt1)
+            worksheet.set_column('M:O', 8, fmt)
+            worksheet.set_column('P:P', 7.8, fmt1)
+            worksheet.set_column('Q:R', 10, fmt)
+            worksheet.set_column('S:S', 11.8, fmt)
+            worksheet.set_column('T:Y', 10.4, fmt)
+            worksheet.set_column('Z:Z', 22, fmt)
+            worksheet.freeze_panes(1, 2)
+            writer1.close()
+
+            if len(transactions_df) != 0:
+                writer2 = pd.ExcelWriter(
+                    './result/%s long no wd outcome/trans/' % file_name
+                    + f'{report_name} capital_{Capital_outcome} trans.xlsx',
+                    engine='xlsxwriter')
+                transactions_df.reset_index(
+                    drop=False).to_excel(writer2, sheet_name='stats')
+                workbook2 = writer2.book
+                worksheet2 = writer2.sheets['stats']
+                worksheet2.set_default_row(21)
+                fmt3 = workbook2.add_format()
+                fmt3.set_num_format('0')
+                fmt3.set_font_name('Microsoft YaHei UI Light')
+                fmt3.set_align('justify')
+                fmt3.set_align('center')
+                fmt3.set_align('vjustify')
+                fmt3.set_align('vcenter')
+                worksheet2.set_column('B:B', 17, fmt3)
+                fmt2 = workbook2.add_format()
+                fmt2.set_font_name('Microsoft YaHei UI Light')
+                fmt2.set_align('justify')
+                fmt2.set_align('center')
+                fmt2.set_align('vjustify')
+                fmt2.set_align('vcenter')
+                fmt2.set_font_size(12)
+                worksheet2.set_column('A:A', 11, fmt2)
+                worksheet2.set_column('C:D', 11, fmt2)
+                worksheet2.set_column('E:E', 14, fmt2)
+                worksheet2.set_column('F:G', 13, fmt2)
+                writer2.close()
+
+            trade_stats_name = (
+                f'{report_name} capital_{Capital_outcome} trade_stats.xlsx'
+            )
+            writer3 = pd.ExcelWriter(
+                './result/%s long no wd outcome/trade_stats/' % file_name + trade_stats_name,
+                engine='xlsxwriter')
+            trade_extreme_df.to_excel(writer3, sheet_name='trade_extremes', index=False)
+            entry_to_max_profit_wd_df.to_excel(
+                writer3, sheet_name='entry_to_max_profit_wd', index=False)
+            writer3.close()
+
+            # Trend analysis Excel
+            if len(trend_analysis_df) > 0 or len(window_scan_df) > 0:
+                trend_stats_name = (
+                    f'{report_name} capital_{Capital_outcome} trend_stats.xlsx'
+                )
+                writer_trend = pd.ExcelWriter(
+                    './result/%s long no wd outcome/trend_stats/' % file_name
+                    + trend_stats_name,
+                    engine='xlsxwriter')
+                trend_analysis_df.to_excel(
+                    writer_trend, sheet_name='trend_analysis', index=False)
+                window_scan_df.to_excel(
+                    writer_trend, sheet_name='window_scan', index=False)
+                wb_t = writer_trend.book
+                ws_t = writer_trend.sheets['trend_analysis']
+                ws_scan = writer_trend.sheets['window_scan']
+                ws_t.set_default_row(15)
+                ws_scan.set_default_row(15)
+                fmt_t = wb_t.add_format()
+                fmt_t.set_font_name('Microsoft YaHei UI Light')
+                fmt_t.set_align('center')
+                fmt_t.set_align('vcenter')
+                fmt_t.set_font_size(12)
+                fmt_t_int = wb_t.add_format({'num_format': '0'})
+                fmt_t_int.set_font_name('Microsoft YaHei UI Light')
+                fmt_t_int.set_align('center')
+                fmt_t_int.set_align('vcenter')
+                for col_idx, col_name in enumerate(trend_analysis_df.columns):
+                    col_width = 14
+                    col_fmt = fmt_t
+                    if col_name in {'optimal_window_invalid_reason'}:
+                        col_width = 24
+                    elif 'date' in col_name:
+                        col_width = 19
+                    elif (col_name.endswith('_index')
+                          or col_name.endswith('_bars')
+                          or col_name in {
+                              'trade_id', 'search_start',
+                              'optimal_window_valid'}):
+                        col_width = 12
+                        col_fmt = fmt_t_int
+                    elif col_name.endswith('_price'):
+                        col_width = 12
+                    elif ('speed' in col_name or 'ratio' in col_name
+                          or col_name.endswith('_pct')
+                          or col_name.startswith('ols_')):
+                        col_width = 16
+                    ws_t.set_column(col_idx, col_idx, col_width, col_fmt)
+                ws_t.freeze_panes(1, 0)
+
+                for col_idx, col_name in enumerate(window_scan_df.columns):
+                    col_width = 14
+                    col_fmt = fmt_t
+                    if col_name in {'invalid_reason'}:
+                        col_width = 24
+                    elif 'date' in col_name:
+                        col_width = 19
+                    elif (col_name.endswith('_index')
+                          or col_name.endswith('_bars')
+                          or col_name in {
+                              'trade_id', 'window_valid',
+                              'first_feasible_flag',
+                              'best_offset_flag',
+                              'selected_flag'}):
+                        col_width = 12
+                        col_fmt = fmt_t_int
+                    elif col_name.endswith('_price'):
+                        col_width = 12
+                    elif ('speed' in col_name or 'ratio' in col_name
+                          or col_name.endswith('_pct')
+                          or col_name.startswith('ols_')):
+                        col_width = 16
+                    ws_scan.set_column(col_idx, col_idx, col_width, col_fmt)
+                ws_scan.freeze_panes(1, 0)
+                writer_trend.close()
+                print(f'[Excel] saved trend stats: {trend_stats_name}')
+
+            # 排序柱状图：每笔交易一根柱（按回撤比例从大到小）
+            if len(entry_to_max_profit_wd_df) > 0:
+                wd_plot_df = entry_to_max_profit_wd_df.copy()
+                wd_plot_df['max_withdrawal_to_max_profit_pct'] = pd.to_numeric(
+                    wd_plot_df['max_withdrawal_to_max_profit_pct'],
+                    errors='coerce'
+                )
+                wd_plot_df = wd_plot_df.dropna(
+                    subset=['max_withdrawal_to_max_profit_pct']
+                ).sort_values(
+                    by='max_withdrawal_to_max_profit_pct',
+                    ascending=False
+                ).reset_index(drop=True)
+                if len(wd_plot_df) > 0:
+                    fig_wd = plt.figure(figsize=(20, 11))
+                    fig_wd.clf()
+                    if hasattr(fig_wd.canvas, 'manager') and fig_wd.canvas.manager is not None:
+                        fig_wd.canvas.manager.set_window_title('profit_withdrawal')
+                    ax_wd = fig_wd.add_subplot(111)
+                    x_rank = np.arange(1, len(wd_plot_df) + 1)
+                    wd_values = wd_plot_df['max_withdrawal_to_max_profit_pct'].to_numpy(
+                        dtype=float
+                    )
+                    max_profit_values = wd_plot_df['max_profit_pct'].to_numpy(dtype=float)
+                    wd_visual_values = wd_values.copy()
+                    zero_mask = np.isclose(wd_visual_values, 0.0, atol=1e-12)
+                    if zero_mask.any():
+                        wd_visual_values[zero_mask] = ZERO_BAR_VISUAL_FLOOR_PCT
+
+                    bars = ax_wd.bar(
+                        x_rank,
+                        wd_visual_values,
+                        width=0.9,
+                        label='segment_withdrawal_pct'
+                    )
+                    # 叠加每笔交易最大盈利幅度柱（宽度=withdrawal柱的1/3）
+                    ax_wd.bar(
+                        x_rank,
+                        max_profit_values,
+                        width=0.3,
+                        color='tab:orange',
+                        alpha=0.8,
+                        label='max_profit_pct'
+                    )
+                    # x 轴只覆盖实际柱子数量，避免右侧留白
+                    ax_wd.set_xlim(0.5, len(wd_plot_df) + 0.5)
+                    ax_wd.set_title('profit_withdrawal')
+                    ax_wd.set_xlabel('Trade Rank (Descending)')
+                    ax_wd.set_ylabel('Max Withdrawal to Max Profit (%)')
+                    ax_wd.grid(alpha=0.25)
+                    ax_wd.legend()
+                    if zero_mask.any():
+                        ax_wd.text(
+                            0.99, 0.98,
+                            f'zero-value bars shown as {ZERO_BAR_VISUAL_FLOOR_PCT:.4f}: {int(zero_mask.sum())}',
+                            transform=ax_wd.transAxes,
+                            ha='right', va='top',
+                            bbox=dict(boxstyle='round', fc='white', alpha=0.6)
+                        )
+
+                    # 交互：鼠标移到柱子上显示该笔交易时间区间
+                    annot_wd = ax_wd.annotate(
+                        "", xy=(0, 0), xytext=(18, 18),
+                        textcoords="offset points",
+                        bbox=dict(boxstyle="round", fc="w"),
+                        arrowprops=dict(arrowstyle="->")
+                    )
+                    annot_wd.set_visible(False)
+
+                    def update_wd_annot(rect, idx):
+                        x = rect.get_x() + rect.get_width() / 2.0
+                        y = rect.get_height()
+                        annot_wd.xy = (x, y)
+                        row = wd_plot_df.iloc[idx]
+                        text = (
+                            f"rank: {idx + 1}\n"
+                            f"wd: {row['max_withdrawal_to_max_profit_pct']:.4f}%\n"
+                            f"max_profit_pct: {row['max_profit_pct']:.4f}%\n"
+                            f"entry: {row['entry_date']}\n"
+                            f"max_profit: {row['max_profit_date']}\n"
+                            f"bars: {int(row['segment_bars'])}"
+                        )
+                        annot_wd.set_text(text)
+                        annot_wd.get_bbox_patch().set_alpha(0.4)
+
+                    def hover_wd_bar(event):
+                        vis = annot_wd.get_visible()
+                        if event.inaxes == ax_wd:
+                            for idx, rect in enumerate(bars):
+                                contains, _ = rect.contains(event)
+                                if contains:
+                                    update_wd_annot(rect, idx)
+                                    annot_wd.set_visible(True)
+                                    fig_wd.canvas.draw_idle()
+                                    return
+                            if vis:
+                                annot_wd.set_visible(False)
+                                fig_wd.canvas.draw_idle()
+
+                    fig_wd.canvas.mpl_connect("motion_notify_event", hover_wd_bar)
+
+                    wd_hist_name = f'{report_name} profit_withdrawal'
+                    if SAVE_STATIC_PLOT:
+                        wd_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                        fig_wd.savefig(
+                            './result/%s long no wd outcome/trade_stats/' % file_name
+                            + wd_hist_name + f'.{wd_plot_ext}',
+                            dpi=300, bbox_inches='tight')
+                    if for_num_2 == 1 and SHOW_MATPLOTLIB_PLOTS:
+                        fig_wd.show()
+                    else:
+                        plt.close(fig_wd)
+
+                    # 新柱状图：按最大盈利从大到小排序，叠加最大回撤（宽度=1/3）
+                    profit_plot_df = entry_to_max_profit_wd_df.copy()
+                    profit_plot_df['max_profit_pct'] = pd.to_numeric(
+                        profit_plot_df['max_profit_pct'],
+                        errors='coerce'
+                    )
+                    profit_plot_df['max_withdrawal_to_max_profit_pct'] = pd.to_numeric(
+                        profit_plot_df['max_withdrawal_to_max_profit_pct'],
+                        errors='coerce'
+                    )
+                    profit_plot_df = profit_plot_df.dropna(
+                        subset=['max_profit_pct']
+                    ).sort_values(
+                        by='max_profit_pct',
+                        ascending=False
+                    ).reset_index(drop=True)
+
+                    if len(profit_plot_df) > 0:
+                        fig_profit = plt.figure(figsize=(20, 11))
+                        fig_profit.clf()
+                        if hasattr(fig_profit.canvas, 'manager') and fig_profit.canvas.manager is not None:
+                            fig_profit.canvas.manager.set_window_title('profit_sorted_withdrawal')
+                        ax_profit = fig_profit.add_subplot(111)
+                        x_rank_profit = np.arange(1, len(profit_plot_df) + 1)
+                        max_profit_values_sorted = profit_plot_df['max_profit_pct'].to_numpy(dtype=float)
+                        wd_values_sorted = np.nan_to_num(
+                            profit_plot_df['max_withdrawal_to_max_profit_pct'].to_numpy(dtype=float),
+                            nan=0.0
+                        )
+                        bars_profit_main = ax_profit.bar(
+                            x_rank_profit,
+                            max_profit_values_sorted,
+                            width=0.9,
+                            label='max_profit_pct'
+                        )
+                        ax_profit.bar(
+                            x_rank_profit,
+                            wd_values_sorted,
+                            width=0.3,
+                            color='tab:orange',
+                            alpha=0.8,
+                            label='segment_withdrawal_pct'
+                        )
+                        ax_profit.set_xlim(0.5, len(profit_plot_df) + 0.5)
+                        ax_profit.set_title('profit_sorted_withdrawal')
+                        ax_profit.set_xlabel('Trade Rank By Max Profit (Descending)')
+                        ax_profit.set_ylabel('Percent (%)')
+                        ax_profit.grid(alpha=0.25)
+                        ax_profit.legend()
+
+                        # 交互：鼠标移到柱子上显示该笔交易时间区间
+                        annot_profit = ax_profit.annotate(
+                            "", xy=(0, 0), xytext=(18, 18),
+                            textcoords="offset points",
+                            bbox=dict(boxstyle="round", fc="w"),
+                            arrowprops=dict(arrowstyle="->")
+                        )
+                        annot_profit.set_visible(False)
+
+                        def update_profit_annot(rect, idx):
+                            x = rect.get_x() + rect.get_width() / 2.0
+                            y = rect.get_height()
+                            annot_profit.xy = (x, y)
+                            row = profit_plot_df.iloc[idx]
+                            text = (
+                                f"rank: {idx + 1}\n"
+                                f"max_profit_pct: {row['max_profit_pct']:.4f}%\n"
+                                f"wd: {row['max_withdrawal_to_max_profit_pct']:.4f}%\n"
+                                f"entry: {row['entry_date']}\n"
+                                f"max_profit: {row['max_profit_date']}\n"
+                                f"bars: {int(row['segment_bars'])}"
+                            )
+                            annot_profit.set_text(text)
+                            annot_profit.get_bbox_patch().set_alpha(0.4)
+
+                        def hover_profit_bar(event):
+                            vis = annot_profit.get_visible()
+                            if event.inaxes == ax_profit:
+                                for idx, rect in enumerate(bars_profit_main):
+                                    contains, _ = rect.contains(event)
+                                    if contains:
+                                        update_profit_annot(rect, idx)
+                                        annot_profit.set_visible(True)
+                                        fig_profit.canvas.draw_idle()
+                                        return
+                                if vis:
+                                    annot_profit.set_visible(False)
+                                    fig_profit.canvas.draw_idle()
+
+                        fig_profit.canvas.mpl_connect("motion_notify_event", hover_profit_bar)
+
+                        profit_hist_name = (
+                            f'{report_name} profit_sorted_withdrawal'
+                        )
+                        if SAVE_STATIC_PLOT:
+                            profit_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+                            fig_profit.savefig(
+                                './result/%s long no wd outcome/trade_stats/' % file_name
+                                + profit_hist_name + f'.{profit_plot_ext}',
+                                dpi=300, bbox_inches='tight')
+                        if for_num_2 == 1 and SHOW_MATPLOTLIB_PLOTS:
+                            fig_profit.show()
+                        else:
+                            plt.close(fig_profit)
+
+            # Stats
+            outcome_index = str(round(open_continous_threshold, 4))
+            perf_temp = perf_outcome[-1:].capital.iloc[0] - 100
+            outcome_stats.at[outcome_index, 'capital'] = perf_temp + 100
+            trade_num = len(transactions_df) / 2
+            outcome_stats.at[outcome_index, 'trade_num'] = trade_num
+            outcome_high, outcome_wd = get_outcome_withdrawal(
+                perf_outcome.capital)
+            outcome_stats.at[outcome_index, 'outcome_high'] = outcome_high
+            outcome_stats.at[outcome_index, 'biggest_wd'] = outcome_wd
+
+    print("\ntime = --- %s seconds ---" % (time.time() - start_time))
+
+    # 多参数对比图
+    if for_num_2 > 1:
+        fig_stat_1 = plt.figure('stats', figsize=(18, 9))
+        left = 0.033
+        width = 0.943
+        bottom = 0.055
+        height = 0.9
+        rect_line = [left, bottom, width, height]
+        ax_stat_1 = fig_stat_1.add_axes(rect_line)
+        ax_stat_1.plot(outcome_stats.capital, label='capital')
+        ax_stat_2 = ax_stat_1.twinx()
+        ax_stat_2.plot(outcome_stats.biggest_wd, color='orange',
+                       label='biggest wd')
+        ax_stat_3 = ax_stat_1.twinx()
+        ax_stat_3.plot(outcome_stats.trade_num, color='salmon',
+                       label='trade num')
+        ax_stat_3.tick_params(axis='y', colors='red')
+        fig_stat_1.show()
+        ax_stat_1.xaxis.set_major_locator(plt.MaxNLocator(12))
+        plt.xticks(rotation=70)
+        fig_stat_1.legend()
+        plt.title('stats ' + str(startdate) + '-' + str(enddate))
+        os.makedirs('./result/stats %s long no wd outcome/' % file_name, exist_ok=True)
+        if SAVE_STATIC_PLOT:
+            stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
+            plt.savefig('./result/stats %s long no wd outcome/' % file_name
+                        + ' ' + save_name + ' '
+                        + str(for_num_1) + ' '
+                        + str(for_num_2) + ' '
+                        + f'all outcome.{stats_plot_ext}', dpi=1000)
+        outcome_stats.to_excel('./result/stats %s long no wd outcome/' % file_name
+                               + ' ' + save_name + ' '
+                               + str(for_num_1) + ' '
+                               + str(for_num_2) + ' '
+                               + 'all outcome.xlsx')
+    else:
+        disk_path = './result/'
+        open_excel = False
+        if open_excel:
+            os.startfile(
+                disk_path + '%s long no wd outcome/perf/' % file_name + perf_name)
+
+    # ====== Trend HTML + Trade HTML ======
+    if for_num_2 == 1 and EXPORT_INTERACTIVE_HTML:
+        underlying1 = underlying.reset_index(drop=True)
+        factor = underlying1['open'][0]
+        fig2_title = (
+            f' capital_{round(Capital_outcome, 2)} '
+            f'{report_name}'
+        )
+        export_interactive_html_long_no_wd(
+            file_name=file_name,
+            save_name=save_name,
+            title=fig2_title,
+            underlying1=underlying1,
+            detail_df=detail_df,
+            transactions_df=transactions_df,
+            factor=factor
+        )
+        if len(trend_analysis_df) > 0:
+            export_trend_analysis_html(
+                file_name=file_name,
+                save_name=save_name,
+                underlying1=underlying1,
+                trend_df=trend_analysis_df,
+                factor=factor
+            )
+            if TREND_TEST_MODE:
+                case_count = min(TREND_TEST_CASE_COUNT, len(trend_analysis_df))
+                print(f'[HTML] exporting first {case_count} trend test cases...')
+                for case_idx in range(case_count):
+                    case_save_name = f'{save_name} case_{case_idx + 1:02d}'
+                    export_trend_test_case_html(
+                        file_name=file_name,
+                        save_name=case_save_name,
+                        underlying1=underlying1,
+                        trend_df=trend_analysis_df,
+                        window_scan_df=window_scan_df,
+                        factor=factor,
+                        test_case_index=case_idx,
+                        test_windows=TREND_TEST_WINDOWS,
+                        improvement_capture_target=(
+                            TREND_IMPROVEMENT_CAPTURE_TARGET
+                        ),
+                    )
+            if AUTO_OPEN_DASHBOARD:
+                import webbrowser
+                if ensure_dashboard_server_running(DASHBOARD_URL):
+                    webbrowser.open(DASHBOARD_URL)
+                else:
+                    print(f'[Dashboard] open failed: {DASHBOARD_URL}')
+            if AUTO_OPEN_TREND_HTML:
+                import webbrowser
+                html_dir = get_html_output_dir(
+                    file_name, TREND_ANALYSIS_HTML_FOLDER)
+                html_path = os.path.join(
+                    html_dir,
+                    save_name + ' trend_analysis interactive.html')
+                webbrowser.open(os.path.abspath(html_path))
+
+    # plt.show()
+

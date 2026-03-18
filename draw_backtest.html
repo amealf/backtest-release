@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draw Backtest Tool</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width .25s ease, min-width .25s ease;
+      position: relative;
+    }
+
+    #sidebar.collapsed {
+      width: 40px;
+      min-width: 40px;
+    }
+
+    #sidebar.collapsed #sidebarContent {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #sidebarContent {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      transition: opacity .2s ease;
+    }
+
+    #sidebarToggle {
+      position: absolute;
+      top: 8px;
+      right: -14px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      font-size: 14px;
+      transition: all .15s;
+    }
+
+    #sidebarToggle:hover {
+      background: #30363d;
+      color: #c9d1d9;
+    }
+
+    #sidebarContent::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #sidebarContent::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #sidebarContent::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 3px;
+    }
+
+    #sidebarContent::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+
+    #sidebarContent {
+      scrollbar-width: thin;
+      scrollbar-color: #30363d transparent;
+    }
+
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    h2 {
+      font-size: 14px;
+      color: #58a6ff;
+      margin: 12px 0 8px;
+      border-bottom: 1px solid #21262d;
+      padding-bottom: 4px;
+    }
+
+    h2:first-child {
+      margin-top: 0;
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 4px 0;
+    }
+
+    .field label {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    .field input,
+    .field select {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 3px 6px;
+      border-radius: 4px;
+      width: 100px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .field select {
+      width: 108px;
+    }
+
+    .btn {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all .15s;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #2ea043;
+    }
+
+    .btn-danger {
+      background: #da3633;
+      color: #fff;
+    }
+
+    .btn-danger:hover {
+      background: #f85149;
+    }
+
+    .btn-secondary {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+    }
+
+    .btn-secondary:hover {
+      background: #30363d;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      margin: 8px 0;
+      flex-wrap: wrap;
+    }
+
+    #canvasArea {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #0d1117;
+    }
+
+    #drawCanvas,
+    #ohlcCanvas {
+      display: block;
+      width: 100%;
+      cursor: crosshair;
+    }
+
+    #ohlcCanvas {
+      cursor: default;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+      font-size: 12px;
+    }
+
+    .stat-row .val {
+      color: #58a6ff;
+      font-weight: 600;
+    }
+
+    .stat-row .neg {
+      color: #f85149;
+    }
+
+    .stat-row .pos {
+      color: #3fb950;
+    }
+
+    #tooltip {
+      position: absolute;
+      background: rgba(22, 27, 34, 0.92);
+      border: 1px solid #30363d;
+      padding: 4px 8px;
+      font-size: 11px;
+      pointer-events: none;
+      display: none;
+      border-radius: 4px;
+      color: #c9d1d9;
+      z-index: 10;
+    }
+
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid #30363d;
+      background: #161b22;
+    }
+
+    .tab-btn {
+      padding: 8px 16px;
+      background: none;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 2px solid transparent;
+    }
+
+    .tab-btn.active {
+      color: #58a6ff;
+      border-bottom-color: #58a6ff;
+    }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #capitalCanvas {
+      width: 100%;
+      height: 120px;
+      display: block;
+      background: #0d1117;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="sidebar">
+    <button id="sidebarToggle" title="Toggle sidebar">&lsaquo;</button>
+    <div id="sidebarContent">
+      <h2>Settings</h2>
+      <div class="field"><label>X Range</label><input id="xRange" type="number" value="100" min="10" max="1000"></div>
+      <div class="field"><label>Y Range</label><input id="yRange" type="number" value="100" min="10" max="1000"></div>
+      <div class="field"><label>Direction</label><select id="direction">
+          <option value="long">Long (上涨)</option>
+          <option value="short">Short (下跌)</option>
+        </select></div>
+
+      <h2>Strategy Parameters</h2>
+      <div class="field"><label>open_bar</label><input id="openBar" type="number" value="5" min="1" max="100"></div>
+      <div class="field"><label>open_threshold</label><input id="openThreshold" type="number" value="0.002"
+          step="0.0001" min="0"></div>
+      <div class="field"><label>open_wd_threshold</label><input id="openWdThreshold" type="number" value="0.0013"
+          step="0.0001" min="0"></div>
+      <div class="field"><label>open_cont_threshold</label><input id="openContThreshold" type="number" value="0.002"
+          step="0.0001" min="0"></div>
+      <div class="field"><label>close_bar</label><input id="closeBar" type="number" value="5" min="1" max="100"></div>
+      <div class="field"><label>close_threshold</label><input id="closeThreshold" type="number" value="0.001"
+          step="0.0001" min="0"></div>
+      <div class="field"><label>close_wd_threshold</label><input id="closeWdThreshold" type="number" value="0.0013"
+          step="0.0001" min="0"></div>
+      <div class="field"><label>Capital</label><input id="capital" type="number" value="100" min="1"></div>
+      <div class="field"><label>Commission %</label><input id="commission" type="number" value="0" step="0.001" min="0">
+      </div>
+
+      <h2>Statistics</h2>
+      <div id="statsPanel">
+        <div class="stat-row"><span>Trades</span><span class="val" id="statTrades">-</span></div>
+        <div class="stat-row"><span>Win Rate</span><span class="val" id="statWinRate">-</span></div>
+        <div class="stat-row"><span>Final P&L</span><span class="val" id="statFinalPnl">-</span></div>
+        <div class="stat-row"><span>Final P&L %</span><span class="val" id="statFinalPnlPct">-</span></div>
+        <div class="stat-row"><span>Max Profit</span><span class="val" id="statMaxProfit">-</span></div>
+        <div class="stat-row"><span>Max Drawdown</span><span class="val" id="statMaxDd">-</span></div>
+        <div class="stat-row"><span>Max DD %</span><span class="val" id="statMaxDdPct">-</span></div>
+        <div class="stat-row"><span>Avg Win</span><span class="val" id="statAvgWin">-</span></div>
+        <div class="stat-row"><span>Avg Loss</span><span class="val" id="statAvgLoss">-</span></div>
+      </div>
+
+      <h2>Capital Curve</h2>
+      <canvas id="capitalCanvas" height="120"></canvas>
+    </div>
+  </div>
+
+  <div id="main">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="draw">Draw</button>
+      <button class="tab-btn" data-tab="ohlc">OHLC Chart</button>
+    </div>
+    <div id="drawTab" class="tab-content active">
+      <div
+        style="padding:6px 12px;display:flex;align-items:center;gap:8px;background:#161b22;border-bottom:1px solid #30363d;">
+        <button class="btn btn-primary" id="btnFinish">Finish</button>
+        <button class="btn btn-secondary" id="btnUndo">Undo</button>
+        <button class="btn btn-danger" id="btnClear">Clear</button>
+        <span id="pointCount" style="font-size:12px;color:#8b949e;margin-left:auto;">Points: 0</span>
+      </div>
+      <div id="canvasArea"><canvas id="drawCanvas"></canvas>
+        <div id="tooltip"></div>
+      </div>
+    </div>
+    <div id="ohlcTab" class="tab-content">
+      <div
+        style="padding:6px 12px;display:flex;align-items:center;gap:8px;background:#161b22;border-bottom:1px solid #30363d;">
+        <button class="btn btn-secondary" id="btnBackDraw">Back to Draw</button>
+        <button class="btn btn-primary" id="btnRerun">Re-run Backtest</button>
+      </div>
+      <div id="ohlcArea" style="flex:1;overflow:hidden;"><canvas id="ohlcCanvas"></canvas></div>
+    </div>
+  </div>
+
+  <script>
+    // ========== State ==========
+    let points = [];
+    let bars = [];
+    let trades = [];
+    let capitalCurve = [];
+    const PAD = { l: 50, r: 20, t: 20, b: 40 };
+
+    // ========== DOM ==========
+    const drawCanvas = document.getElementById('drawCanvas');
+    const ohlcCanvas = document.getElementById('ohlcCanvas');
+    const capCanvas = document.getElementById('capitalCanvas');
+    const tooltip = document.getElementById('tooltip');
+    const dCtx = drawCanvas.getContext('2d');
+    const oCtx = ohlcCanvas.getContext('2d');
+    const cCtx = capCanvas.getContext('2d');
+
+    // ========== Config Helpers ==========
+    function cfg(id) { return parseFloat(document.getElementById(id).value); }
+    function cfgDir() { return document.getElementById('direction').value; }
+
+    // ========== Resize ==========
+    function resizeCanvas(canvas, container) {
+      const r = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * r;
+      canvas.height = rect.height * r;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      canvas.getContext('2d').setTransform(r, 0, 0, r, 0, 0);
+      return { w: rect.width, h: rect.height };
+    }
+
+    function resizeAll() {
+      const da = document.getElementById('canvasArea');
+      resizeCanvas(drawCanvas, da);
+      drawScene();
+      const oa = document.getElementById('ohlcArea');
+      if (oa.offsetHeight > 0) { resizeCanvas(ohlcCanvas, oa); drawOHLC(); }
+      const cp = capCanvas.parentElement;
+      capCanvas.width = cp.clientWidth * (window.devicePixelRatio || 1);
+      capCanvas.height = 120 * (window.devicePixelRatio || 1);
+      capCanvas.style.width = cp.clientWidth + 'px';
+      cCtx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+      drawCapitalCurve();
+    }
+    window.addEventListener('resize', resizeAll);
+
+    // ========== Coordinate Transform ==========
+    function xRange() { return cfg('xRange'); }
+    function yRange() { return cfg('yRange'); }
+    function plotW() { return drawCanvas.width / (window.devicePixelRatio || 1) - PAD.l - PAD.r; }
+    function plotH() { return drawCanvas.height / (window.devicePixelRatio || 1) - PAD.t - PAD.b; }
+    function dataToPixel(x, y) {
+      const pw = plotW(), ph = plotH();
+      return { px: PAD.l + (x / xRange()) * pw, py: PAD.t + (1 - y / yRange()) * ph };
+    }
+    function pixelToData(px, py) {
+      const pw = plotW(), ph = plotH();
+      return { x: ((px - PAD.l) / pw) * xRange(), y: (1 - (py - PAD.t) / ph) * yRange() };
+    }
+
+    // ========== Draw Scene ==========
+    function drawScene() {
+      const W = drawCanvas.width / (window.devicePixelRatio || 1);
+      const H = drawCanvas.height / (window.devicePixelRatio || 1);
+      dCtx.clearRect(0, 0, W, H);
+      const pw = plotW(), ph = plotH();
+      // Grid
+      dCtx.strokeStyle = '#21262d'; dCtx.lineWidth = 0.5;
+      const xr = xRange(), yr = yRange();
+      const xStep = niceStep(xr, 10), yStep = niceStep(yr, 10);
+      dCtx.font = '11px Segoe UI'; dCtx.fillStyle = '#484f58'; dCtx.textAlign = 'center';
+      for (let v = 0; v <= xr; v += xStep) {
+        const { px } = dataToPixel(v, 0);
+        dCtx.beginPath(); dCtx.moveTo(px, PAD.t); dCtx.lineTo(px, PAD.t + ph); dCtx.stroke();
+        dCtx.fillText(v, px, PAD.t + ph + 14);
+      }
+      dCtx.textAlign = 'right'; dCtx.textBaseline = 'middle';
+      for (let v = 0; v <= yr; v += yStep) {
+        const { py } = dataToPixel(0, v);
+        dCtx.beginPath(); dCtx.moveTo(PAD.l, py); dCtx.lineTo(PAD.l + pw, py); dCtx.stroke();
+        dCtx.fillText(v, PAD.l - 6, py);
+      }
+      // Axes
+      dCtx.strokeStyle = '#484f58'; dCtx.lineWidth = 1;
+      dCtx.beginPath(); dCtx.moveTo(PAD.l, PAD.t); dCtx.lineTo(PAD.l, PAD.t + ph); dCtx.lineTo(PAD.l + pw, PAD.t + ph); dCtx.stroke();
+      // Axis labels
+      dCtx.fillStyle = '#8b949e'; dCtx.font = '13px Segoe UI';
+      dCtx.textAlign = 'center'; dCtx.textBaseline = 'top';
+      dCtx.fillText('t', PAD.l + pw / 2, PAD.t + ph + 26);
+      dCtx.save(); dCtx.translate(14, PAD.t + ph / 2); dCtx.rotate(-Math.PI / 2);
+      dCtx.textBaseline = 'middle'; dCtx.fillText('P', 0, 0); dCtx.restore();
+      // Lines
+      if (points.length > 1) {
+        dCtx.strokeStyle = '#58a6ff'; dCtx.lineWidth = 2; dCtx.beginPath();
+        points.forEach((p, i) => {
+          const { px, py } = dataToPixel(p.x, p.y);
+          i === 0 ? dCtx.moveTo(px, py) : dCtx.lineTo(px, py);
+        });
+        dCtx.stroke();
+      }
+      // Points
+      points.forEach((p, i) => {
+        const { px, py } = dataToPixel(p.x, p.y);
+        dCtx.beginPath(); dCtx.arc(px, py, 4, 0, Math.PI * 2);
+        dCtx.fillStyle = '#58a6ff'; dCtx.fill();
+        dCtx.strokeStyle = '#c9d1d9'; dCtx.lineWidth = 1; dCtx.stroke();
+      });
+      document.getElementById('pointCount').textContent = 'Points: ' + points.length;
+    }
+
+    function niceStep(range, maxTicks) {
+      const raw = range / maxTicks;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const res = raw / mag;
+      if (res <= 1) return mag;
+      if (res <= 2) return 2 * mag;
+      if (res <= 5) return 5 * mag;
+      return 10 * mag;
+    }
+
+    // ========== Canvas Events ==========
+    drawCanvas.addEventListener('click', function (e) {
+      const rect = drawCanvas.getBoundingClientRect();
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
+      const d = pixelToData(px, py);
+      if (d.x < 0 || d.x > xRange() || d.y < 0 || d.y > yRange()) return;
+      // Snap: round to 1 decimal
+      d.x = Math.round(d.x * 10) / 10;
+      d.y = Math.round(d.y * 10) / 10;
+      points.push(d);
+      drawScene();
+    });
+
+    drawCanvas.addEventListener('mousemove', function (e) {
+      const rect = drawCanvas.getBoundingClientRect();
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
+      const d = pixelToData(px, py);
+      if (d.x >= 0 && d.x <= xRange() && d.y >= 0 && d.y <= yRange()) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX - document.getElementById('main').getBoundingClientRect().left + 12) + 'px';
+        tooltip.style.top = (py + 50) + 'px';
+        tooltip.textContent = `t: ${d.x.toFixed(1)}, P: ${d.y.toFixed(1)}`;
+      } else { tooltip.style.display = 'none'; }
+    });
+    drawCanvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+    // ========== Buttons ==========
+    document.getElementById('btnUndo').onclick = () => { points.pop(); drawScene(); };
+    document.getElementById('btnClear').onclick = () => { points = []; drawScene(); };
+    document.getElementById('btnFinish').onclick = () => { if (points.length < 2) return; generateBars(); runBacktest(); switchTab('ohlc'); };
+    document.getElementById('btnBackDraw').onclick = () => { switchTab('draw'); };
+    document.getElementById('btnRerun').onclick = () => { if (bars.length === 0) generateBars(); runBacktest(); drawOHLC(); drawCapitalCurve(); };
+
+    // ========== Tabs ==========
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === name + 'Tab'));
+      setTimeout(resizeAll, 50);
+    }
+
+    // ========== Generate OHLC Bars ==========
+    function generateBars() {
+      bars = [];
+      if (points.length < 2) return;
+      // Sort points by x
+      const sorted = [...points].sort((a, b) => a.x - b.x);
+      const xStart = Math.round(sorted[0].x);
+      const xEnd = Math.round(sorted[sorted.length - 1].x);
+      if (xEnd <= xStart) return;
+
+      // Build cumulative y values at each integer x using random weights
+      // For each segment between two drawn points, distribute the total
+      // delta-y randomly across bars so all bars share the same direction.
+      const totalBars = xEnd - xStart;
+      const yValues = new Array(totalBars + 1);
+
+      // Map sorted point x's to integer indices
+      for (let seg = 0; seg < sorted.length - 1; seg++) {
+        const x0 = Math.round(sorted[seg].x);
+        const x1 = Math.round(sorted[seg + 1].x);
+        const y0 = sorted[seg].y;
+        const y1 = sorted[seg + 1].y;
+        const n = x1 - x0;
+        if (n <= 0) continue;
+
+        yValues[x0 - xStart] = y0;
+        yValues[x1 - xStart] = y1;
+
+        if (n === 1) continue; // only endpoints, no inner points needed
+
+        const delta = y1 - y0;
+        // Generate n random positive weights
+        const weights = [];
+        for (let i = 0; i < n; i++) weights.push(Math.random() + 0.1);
+        const wSum = weights.reduce((s, w) => s + w, 0);
+
+        // Distribute delta proportionally
+        let cumY = y0;
+        for (let i = 0; i < n - 1; i++) {
+          cumY += delta * (weights[i] / wSum);
+          yValues[(x0 - xStart) + i + 1] = cumY;
+        }
+      }
+      // Ensure endpoints
+      yValues[0] = sorted[0].y;
+      yValues[totalBars] = sorted[sorted.length - 1].y;
+
+      // Build bars
+      for (let i = 0; i < totalBars; i++) {
+        const o = yValues[i], c = yValues[i + 1];
+        bars.push({ open: o, close: c, high: Math.max(o, c), low: Math.min(o, c), index: i });
+      }
+    }
+
+    // ========== Draw OHLC ==========
+    function drawOHLC() {
+      if (bars.length === 0) return;
+      const W = ohlcCanvas.width / (window.devicePixelRatio || 1);
+      const H = ohlcCanvas.height / (window.devicePixelRatio || 1);
+      oCtx.clearRect(0, 0, W, H);
+      const pad = { l: 50, r: 20, t: 20, b: 40 };
+      const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+      const allVals = bars.flatMap(b => [b.high, b.low]);
+      let yMin = Math.min(...allVals), yMax = Math.max(...allVals);
+      const yPad = (yMax - yMin) * 0.08 || 1;
+      yMin -= yPad; yMax += yPad;
+      const n = bars.length;
+      const barW = pw / (n + 1);
+      const candleW = Math.max(1, barW * 0.6);
+
+      // Grid
+      oCtx.strokeStyle = '#21262d'; oCtx.lineWidth = 0.5;
+      const yStep = niceStep(yMax - yMin, 8);
+      oCtx.font = '11px Segoe UI'; oCtx.fillStyle = '#484f58'; oCtx.textAlign = 'right'; oCtx.textBaseline = 'middle';
+      for (let v = Math.ceil(yMin / yStep) * yStep; v <= yMax; v += yStep) {
+        const py = pad.t + (1 - (v - yMin) / (yMax - yMin)) * ph;
+        oCtx.beginPath(); oCtx.moveTo(pad.l, py); oCtx.lineTo(pad.l + pw, py); oCtx.stroke();
+        oCtx.fillText(v.toFixed(1), pad.l - 6, py);
+      }
+      // X labels
+      oCtx.textAlign = 'center'; oCtx.textBaseline = 'top';
+      const xLabelStep = Math.max(1, Math.floor(n / 15));
+      for (let i = 0; i < n; i += xLabelStep) {
+        const cx = pad.l + (i + 1) * barW;
+        oCtx.fillText(i, cx, pad.t + ph + 6);
+      }
+      // Axes
+      oCtx.strokeStyle = '#484f58'; oCtx.lineWidth = 1;
+      oCtx.beginPath(); oCtx.moveTo(pad.l, pad.t); oCtx.lineTo(pad.l, pad.t + ph); oCtx.lineTo(pad.l + pw, pad.t + ph); oCtx.stroke();
+
+      // Candles
+      bars.forEach((b, i) => {
+        const cx = pad.l + (i + 1) * barW;
+        const oY = pad.t + (1 - (b.open - yMin) / (yMax - yMin)) * ph;
+        const cY = pad.t + (1 - (b.close - yMin) / (yMax - yMin)) * ph;
+        const hY = pad.t + (1 - (b.high - yMin) / (yMax - yMin)) * ph;
+        const lY = pad.t + (1 - (b.low - yMin) / (yMax - yMin)) * ph;
+        const up = b.close >= b.open;
+        const color = up ? '#3fb950' : '#f85149';
+        // Wick
+        oCtx.strokeStyle = color; oCtx.lineWidth = 1;
+        oCtx.beginPath(); oCtx.moveTo(cx, hY); oCtx.lineTo(cx, lY); oCtx.stroke();
+        // Body
+        const top = Math.min(oY, cY), bot = Math.max(oY, cY);
+        const bodyH = Math.max(1, bot - top);
+        oCtx.fillStyle = color;
+        oCtx.fillRect(cx - candleW / 2, top, candleW, bodyH);
+      });
+
+      // Trade markers
+      trades.forEach(t => {
+        const openCx = pad.l + (t.openIdx + 1) * barW;
+        const closeCx = pad.l + (t.closeIdx + 1) * barW;
+        const openPy = pad.t + (1 - (t.openPrice - yMin) / (yMax - yMin)) * ph;
+        const closePy = pad.t + (1 - (t.closePrice - yMin) / (yMax - yMin)) * ph;
+        // Line
+        oCtx.strokeStyle = 'rgba(88,166,255,0.5)'; oCtx.lineWidth = 1.5;
+        oCtx.beginPath(); oCtx.moveTo(openCx, openPy); oCtx.lineTo(closeCx, closePy); oCtx.stroke();
+        // Open marker (triangle up / down)
+        oCtx.fillStyle = '#58a6ff';
+        drawTriangle(oCtx, openCx, openPy, 5, cfgDir() === 'long');
+        // Close marker
+        oCtx.fillStyle = t.pnl >= 0 ? '#3fb950' : '#f85149';
+        oCtx.beginPath(); oCtx.arc(closeCx, closePy, 4, 0, Math.PI * 2); oCtx.fill();
+      });
+    }
+
+    function drawTriangle(ctx, x, y, s, up) {
+      ctx.beginPath();
+      if (up) { ctx.moveTo(x, y - s); ctx.lineTo(x - s, y + s); ctx.lineTo(x + s, y + s); }
+      else { ctx.moveTo(x, y + s); ctx.lineTo(x - s, y - s); ctx.lineTo(x + s, y - s); }
+      ctx.closePath(); ctx.fill();
+    }
+
+    // ========== Momentum Backtest Engine ==========
+    function getIncrease(bars) {
+      if (!bars.length) return 0;
+      let low, high;
+      if (bars[0].open >= bars[0].close) { low = bars[0].low; high = bars[0].high; }
+      else { low = bars[0].low; high = bars[0].close; }
+      for (const b of bars) {
+        if (b.low <= low) { high = b.close; low = b.low; }
+        else if (b.high > high) { high = b.high; }
+      }
+      return high - low;
+    }
+    function getIncreaseWithBase(bars) {
+      if (!bars.length) return [0, 0];
+      let low, high;
+      if (bars[0].open >= bars[0].close) { low = bars[0].low; high = bars[0].high; }
+      else { low = bars[0].low; high = bars[0].close; }
+      for (const b of bars) {
+        if (b.low <= low) { high = b.close; low = b.low; }
+        else if (b.high > high) { high = b.high; }
+      }
+      return [high - low, low];
+    }
+    function getWithdrawal(bars) {
+      if (!bars.length) return [0, 0];
+      let wh = bars[0].close, wl = bars[0].close;
+      for (let i = 1; i < bars.length; i++) {
+        const b = bars[i];
+        if (b.high > wh) { wh = b.high; wl = b.close; }
+        else if (b.low < wl) { wl = b.low; }
+      }
+      return [wh, wh - wl];
+    }
+    function getDecrease(bars) {
+      if (!bars.length) return 0;
+      let high, low;
+      if (bars[0].open <= bars[0].close) { high = bars[0].high; low = bars[0].low; }
+      else { high = bars[0].high; low = bars[0].close; }
+      for (const b of bars) {
+        if (b.high >= high) { low = b.close; high = b.high; }
+        else if (b.low < low) { low = b.low; }
+      }
+      return high - low;
+    }
+    function getDecreaseWithBase(bars) {
+      if (!bars.length) return [0, 0];
+      let high, low;
+      if (bars[0].open <= bars[0].close) { high = bars[0].high; low = bars[0].low; }
+      else { high = bars[0].high; low = bars[0].close; }
+      for (const b of bars) {
+        if (b.high >= high) { low = b.close; high = b.high; }
+        else if (b.low < low) { low = b.low; }
+      }
+      return [high - low, high];
+    }
+    function getRebound(bars) {
+      if (!bars.length) return [0, 0];
+      let wh = bars[0].close, wl = bars[0].close;
+      for (let i = 1; i < bars.length; i++) {
+        const b = bars[i];
+        if (b.low < wl) { wl = b.low; wh = b.close; }
+        else if (b.high > wh) { wh = b.high; }
+      }
+      return [wl, wh - wl];
+    }
+    function getMaxWd(bars) {
+      if (!bars.length) return 0;
+      let wh = bars[0].high, wl = bars[0].close, maxWd = 0;
+      for (let i = 1; i < bars.length; i++) {
+        const b = bars[i];
+        if (b.high > wh) { wh = b.high; wl = b.close; }
+        else if (b.low < wl) { wl = b.low; }
+        const wd = wh !== 0 ? (wh - wl) / wh : 0;
+        if (wd > maxWd) maxWd = wd;
+      }
+      return maxWd;
+    }
+
+    function runBacktest() {
+      const dir = cfgDir();
+      const openBar = Math.round(cfg('openBar'));
+      const openThreshold = cfg('openThreshold');
+      const openWdThreshold = cfg('openWdThreshold');
+      const openContThreshold = cfg('openContThreshold');
+      const closeBar = Math.round(cfg('closeBar'));
+      const closeThreshold = cfg('closeThreshold');
+      const closeWdThreshold = cfg('closeWdThreshold');
+      const initCapital = cfg('capital');
+      const commPct = cfg('commission') / 100;
+
+      trades = [];
+      capitalCurve = [];
+      let capital = initCapital;
+      capitalCurve.push(capital);
+
+      if (dir === 'long') runLong(bars, openBar, openThreshold, openWdThreshold, openContThreshold, closeBar, closeThreshold, closeWdThreshold, commPct);
+      else runShort(bars, openBar, openThreshold, openWdThreshold, openContThreshold, closeBar, closeThreshold, closeWdThreshold, commPct);
+
+      // Build capital curve
+      capital = initCapital;
+      capitalCurve = [capital];
+      trades.forEach(t => {
+        const ret = (t.closePrice - t.openPrice) / t.openPrice * (cfgDir() === 'long' ? 1 : -1);
+        capital *= (1 + ret - commPct);
+        capitalCurve.push(capital);
+      });
+
+      updateStats(initCapital);
+      drawOHLC();
+      drawCapitalCurve();
+    }
+
+    function runLong(B, openBar, openTh, openWdTh, openContTh, closeBar, closeTh, closeWdTh, commPct) {
+      let var0 = 0, lastIdx = 0, lowIdx = 0, startIdx = 0, newOpening = true, newOpeningCount = 0, holding = false, holdingStartIdx = 0, increaseStartIdx = 0, firstPrice = 0;
+      const EPS = 1e-10;
+
+      for (let ii = 0; ii < B.length; ii++) {
+        if (holding) {
+          // Holding logic
+          if (newOpening) { lastIdx = lowIdx; increaseStartIdx = lowIdx; holdingStartIdx = ii; newOpening = false; }
+          const windowReady = newOpeningCount >= closeBar;
+          if (windowReady) lastIdx = ii - closeBar;
+          newOpeningCount++;
+          const holdSlice = B.slice(increaseStartIdx, ii + 1);
+          // Speed
+          if (windowReady) {
+            const s1 = B.slice(lowIdx, ii + 1), s2 = B.slice(lowIdx, Math.max(lowIdx, ii + 1 - closeBar));
+            const hMax1 = Math.max(...s1.map(b => b.high)), hMax2 = s2.length ? Math.max(...s2.map(b => b.high)) : hMax1;
+            const hInc = hMax1 - hMax2;
+            const hBase = B.slice(lastIdx + 1, ii + 1);
+            const hBaseVal = hBase.length ? hBase[0].low : 1;
+            const hIncPct = hBaseVal !== 0 ? hInc / hBaseVal : 0;
+            if (hIncPct < closeTh) {
+              // Speed close
+              const ep = B[ii].close;
+              const pnl = ep - trades[trades.length - 1].openPrice;
+              trades[trades.length - 1].closeIdx = ii;
+              trades[trades.length - 1].closePrice = ep;
+              trades[trades.length - 1].pnl = pnl;
+              trades[trades.length - 1].closeType = 2;
+              holding = false; newOpening = true; newOpeningCount = 0;
+              continue;
+            }
+          }
+          // Withdrawal
+          const [wh, wd] = getWithdrawal(holdSlice);
+          const wdPct = wh !== 0 ? wd / wh : 0;
+          if (wdPct > closeWdTh) {
+            const ep = wh * (1 - closeWdTh);
+            const pnl = ep - trades[trades.length - 1].openPrice;
+            trades[trades.length - 1].closeIdx = ii;
+            trades[trades.length - 1].closePrice = ep;
+            trades[trades.length - 1].pnl = pnl;
+            trades[trades.length - 1].closeType = 1;
+            holding = false; newOpening = true; newOpeningCount = 0;
+          }
+          continue;
+        }
+
+        // Idle logic
+        if (newOpening) { lastIdx = Math.max(0, ii - 1); newOpening = false; }
+        if (newOpeningCount >= openBar) lastIdx = ii - openBar + 1;
+        newOpeningCount++;
+        const aSlice = B.slice(Math.max(0, lastIdx), ii + 1);
+
+        if (var0 === 0) {
+          const [inc, incBase] = getIncreaseWithBase(aSlice);
+          const incPct = incBase !== 0 ? inc / incBase : 0;
+          const [wh, wd] = getWithdrawal(aSlice);
+          const wdPct = wh !== 0 ? wd / wh : 0;
+          const cond1 = incPct >= openTh;
+          const cond2 = wdPct < openWdTh;
+          if (cond2) {
+            if (cond1) {
+              // Find low_index
+              for (let i = ii; i >= lastIdx; i--) {
+                const sl = B.slice(i, ii + 1);
+                const inc2 = getIncrease(sl);
+                if (Math.abs(inc2 - inc) < EPS) { lowIdx = i; break; }
+              }
+              lastIdx = lowIdx; startIdx = lowIdx; var0 = 1;
+            }
+          } else {
+            newOpening = true; newOpeningCount = 1;
+          }
+        }
+        if (var0 === 1) {
+          newOpeningCount = ii - lowIdx + 1;
+          var0 = 2;
+        }
+        if (var0 === 2) {
+          const cSlice = B.slice(lowIdx, ii + 1);
+          const [wh2, wd2] = getWithdrawal(cSlice);
+          const wdPct2 = wh2 !== 0 ? wd2 / wh2 : 0;
+          const [totInc, totBase] = getIncreaseWithBase(cSlice);
+          const cond3 = wdPct2 < openWdTh;
+          if (cond3) {
+            if (newOpeningCount >= openBar) {
+              const s1 = B.slice(lowIdx, ii + 1), s2 = B.slice(lowIdx, Math.max(lowIdx, ii + 1 - openBar));
+              const hMax1 = Math.max(...s1.map(b => b.high)), hMax2 = s2.length ? Math.max(...s2.map(b => b.high)) : hMax1;
+              const anaInc = hMax1 - hMax2;
+              const anaBase = s1[0].low;
+              const anaIncPct = anaBase !== 0 ? anaInc / anaBase : 0;
+              if (anaIncPct < closeTh) { var0 = 0; newOpeningCount = ii - lowIdx + 1; firstPrice = 0; continue; }
+            }
+            const totIncPct = totBase !== 0 ? totInc / totBase : 0;
+            firstPrice = totBase;
+            if (totIncPct >= openContTh) {
+              // Open position
+              const ep = firstPrice * (1 + openContTh);
+              trades.push({ openIdx: ii, closeIdx: ii, openPrice: ep, closePrice: ep, pnl: 0, closeType: 0 });
+              holding = true; newOpening = true; newOpeningCount = ii - lowIdx;
+              var0 = 0; firstPrice = 0;
+            }
+          } else {
+            var0 = 0; newOpening = true; newOpeningCount = 0; firstPrice = 0;
+          }
+        }
+      }
+      // Close any open position at end
+      if (holding && trades.length) {
+        const t = trades[trades.length - 1];
+        if (t.closeType === 0) {
+          t.closeIdx = B.length - 1; t.closePrice = B[B.length - 1].close; t.pnl = t.closePrice - t.openPrice; t.closeType = 3;
+        }
+      }
+    }
+
+    function runShort(B, openBar, openTh, openWdTh, openContTh, closeBar, closeTh, closeWdTh, commPct) {
+      let var0 = 0, lastIdx = 0, lowIdx = 0, startIdx = 0, newOpening = true, newOpeningCount = 0, holding = false, holdingStartIdx = 0, decreaseStartIdx = 0, firstPrice = 0;
+      const EPS = 1e-10;
+
+      for (let ii = 0; ii < B.length; ii++) {
+        if (holding) {
+          if (newOpening) { lastIdx = lowIdx; decreaseStartIdx = lowIdx; holdingStartIdx = ii; newOpening = false; }
+          const windowReady = newOpeningCount >= closeBar;
+          if (windowReady) lastIdx = ii - closeBar;
+          newOpeningCount++;
+          const holdSlice = B.slice(decreaseStartIdx, ii + 1);
+          if (windowReady) {
+            const s1 = B.slice(lowIdx, ii + 1), s2 = B.slice(lowIdx, Math.max(lowIdx, ii + 1 - closeBar));
+            const lMin1 = Math.min(...s1.map(b => b.low)), lMin2 = s2.length ? Math.min(...s2.map(b => b.low)) : lMin1;
+            const hDec = lMin2 - lMin1;
+            const hBase = B.slice(lastIdx + 1, ii + 1);
+            const hBaseVal = hBase.length ? hBase[0].high : 1;
+            const hDecPct = hBaseVal !== 0 ? hDec / hBaseVal : 0;
+            if (hDecPct < closeTh) {
+              const ep = B[ii].close;
+              trades[trades.length - 1].closeIdx = ii; trades[trades.length - 1].closePrice = ep;
+              trades[trades.length - 1].pnl = trades[trades.length - 1].openPrice - ep;
+              trades[trades.length - 1].closeType = 2;
+              holding = false; newOpening = true; newOpeningCount = 0; continue;
+            }
+          }
+          const [wl, rb] = getRebound(holdSlice);
+          const rbPct = wl !== 0 ? rb / wl : 0;
+          if (rbPct > closeWdTh) {
+            const ep = wl * (1 + closeWdTh);
+            trades[trades.length - 1].closeIdx = ii; trades[trades.length - 1].closePrice = ep;
+            trades[trades.length - 1].pnl = trades[trades.length - 1].openPrice - ep;
+            trades[trades.length - 1].closeType = 1;
+            holding = false; newOpening = true; newOpeningCount = 0;
+          }
+          continue;
+        }
+
+        if (newOpening) { lastIdx = Math.max(0, ii - 1); newOpening = false; }
+        if (newOpeningCount >= openBar) lastIdx = ii - openBar + 1;
+        newOpeningCount++;
+        const aSlice = B.slice(Math.max(0, lastIdx), ii + 1);
+
+        if (var0 === 0) {
+          const [dec, decBase] = getDecreaseWithBase(aSlice);
+          const decPct = decBase !== 0 ? dec / decBase : 0;
+          const [wl, rb] = getRebound(aSlice);
+          const rbPct = wl !== 0 ? rb / wl : 0;
+          if (rbPct < openWdTh) {
+            if (decPct >= openTh) {
+              for (let i = ii; i >= lastIdx; i--) {
+                const sl = B.slice(i, ii + 1);
+                if (Math.abs(getDecrease(sl) - dec) < EPS) { lowIdx = i; break; }
+              }
+              lastIdx = lowIdx; startIdx = lowIdx; var0 = 1;
+            }
+          } else { newOpening = true; newOpeningCount = 1; }
+        }
+        if (var0 === 1) { newOpeningCount = ii - lowIdx + 1; var0 = 2; }
+        if (var0 === 2) {
+          const cSlice = B.slice(lowIdx, ii + 1);
+          const [wl2, rb2] = getRebound(cSlice);
+          const rbPct2 = wl2 !== 0 ? rb2 / wl2 : 0;
+          const [totDec, totBase] = getDecreaseWithBase(cSlice);
+          if (rbPct2 < openWdTh) {
+            if (newOpeningCount >= openBar) {
+              const s1 = B.slice(lowIdx, ii + 1), s2 = B.slice(lowIdx, Math.max(lowIdx, ii + 1 - openBar));
+              const lMin1 = Math.min(...s1.map(b => b.low)), lMin2 = s2.length ? Math.min(...s2.map(b => b.low)) : lMin1;
+              const anaDec = lMin2 - lMin1;
+              const anaBase = s1[0].high;
+              const anaDecPct = anaBase !== 0 ? anaDec / anaBase : 0;
+              if (anaDecPct < closeTh) { var0 = 0; newOpeningCount = ii - lowIdx + 1; firstPrice = 0; continue; }
+            }
+            const totDecPct = totBase !== 0 ? totDec / totBase : 0;
+            firstPrice = totBase;
+            if (totDecPct >= openContTh) {
+              const ep = firstPrice * (1 - openContTh);
+              trades.push({ openIdx: ii, closeIdx: ii, openPrice: ep, closePrice: ep, pnl: 0, closeType: 0 });
+              holding = true; newOpening = true; newOpeningCount = ii - lowIdx;
+              var0 = 0; firstPrice = 0;
+            }
+          } else { var0 = 0; newOpening = true; newOpeningCount = 0; firstPrice = 0; }
+        }
+      }
+      if (holding && trades.length) {
+        const t = trades[trades.length - 1];
+        if (t.closeType === 0) {
+          t.closeIdx = B.length - 1; t.closePrice = B[B.length - 1].close;
+          t.pnl = t.openPrice - t.closePrice; t.closeType = 3;
+        }
+      }
+    }
+
+    // ========== Statistics ==========
+    function updateStats(initCapital) {
+      const n = trades.length;
+      const el = id => document.getElementById(id);
+      if (n === 0) {
+        ['statTrades', 'statWinRate', 'statFinalPnl', 'statFinalPnlPct', 'statMaxProfit', 'statMaxDd', 'statMaxDdPct', 'statAvgWin', 'statAvgLoss'].forEach(id => { el(id).textContent = '-'; el(id).className = 'val'; });
+        return;
+      }
+      const wins = trades.filter(t => t.pnl > 0).length;
+      const finalCap = capitalCurve[capitalCurve.length - 1];
+      const finalPnl = finalCap - initCapital;
+      const finalPnlPct = (finalPnl / initCapital) * 100;
+
+      // Max profit & max drawdown from capital curve
+      let peak = capitalCurve[0], maxDd = 0, maxProfit = 0;
+      capitalCurve.forEach(c => {
+        if (c > peak) peak = c;
+        const dd = peak - c;
+        if (dd > maxDd) maxDd = dd;
+        const profit = c - initCapital;
+        if (profit > maxProfit) maxProfit = profit;
+      });
+      const maxDdPct = peak !== 0 ? (maxDd / peak) * 100 : 0;
+      const avgWin = wins > 0 ? trades.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0) / wins : 0;
+      const losses = trades.filter(t => t.pnl <= 0);
+      const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0;
+
+      function setVal(id, val, fmt, colorize) {
+        const e = el(id);
+        e.textContent = fmt ? val.toFixed(fmt) : val;
+        e.className = 'val' + (colorize && val > 0 ? ' pos' : '') + (colorize && val < 0 ? ' neg' : '');
+      }
+      setVal('statTrades', n);
+      setVal('statWinRate', (wins / n * 100).toFixed(1) + '%');
+      setVal('statFinalPnl', finalPnl, 4, true);
+      setVal('statFinalPnlPct', finalPnlPct.toFixed(2) + '%', 0, true);
+      setVal('statMaxProfit', maxProfit, 4, true);
+      setVal('statMaxDd', maxDd, 4);
+      el('statMaxDd').className = 'val neg';
+      setVal('statMaxDdPct', maxDdPct.toFixed(2) + '%');
+      el('statMaxDdPct').className = 'val neg';
+      setVal('statAvgWin', avgWin, 4, true);
+      setVal('statAvgLoss', avgLoss, 4, true);
+    }
+
+    // ========== Capital Curve ==========
+    function drawCapitalCurve() {
+      const w = capCanvas.width / (window.devicePixelRatio || 1);
+      const h = 120;
+      cCtx.clearRect(0, 0, w, h);
+      if (capitalCurve.length < 2) return;
+      const pad = { l: 40, r: 10, t: 10, b: 20 };
+      const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+      let mn = Math.min(...capitalCurve), mx = Math.max(...capitalCurve);
+      const yPad = (mx - mn) * 0.1 || 1; mn -= yPad; mx += yPad;
+      // Base line
+      const initY = pad.t + (1 - (capitalCurve[0] - mn) / (mx - mn)) * ph;
+      cCtx.strokeStyle = '#30363d'; cCtx.lineWidth = 0.5; cCtx.setLineDash([4, 4]);
+      cCtx.beginPath(); cCtx.moveTo(pad.l, initY); cCtx.lineTo(pad.l + pw, initY); cCtx.stroke();
+      cCtx.setLineDash([]);
+      // Curve
+      cCtx.strokeStyle = '#58a6ff'; cCtx.lineWidth = 1.5; cCtx.beginPath();
+      capitalCurve.forEach((c, i) => {
+        const x = pad.l + (i / (capitalCurve.length - 1)) * pw;
+        const y = pad.t + (1 - (c - mn) / (mx - mn)) * ph;
+        i === 0 ? cCtx.moveTo(x, y) : cCtx.lineTo(x, y);
+      });
+      cCtx.stroke();
+      // Fill
+      cCtx.lineTo(pad.l + pw, pad.t + ph); cCtx.lineTo(pad.l, pad.t + ph); cCtx.closePath();
+      cCtx.fillStyle = 'rgba(88,166,255,0.08)'; cCtx.fill();
+      // Y labels
+      cCtx.fillStyle = '#484f58'; cCtx.font = '10px Segoe UI'; cCtx.textAlign = 'right'; cCtx.textBaseline = 'middle';
+      cCtx.fillText(mx.toFixed(1), pad.l - 4, pad.t);
+      cCtx.fillText(mn.toFixed(1), pad.l - 4, pad.t + ph);
+    }
+
+    // ========== Sidebar Toggle ==========
+    document.getElementById('sidebarToggle').addEventListener('click', function () {
+      const sb = document.getElementById('sidebar');
+      sb.classList.toggle('collapsed');
+      this.innerHTML = sb.classList.contains('collapsed') ? '&rsaquo;' : '&lsaquo;';
+      setTimeout(resizeAll, 300);
+    });
+
+    // ========== Init ==========
+    setTimeout(resizeAll, 100);
+  </script>
+</body>
+
+</html>
