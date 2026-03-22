@@ -478,7 +478,6 @@ DASHBOARD_HTML = f"""<!doctype html>
     const MAX_SIDEBAR_WIDTH = {MAX_SIDEBAR_WIDTH};
     const LIST_PAGE_SIZE = 10;
     const IFRAME_CACHE_LIMIT = 20;
-    const PRELOAD_CONCURRENCY = 2;
 
     const appEl = document.getElementById("app");
     const splitterEl = document.getElementById("splitter");
@@ -503,9 +502,6 @@ DASHBOARD_HTML = f"""<!doctype html>
     let renderedCount = 0;
 
     const iframeCache = new Map();
-    const preloadQueue = [];
-    const preloadSet = new Set();
-    let preloadInFlightCount = 0;
     let fullscreenFrame = null;
     let fullscreenToken = "";
 
@@ -627,7 +623,41 @@ DASHBOARD_HTML = f"""<!doctype html>
       frame.style.visibility = "hidden";
       frame.style.pointerEvents = "none";
       frame.style.zIndex = "0";
+      frame.addEventListener("load", () => {{
+        scheduleFrameResize(frame);
+      }});
       return frame;
+    }}
+
+    function resizePlotlyInFrame(frame) {{
+      if (!frame || !frame.contentWindow) return;
+      try {{
+        const win = frame.contentWindow;
+        const doc = frame.contentDocument;
+        if (doc && doc.documentElement) {{
+          doc.documentElement.style.width = "100%";
+          doc.documentElement.style.height = "100%";
+        }}
+        if (doc && doc.body) {{
+          doc.body.style.width = "100%";
+          doc.body.style.height = "100%";
+          doc.body.style.margin = "0";
+        }}
+        win.dispatchEvent(new Event("resize"));
+        if (win.Plotly && doc) {{
+          doc.querySelectorAll(".js-plotly-plot").forEach((plotEl) => {{
+            try {{
+              win.Plotly.Plots.resize(plotEl);
+            }} catch (_err) {{}}
+          }});
+        }}
+      }} catch (_err) {{}}
+    }}
+
+    function scheduleFrameResize(frame) {{
+      [0, 120, 400, 900].forEach((delay) => {{
+        window.setTimeout(() => resizePlotlyInFrame(frame), delay);
+      }});
     }}
 
     function showFullscreenFrame(token) {{
@@ -655,6 +685,7 @@ DASHBOARD_HTML = f"""<!doctype html>
       fullscreenFrame.style.zIndex = "1";
       fullscreenViewerEl.appendChild(fullscreenFrame);
       fullscreenToken = token;
+      scheduleFrameResize(fullscreenFrame);
     }}
 
     function getOrCreateFrame(token) {{
@@ -662,10 +693,6 @@ DASHBOARD_HTML = f"""<!doctype html>
         return iframeCache.get(token);
       }}
       const frame = createIframe(token);
-      if (viewerWrapEl.querySelector(".empty")) {{
-        viewerWrapEl.innerHTML = "";
-      }}
-      viewerWrapEl.appendChild(frame);
       iframeCache.set(token, frame);
       enforceCacheLimit();
       return frame;
@@ -687,47 +714,15 @@ DASHBOARD_HTML = f"""<!doctype html>
         node.style.pointerEvents = active ? "auto" : "none";
         node.style.zIndex = active ? "1" : "0";
       }});
+      scheduleFrameResize(frame);
     }}
 
     function queuePreloadVisible() {{
-      const tokens = filtered.slice(0, visibleCount).map((x) => x.token);
-      for (const token of tokens) {{
-        if (iframeCache.has(token) || preloadSet.has(token)) continue;
-        preloadSet.add(token);
-        preloadQueue.push(token);
-      }}
-      processPreloadQueue();
+      return;
     }}
 
     function processPreloadQueue() {{
-      while (preloadInFlightCount < PRELOAD_CONCURRENCY && preloadQueue.length > 0) {{
-        const token = preloadQueue.shift();
-        preloadSet.delete(token);
-        if (!token || iframeCache.has(token)) {{
-          continue;
-        }}
-
-        preloadInFlightCount += 1;
-        const frame = createIframe(token);
-        if (viewerWrapEl.querySelector(".empty")) {{
-          viewerWrapEl.innerHTML = "";
-        }}
-        viewerWrapEl.appendChild(frame);
-        iframeCache.set(token, frame);
-        enforceCacheLimit();
-
-        let done = false;
-        const finish = () => {{
-          if (done) return;
-          done = true;
-          preloadInFlightCount = Math.max(0, preloadInFlightCount - 1);
-          processPreloadQueue();
-        }};
-
-        frame.addEventListener("load", finish, {{ once: true }});
-        frame.addEventListener("error", finish, {{ once: true }});
-        setTimeout(finish, 8000);
-      }}
+      return;
     }}
 
     function selectFile(token) {{
