@@ -13,6 +13,7 @@ from matplotlib.widgets import Cursor
 import matplotlib.ticker as ticker
 from mplfinance.original_flavor import candlestick2_ohlc
 import time, os
+import json
 import socket
 import subprocess
 try:
@@ -48,14 +49,14 @@ DATA_FILE_NAME = "xagusd_30s_all"
 # 采用切片语义 [START_INDEX, END_INDEX)。
 # 例如 RESAMPLE_RULE = '30min' 时，0~150 表示前 150 根 30 分钟 bar。
 START_INDEX = 0
-END_INDEX = 10000  # 或 'latest'
+END_INDEX = 3000  # 或 'latest'
 ONLY_CLOSE = False
 
 # 重采样设置：设为 '' 表示直接使用当前原始周期
 # 例如 '1min' / '5min' / '15min' / '1H'
 RESAMPLE_RULE = ''
 TREND_W_MIN_BARS = 3
-TREND_W_MAX_BARS = 200
+TREND_W_MAX_BARS = 50
 DEBUG_TREND_SEARCH = False
 DEBUG_RECORD_FROM_INDEX = None
 # DEBUG_TREND_SEARCH = True
@@ -77,7 +78,7 @@ OPEN_BAR = TREND_W_MAX_BARS
 OPEN_THRESHOLD = 0.0001
 CLOSE_BAR = OPEN_BAR
 CLOSE_THRESHOLD = 0.001
-OPEN_CONTINOUS_THRESHOLD = 0.0013
+OPEN_CONTINOUS_THRESHOLD = 0.0
 
 # 双策略参数（保留）
 OPEN_BAR2 = np.nan  # np.nan 表示不启用
@@ -115,6 +116,9 @@ DASHBOARD_URL = 'http://127.0.0.1:8765'
 BACKTEST_HTML_FOLDER = 'backtest html'
 TREND_ANALYSIS_HTML_FOLDER = 'trend analysis html'
 TREND_TEST_CASE_HTML_FOLDER = 'trend test case html'
+TREND_MULTIPLE_FOLDER = 'trend multiple'
+TREND_HTML_DEFAULT_MULTIPLE = 5.0
+TREND_HTML_MIN_VISIBLE_MULTIPLE = 1.5
 def detect_bar_seconds_from_df(df: pd.DataFrame) -> int:
     dates = pd.to_datetime(df['Date'], errors='coerce')
     diffs = dates.diff().dropna()
@@ -251,6 +255,274 @@ def ensure_dashboard_server_running(url: str,
 
     print(f'[Dashboard] server did not become ready: {url}')
     return False
+
+
+def build_trend_atr_multiple_df(quote: pd.DataFrame,
+                                trend_df: pd.DataFrame):
+    if len(trend_df) == 0:
+        return pd.DataFrame(columns=[
+            'trade_id',
+            'pre_atr',
+            'pre_atr_pct',
+            'trend_atr_multiple',
+        ])
+
+    prev_close = quote['close'].shift(1)
+    true_range = np.maximum.reduce([
+        (quote['high'] - quote['low']).to_numpy(dtype=float),
+        (quote['high'] - prev_close).abs().to_numpy(dtype=float),
+        (quote['low'] - prev_close).abs().to_numpy(dtype=float),
+    ])
+    tr_series = pd.Series(true_range, index=quote.index, dtype=float)
+
+    records = []
+    for _, row in trend_df.iterrows():
+        low_index = int(row['low_index'])
+        atr_window = (
+            int(row['constraint_w_bars'])
+            if 'constraint_w_bars' in row.index and pd.notna(row['constraint_w_bars'])
+            else int(TREND_W_MAX_BARS)
+        )
+        pre_end = low_index - 1
+        pre_start = low_index - atr_window
+
+        pre_atr = np.nan
+        pre_atr_pct = np.nan
+        if pre_start >= 0 and pre_end >= pre_start:
+            pre_tr = tr_series.iloc[pre_start:pre_end + 1]
+            pre_close = quote['close'].iloc[pre_start:pre_end + 1]
+            if len(pre_tr) == atr_window and len(pre_close) == atr_window:
+                pre_atr = float(pre_tr.mean())
+                pre_close_mean = float(pre_close.mean())
+                if np.isfinite(pre_close_mean) and pre_close_mean > 0:
+                    pre_atr_pct = pre_atr / pre_close_mean * 100.0
+
+        trend_return_pct = (
+            float(row['total_return_pct'])
+            if pd.notna(row['total_return_pct']) else np.nan
+        )
+        trend_atr_multiple = (
+            trend_return_pct / pre_atr_pct
+            if np.isfinite(pre_atr_pct) and pre_atr_pct > 0 and np.isfinite(trend_return_pct)
+            else np.nan
+        )
+        records.append({
+            'trade_id': int(row['trade_id']),
+            'pre_atr': pre_atr,
+            'pre_atr_pct': pre_atr_pct,
+            'trend_atr_multiple': trend_atr_multiple,
+        })
+
+    return pd.DataFrame(records)
+
+
+def build_filtered_trend_case_df(quote: pd.DataFrame,
+                                 trend_df: pd.DataFrame,
+                                 multiple_threshold: float):
+    if len(trend_df) == 0:
+        return trend_df.copy()
+
+    case_df = trend_df.copy()
+    atr_df = build_trend_atr_multiple_df(quote, case_df)
+    if len(atr_df) > 0:
+        case_df = case_df.merge(
+            atr_df[['trade_id', 'trend_atr_multiple']],
+            on='trade_id',
+            how='left'
+        )
+    else:
+        case_df['trend_atr_multiple'] = np.nan
+
+    threshold = float(multiple_threshold)
+    multiple_series = pd.to_numeric(
+        case_df['trend_atr_multiple'],
+        errors='coerce'
+    )
+    case_df = case_df[multiple_series >= threshold].copy()
+    return case_df.reset_index(drop=True)
+
+
+def build_trend_multiple_summary_df(quote: pd.DataFrame,
+                                    trend_df: pd.DataFrame,
+                                    bar_seconds: int):
+    if len(trend_df) == 0:
+        return pd.DataFrame(columns=[
+            'multiple_rank',
+            'trade_id',
+            'trend_atr_multiple',
+            'duration_bars',
+            'duration_minutes',
+            'low_date',
+            'high_date',
+            'end_date',
+            'total_return_pct',
+            'pre_atr_pct',
+        ])
+
+    summary_df = trend_df.copy()
+    atr_df = build_trend_atr_multiple_df(quote, summary_df)
+    if len(atr_df) > 0:
+        summary_df = summary_df.merge(
+            atr_df,
+            on='trade_id',
+            how='left'
+        )
+    else:
+        summary_df['pre_atr'] = np.nan
+        summary_df['pre_atr_pct'] = np.nan
+        summary_df['trend_atr_multiple'] = np.nan
+
+    summary_df['trend_atr_multiple'] = pd.to_numeric(
+        summary_df['trend_atr_multiple'],
+        errors='coerce'
+    )
+    summary_df = summary_df[summary_df['trend_atr_multiple'].notna()].copy()
+    if len(summary_df) == 0:
+        return pd.DataFrame(columns=[
+            'multiple_rank',
+            'trade_id',
+            'trend_atr_multiple',
+            'duration_bars',
+            'duration_minutes',
+            'low_date',
+            'high_date',
+            'end_date',
+            'total_return_pct',
+            'pre_atr_pct',
+        ])
+
+    summary_df['duration_bars'] = pd.to_numeric(
+        summary_df['duration_bars'],
+        errors='coerce'
+    )
+    if int(bar_seconds) > 0:
+        summary_df['duration_minutes'] = (
+            summary_df['duration_bars'] * float(bar_seconds) / 60.0
+        )
+    else:
+        summary_df['duration_minutes'] = np.nan
+
+    summary_df = summary_df.sort_values(
+        ['trend_atr_multiple', 'duration_bars', 'trade_id'],
+        ascending=[False, False, True]
+    ).reset_index(drop=True)
+    summary_df.insert(0, 'multiple_rank', np.arange(1, len(summary_df) + 1))
+
+    selected_cols = [
+        'multiple_rank',
+        'trade_id',
+        'trend_atr_multiple',
+        'duration_bars',
+        'duration_minutes',
+        'low_date',
+        'high_date',
+        'end_date',
+        'total_return_pct',
+        'pre_atr_pct',
+        'low_index',
+        'high_index',
+        'end_index',
+    ]
+    return summary_df[selected_cols].copy()
+
+
+def export_trend_multiple_ranked_html(file_name: str,
+                                      save_name: str,
+                                      trend_multiple_df: pd.DataFrame):
+    if go is None:
+        print('[HTML] plotly is not installed, skip trend multiple html export.')
+        return
+    if len(trend_multiple_df) == 0:
+        print('[HTML] no trend multiple data, skip trend multiple html export.')
+        return
+
+    plot_df = trend_multiple_df.copy()
+    hover_text = []
+    for _, row in plot_df.iterrows():
+        duration_minutes = (
+            f"{float(row['duration_minutes']):.2f}"
+            if pd.notna(row['duration_minutes']) else 'nan'
+        )
+        hover_text.append(
+            f"rank: {int(row['multiple_rank'])}<br>"
+            f"segment: {int(row['trade_id'])}<br>"
+            f"trend_multiple: {float(row['trend_atr_multiple']):.4f}<br>"
+            f"duration_bars: {int(row['duration_bars'])}<br>"
+            f"duration_minutes: {duration_minutes}<br>"
+            f"low_time: {row['low_date']}<br>"
+            f"high_time: {row['high_date']}<br>"
+            f"end_time: {row['end_date']}<br>"
+            f"total_return_pct: {float(row['total_return_pct']):.4f}%"
+        )
+
+    fig_html = go.Figure()
+    fig_html.add_trace(go.Bar(
+        x=plot_df['multiple_rank'].astype(int).tolist(),
+        y=plot_df['trend_atr_multiple'].astype(float).tolist(),
+        hovertext=hover_text,
+        hovertemplate='%{hovertext}<extra></extra>',
+        marker=dict(
+            color=ACCENT_BLUE,
+        ),
+        name='trend_multiple',
+    ))
+
+    fig_html.update_layout(
+        title='Trend Multiple Ranked Segments',
+        template='plotly_white',
+        autosize=True,
+        hovermode='closest',
+        showlegend=False,
+        xaxis=dict(
+            title='rank by trend_multiple',
+            tickfont=dict(size=10),
+            showgrid=False,
+        ),
+        yaxis=dict(
+            title='trend_multiple',
+            tickfont=dict(size=10),
+            showgrid=False,
+        ),
+        margin=dict(l=42, r=25, t=48, b=45, pad=0),
+        hoverlabel=dict(
+            bgcolor='rgba(255, 255, 255, 0.50)',
+            bordercolor='rgba(0, 0, 0, 0.45)',
+            font=dict(color='black')
+        )
+    )
+
+    html_dir = get_html_output_dir(file_name, TREND_MULTIPLE_FOLDER)
+    os.makedirs(html_dir, exist_ok=True)
+    html_path = os.path.join(
+        html_dir, save_name + ' trend_multiple_ranked interactive.html')
+    html_text = fig_html.to_html(
+        include_plotlyjs=True, full_html=True,
+        default_width='100vw', default_height='100vh',
+        config={'responsive': True, 'displayModeBar': False,
+                'displaylogo': False}
+    )
+    html_text = html_text.replace(
+        '<head>',
+        '<head><style>'
+        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
+        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
+        '.hoverlayer .hovertext .bg,'
+        '.hoverlayer .hovertext rect,'
+        '.hoverlayer .hovertext path{'
+        'fill:rgba(255,255,255,0.50) !important;'
+        'fill-opacity:0.50 !important;'
+        'stroke:rgba(0,0,0,0.45) !important;'
+        'stroke-opacity:0.45 !important;}'
+        '.hoverlayer .hovertext{opacity:1 !important;}'
+        '.hoverlayer .hovertext text{fill:#000 !important;}'
+        '</style>',
+        1
+    )
+    html_text = html_text.replace(
+        '<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(html_text)
+    print('[HTML] saved trend multiple chart.')
 
 
 # ============================================================
@@ -1609,7 +1881,7 @@ def export_trend_test_case_html(file_name: str,
         '<body>', '<body style="margin:0;overflow:hidden;">', 1)
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_text)
-    print(f'[HTML] saved trend test chart: {html_path}')
+    print('[HTML] saved trend test chart.')
 
 
 def compute_ols_trend_line_stats_long(seg: pd.DataFrame):
@@ -2986,7 +3258,7 @@ def legacy_export_trend_analysis_html(
         '<body>', '<body style="margin:0;overflow:hidden;">', 1)
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_text)
-    print(f'[HTML] saved trend analysis chart: {html_path}')
+    print('[HTML] saved trend analysis chart.')
 
 
 def export_trend_analysis_html(
@@ -2996,14 +3268,21 @@ def export_trend_analysis_html(
         trend_df: pd.DataFrame,
         factor: float,
         debug_df: pd.DataFrame | None = None):
-    if go is None:
-        print('[HTML] plotly is not installed, skip trend html export.')
-        return
     if len(trend_df) == 0:
         print('[HTML] no trend data, skip trend html export.')
         return
 
-    fig_html = go.Figure()
+    trend_display_df = trend_df.copy()
+    atr_df = build_trend_atr_multiple_df(underlying1, trend_display_df)
+    if len(atr_df) > 0:
+        trend_display_df = trend_display_df.merge(
+            atr_df[['trade_id', 'trend_atr_multiple']],
+            on='trade_id',
+            how='left'
+        )
+    else:
+        trend_display_df['trend_atr_multiple'] = np.nan
+
     x_index = underlying1.index.to_numpy()
     x_min = int(x_index[0]) if len(x_index) > 0 else 0
     x_max = int(x_index[-1]) if len(x_index) > 0 else 1
@@ -3011,40 +3290,17 @@ def export_trend_analysis_html(
     x_left_pad = max(1, int(round(x_span * 0.006)))
     x_right_pad = max(1, int(round(x_span * 0.010)))
 
-    fig_html.add_trace(go.Candlestick(
-        x=x_index,
-        open=underlying1['open'] / factor * 100,
-        high=underlying1['high'] / factor * 100,
-        low=underlying1['low'] / factor * 100,
-        close=underlying1['close'] / factor * 100,
-        text=build_candlestick_hovertext(underlying1, factor),
-        name='candles',
-        showlegend=False,
-        hoverinfo='text',
-        increasing=dict(
-            line=dict(color='salmon', width=0.8),
-            fillcolor='rgba(250, 128, 114, 0.28)'
-        ),
-        decreasing=dict(
-            line=dict(color='#2ca02c', width=0.8),
-            fillcolor='rgba(44, 160, 44, 0.28)'
+    segment_records = []
+    for _, row in trend_display_df.iterrows():
+        trend_atr_multiple = (
+            float(row['trend_atr_multiple'])
+            if 'trend_atr_multiple' in row.index and pd.notna(row['trend_atr_multiple'])
+            else np.nan
         )
-    ))
+        if (not np.isfinite(trend_atr_multiple)
+                or trend_atr_multiple < TREND_HTML_MIN_VISIBLE_MULTIPLE):
+            continue
 
-    low_texts = []
-    high_texts = []
-    end_texts = []
-    trend_line_x = []
-    trend_line_y = []
-    end_link_x = []
-    end_link_y = []
-    debug_line_x = []
-    debug_line_y = []
-    debug_reset_x = []
-    debug_reset_y = []
-    debug_reset_texts = []
-
-    for _, row in trend_df.iterrows():
         trade_id = int(row['trade_id'])
         search_start = int(row['search_start'])
         low_index = int(row['low_index'])
@@ -3074,26 +3330,15 @@ def export_trend_analysis_html(
             f"{float(row['ols_r_squared']):.4f}"
             if pd.notna(row['ols_r_squared']) else 'nan'
         )
-        low_texts.append(
+        low_text = (
             f"segment: {trade_id}<br>"
             f"search_start: {search_start}<br>"
             f"low_date: {row['low_date']}<br>"
             f"low_price: {low_price:.4f}<br>"
             f"low_index: {low_index}"
         )
-
-        trend_seg = underlying1.iloc[low_index:high_index + 1]
-        if len(trend_seg) >= 2 and pd.notna(row['ols_slope']) and pd.notna(row['ols_intercept']):
-            t = np.arange(len(trend_seg), dtype=float)
-            fitted = row['ols_slope'] * t + row['ols_intercept']
-            trend_line_x.extend([low_index, high_index, None])
-            trend_line_y.extend([
-                fitted[0] / factor * 100,
-                fitted[-1] / factor * 100,
-                None,
-            ])
-
-        high_texts.append(
+        high_text = (
+            f"multiple: {trend_atr_multiple:.4f}<br>"
             f"segment: {trade_id}<br>"
             f"high_date: {row['high_date']}<br>"
             f"high_price: {high_price:.4f}<br>"
@@ -3106,73 +3351,52 @@ def export_trend_analysis_html(
             f"segment_speed_pct_per_bar: {segment_speed}<br>"
             f"ols_r_squared: {ols_r2}"
         )
-
-        end_texts.append(
+        end_text = (
             f"segment: {trade_id}<br>"
             f"end_date: {row['end_date']}<br>"
             f"end_price: {end_price:.4f}<br>"
             f"end_index: {end_index}"
         )
 
+        trend_line_y0 = None
+        trend_line_y1 = None
+        trend_seg = underlying1.iloc[low_index:high_index + 1]
+        if len(trend_seg) >= 2 and pd.notna(row['ols_slope']) and pd.notna(row['ols_intercept']):
+            t = np.arange(len(trend_seg), dtype=float)
+            fitted = row['ols_slope'] * t + row['ols_intercept']
+            trend_line_y0 = float(fitted[0] / factor * 100)
+            trend_line_y1 = float(fitted[-1] / factor * 100)
+
+        end_link_y0 = None
+        end_link_y1 = None
         if end_index > high_index:
-            end_link_x.extend([high_index, end_index, None])
-            end_link_y.extend([
-                high_price / factor * 100,
-                end_price / factor * 100,
-                None,
-            ])
+            end_link_y0 = float(high_price / factor * 100)
+            end_link_y1 = float(end_price / factor * 100)
 
-    fig_html.add_trace(go.Scatter(
-        x=trend_df['low_index'].astype(int).tolist(),
-        y=(trend_df['low_price'] / factor * 100).tolist(),
-        mode='markers',
-        marker=dict(color='#1F77B4', size=5),
-        name='low',
-        text=low_texts,
-        hovertemplate='%{text}<extra></extra>'
-    ))
+        segment_records.append({
+            'trade_id': trade_id,
+            'trend_atr_multiple': trend_atr_multiple,
+            'low_index': low_index,
+            'low_y': float(low_price / factor * 100),
+            'low_text': low_text,
+            'high_index': high_index,
+            'high_y': float(high_price / factor * 100),
+            'high_text': high_text,
+            'end_index': end_index,
+            'end_y': float(end_price / factor * 100),
+            'end_text': end_text,
+            'trend_line_y0': trend_line_y0,
+            'trend_line_y1': trend_line_y1,
+            'end_link_y0': end_link_y0,
+            'end_link_y1': end_link_y1,
+        })
 
-    fig_html.add_trace(go.Scatter(
-        x=trend_df['high_index'].astype(int).tolist(),
-        y=(trend_df['high_price'] / factor * 100).tolist(),
-        mode='markers',
-        marker=dict(color='orange', size=5),
-        name='high',
-        text=high_texts,
-        hovertemplate='%{text}<extra></extra>'
-    ))
-
-    fig_html.add_trace(go.Scatter(
-        x=trend_df['end_index'].astype(int).tolist(),
-        y=(trend_df['end_price'] / factor * 100).tolist(),
-        mode='markers',
-        marker=dict(color='rgba(255,99,71,0.60)', size=6),
-        name='end',
-        text=end_texts,
-        hovertemplate='%{text}<extra></extra>'
-    ))
-
-    if len(end_link_x) > 0:
-        fig_html.add_trace(go.Scatter(
-            x=end_link_x,
-            y=end_link_y,
-            mode='lines',
-            line=dict(color='rgba(255,99,71,0.60)', width=1.4, dash='dash'),
-            name='high_to_end',
-            hoverinfo='skip'
-        ))
-
-    if len(trend_line_x) > 0:
-        fig_html.add_trace(go.Scatter(
-            x=trend_line_x,
-            y=trend_line_y,
-            mode='lines',
-            line=dict(color=ACCENT_BLUE, width=2),
-            name='trend_line',
-            hoverinfo='skip'
-        ))
-
-    if DEBUG_TREND_SEARCH:
+    debug_line_x = []
+    debug_line_y = []
+    debug_reset_x = []
+    debug_reset_y = []
+    debug_reset_texts = []
+    if DEBUG_TREND_SEARCH and debug_df is not None:
         debug_segments = build_debug_reset_segments(debug_df, underlying1)
         for seg_meta in debug_segments:
             low_index = int(seg_meta['low_index'])
@@ -3187,8 +3411,8 @@ def export_trend_analysis_html(
             fitted = ols_stats['ols_slope'] * t + ols_stats['ols_intercept']
             debug_line_x.extend([low_index, high_index, None])
             debug_line_y.extend([
-                fitted[0] / factor * 100,
-                fitted[-1] / factor * 100,
+                float(fitted[0] / factor * 100),
+                float(fitted[-1] / factor * 100),
                 None,
             ])
             debug_reset_x.append(int(seg_meta['reset_end_index']))
@@ -3205,95 +3429,421 @@ def export_trend_analysis_html(
                 f"reset_low_index: {int(seg_meta['reset_low_index'])}"
             )
 
-        if len(debug_line_x) > 0:
-            fig_html.add_trace(go.Scatter(
-                x=debug_line_x,
-                y=debug_line_y,
-                mode='lines',
-                line=dict(color='rgba(148,103,189,0.85)', width=2, dash='dot'),
-                name='debug_line',
-                hoverinfo='skip'
-            ))
+    candle_data = {
+        'x': x_index.astype(int).tolist(),
+        'open': (underlying1['open'] / factor * 100).astype(float).tolist(),
+        'high': (underlying1['high'] / factor * 100).astype(float).tolist(),
+        'low': (underlying1['low'] / factor * 100).astype(float).tolist(),
+        'close': (underlying1['close'] / factor * 100).astype(float).tolist(),
+        'text': build_candlestick_hovertext(underlying1, factor),
+    }
+    debug_data = {
+        'line_x': debug_line_x,
+        'line_y': debug_line_y,
+        'reset_x': debug_reset_x,
+        'reset_y': debug_reset_y,
+        'reset_text': debug_reset_texts,
+    }
 
-        if len(debug_reset_x) > 0:
-            fig_html.add_trace(go.Scatter(
-                x=debug_reset_x,
-                y=debug_reset_y,
-                mode='markers',
-                marker=dict(color='rgba(148,103,189,0.90)', size=6, symbol='x'),
-                name='debug_reset',
-                text=debug_reset_texts,
-                hovertemplate='%{text}<extra></extra>'
-            ))
-
-    fig_html.update_layout(
-        title=None,
-        template='plotly_white',
-        autosize=True,
-        hovermode='closest',
-        legend=dict(orientation='h', yanchor='bottom', y=1.01,
-                    xanchor='left', x=0),
-        margin=dict(l=42, r=25, t=72, b=45, pad=0),
-        hoverlabel=dict(
-            bgcolor='rgba(255, 255, 255, 0.50)',
-            bordercolor='rgba(0, 0, 0, 0.45)',
-            font=dict(color='black')
-        ),
-        xaxis=dict(
-            title=None,
-            tickfont=dict(size=10),
-            showgrid=False,
-            range=[x_min - x_left_pad, x_max + x_right_pad],
-            autorange=False,
-            showspikes=False,
-            showline=True,
-            linewidth=1,
-            linecolor='rgba(0,0,0,0.35)',
-            rangeslider=dict(visible=False),
-        ),
-        yaxis=dict(
-            title=None,
-            tickfont=dict(size=10),
-            showgrid=False,
-            showspikes=False,
-            showline=True,
-            linewidth=1,
-            linecolor='rgba(0,0,0,0.35)',
-        ),
-    )
+    source_json = json.dumps(segment_records, ensure_ascii=False)
+    candle_json = json.dumps(candle_data, ensure_ascii=False)
+    debug_json = json.dumps(debug_data, ensure_ascii=False)
 
     html_dir = get_html_output_dir(file_name, TREND_ANALYSIS_HTML_FOLDER)
     os.makedirs(html_dir, exist_ok=True)
     html_path = os.path.join(
         html_dir, save_name + ' trend_analysis interactive.html')
-    html_text = fig_html.to_html(
-        include_plotlyjs=True, full_html=True,
-        default_width='100vw', default_height='100vh',
-        config={'responsive': True, 'displayModeBar': False,
-                'displaylogo': False}
-    )
-    html_text = html_text.replace(
-        '<head>',
-        '<head><style>'
-        'html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}'
-        '.plotly-graph-div{width:100vw !important;height:100vh !important;}'
-        '.hoverlayer .hovertext .bg,'
-        '.hoverlayer .hovertext rect,'
-        '.hoverlayer .hovertext path{'
-        'fill:rgba(255,255,255,0.50) !important;'
-        'fill-opacity:0.50 !important;'
-        'stroke:rgba(0,0,0,0.45) !important;'
-        'stroke-opacity:0.45 !important;}'
-        '.hoverlayer .hovertext{opacity:1 !important;}'
-        '.hoverlayer .hovertext text{fill:#000 !important;}'
-        '</style>',
-        1
-    )
-    html_text = html_text.replace(
-        '<body>', '<body style="margin:0;overflow:hidden;">', 1)
+    html_text = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trend analysis</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+html, body {{
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #ffffff;
+}}
+#app {{
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    position: relative;
+}}
+#sidebar {{
+    width: 250px;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 18px 16px;
+    border-right: 1px solid rgba(0,0,0,0.10);
+    background: rgba(248,249,250,0.98);
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+}}
+#sidebar.open {{
+    transform: translateX(0);
+}}
+#sidebar h2 {{
+    margin: 0 0 14px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #20324d;
+}}
+#sidebar .field {{
+    margin-bottom: 14px;
+}}
+#sidebar label {{
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #22344f;
+}}
+#sidebar input {{
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid rgba(0,0,0,0.20);
+    border-radius: 8px;
+    font-size: 14px;
+}}
+#sidebar .hint {{
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(0,0,0,0.62);
+}}
+#toggle-btn {{
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 5;
+    padding: 8px 12px;
+    border: 1px solid rgba(0,0,0,0.18);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.96);
+    color: #20324d;
+    font-size: 14px;
+    cursor: pointer;
+}}
+#main {{
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    position: relative;
+}}
+#summary {{
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.92);
+    color: #22344f;
+    font-size: 13px;
+    border: 1px solid rgba(0,0,0,0.10);
+    line-height: 1.5;
+}}
+#chart {{
+    width: 100%;
+    height: 100%;
+}}
+.hoverlayer .hovertext .bg,
+.hoverlayer .hovertext rect,
+.hoverlayer .hovertext path {{
+    fill: rgba(255,255,255,0.50) !important;
+    fill-opacity: 0.50 !important;
+    stroke: rgba(0,0,0,0.45) !important;
+    stroke-opacity: 0.45 !important;
+}}
+.hoverlayer .hovertext {{
+    opacity: 1 !important;
+}}
+.hoverlayer .hovertext text {{
+    fill: #000 !important;
+}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <h2>筛选设置</h2>
+    <div class="field">
+      <label for="multiple-input">最小 multiple</label>
+      <input id="multiple-input" type="number" min="{TREND_HTML_MIN_VISIBLE_MULTIPLE:.1f}" step="0.1" value="{TREND_HTML_DEFAULT_MULTIPLE:.1f}">
+    </div>
+    <div class="hint">
+      默认阈值为 {TREND_HTML_DEFAULT_MULTIPLE:.1f}。<br>
+      小于 {TREND_HTML_MIN_VISIBLE_MULTIPLE:.1f} 的样本不会显示。<br>
+      high point 的 hover 第一行显示 multiple。
+    </div>
+    <div id="summary"></div>
+  </div>
+  <button id="toggle-btn">筛选</button>
+  <div id="main">
+    <div id="chart"></div>
+  </div>
+</div>
+<script>
+const candleData = {candle_json};
+const sourceSegments = {source_json};
+const debugData = {debug_json};
+const defaultMultiple = {TREND_HTML_DEFAULT_MULTIPLE:.1f};
+const minVisibleMultiple = {TREND_HTML_MIN_VISIBLE_MULTIPLE:.1f};
+const xMin = {x_min};
+const xMax = {x_max};
+const xLeftPad = {x_left_pad};
+const xRightPad = {x_right_pad};
+const multipleInput = document.getElementById('multiple-input');
+const sidebar = document.getElementById('sidebar');
+const toggleBtn = document.getElementById('toggle-btn');
+const summaryBox = document.getElementById('summary');
+const chartDiv = document.getElementById('chart');
+
+function buildSegmentTraces(filtered) {{
+    const traces = [{{
+        type: 'candlestick',
+        x: candleData.x,
+        open: candleData.open,
+        high: candleData.high,
+        low: candleData.low,
+        close: candleData.close,
+        text: candleData.text,
+        name: 'candles',
+        showlegend: false,
+        hoverinfo: 'text',
+        increasing: {{
+            line: {{color: 'salmon', width: 0.8}},
+            fillcolor: 'rgba(250, 128, 114, 0.28)'
+        }},
+        decreasing: {{
+            line: {{color: '#2ca02c', width: 0.8}},
+            fillcolor: 'rgba(44, 160, 44, 0.28)'
+        }}
+    }}];
+
+    const lowX = [];
+    const lowY = [];
+    const lowText = [];
+    const highX = [];
+    const highY = [];
+    const highText = [];
+    const endX = [];
+    const endY = [];
+    const endText = [];
+    const trendLineX = [];
+    const trendLineY = [];
+    const endLinkX = [];
+    const endLinkY = [];
+
+    filtered.forEach(row => {{
+        lowX.push(row.low_index);
+        lowY.push(row.low_y);
+        lowText.push(row.low_text);
+        highX.push(row.high_index);
+        highY.push(row.high_y);
+        highText.push(row.high_text);
+        endX.push(row.end_index);
+        endY.push(row.end_y);
+        endText.push(row.end_text);
+
+        if (row.trend_line_y0 !== null && row.trend_line_y1 !== null) {{
+            trendLineX.push(row.low_index, row.high_index, null);
+            trendLineY.push(row.trend_line_y0, row.trend_line_y1, null);
+        }}
+        if (row.end_link_y0 !== null && row.end_link_y1 !== null) {{
+            endLinkX.push(row.high_index, row.end_index, null);
+            endLinkY.push(row.end_link_y0, row.end_link_y1, null);
+        }}
+    }});
+
+    if (lowX.length > 0) {{
+        traces.push({{
+            type: 'scatter',
+            x: lowX,
+            y: lowY,
+            mode: 'markers',
+            marker: {{color: '#1F77B4', size: 5}},
+            name: 'low',
+            text: lowText,
+            hovertemplate: '%{{text}}<extra></extra>'
+        }});
+        traces.push({{
+            type: 'scatter',
+            x: highX,
+            y: highY,
+            mode: 'markers',
+            marker: {{color: 'orange', size: 5}},
+            name: 'high',
+            text: highText,
+            hovertemplate: '%{{text}}<extra></extra>'
+        }});
+        traces.push({{
+            type: 'scatter',
+            x: endX,
+            y: endY,
+            mode: 'markers',
+            marker: {{color: 'rgba(255,99,71,0.60)', size: 6}},
+            name: 'end',
+            text: endText,
+            hovertemplate: '%{{text}}<extra></extra>'
+        }});
+    }}
+
+    if (endLinkX.length > 0) {{
+        traces.push({{
+            type: 'scatter',
+            x: endLinkX,
+            y: endLinkY,
+            mode: 'lines',
+            line: {{color: 'rgba(255,99,71,0.60)', width: 1.4, dash: 'dash'}},
+            name: 'high_to_end',
+            hoverinfo: 'skip'
+        }});
+    }}
+
+    if (trendLineX.length > 0) {{
+        traces.push({{
+            type: 'scatter',
+            x: trendLineX,
+            y: trendLineY,
+            mode: 'lines',
+            line: {{color: '{ACCENT_BLUE}', width: 2}},
+            name: 'trend_line',
+            hoverinfo: 'skip'
+        }});
+    }}
+
+    if (debugData.line_x.length > 0) {{
+        traces.push({{
+            type: 'scatter',
+            x: debugData.line_x,
+            y: debugData.line_y,
+            mode: 'lines',
+            line: {{color: 'rgba(148,103,189,0.85)', width: 2, dash: 'dot'}},
+            name: 'debug_line',
+            hoverinfo: 'skip'
+        }});
+    }}
+
+    if (debugData.reset_x.length > 0) {{
+        traces.push({{
+            type: 'scatter',
+            x: debugData.reset_x,
+            y: debugData.reset_y,
+            mode: 'markers',
+            marker: {{color: 'rgba(148,103,189,0.90)', size: 6, symbol: 'x'}},
+            name: 'debug_reset',
+            text: debugData.reset_text,
+            hovertemplate: '%{{text}}<extra></extra>'
+        }});
+    }}
+
+    return traces;
+}}
+
+function buildLayout(filteredCount) {{
+    const layout = {{
+        title: null,
+        template: 'plotly_white',
+        autosize: true,
+        hovermode: 'closest',
+        legend: {{
+            orientation: 'h',
+            yanchor: 'bottom',
+            y: 1.01,
+            xanchor: 'left',
+            x: 0
+        }},
+        margin: {{l: 42, r: 25, t: 72, b: 45, pad: 0}},
+        hoverlabel: {{
+            bgcolor: 'rgba(255, 255, 255, 0.50)',
+            bordercolor: 'rgba(0, 0, 0, 0.45)',
+            font: {{color: 'black'}}
+        }},
+        xaxis: {{
+            title: null,
+            tickfont: {{size: 10}},
+            showgrid: false,
+            range: [xMin - xLeftPad, xMax + xRightPad],
+            autorange: false,
+            showspikes: false,
+            showline: true,
+            linewidth: 1,
+            linecolor: 'rgba(0,0,0,0.35)',
+            rangeslider: {{visible: false}},
+        }},
+        yaxis: {{
+            title: null,
+            tickfont: {{size: 10}},
+            showgrid: false,
+            showspikes: false,
+            showline: true,
+            linewidth: 1,
+            linecolor: 'rgba(0,0,0,0.35)',
+        }},
+        annotations: []
+    }};
+
+    if (filteredCount === 0) {{
+        layout.annotations.push({{
+            x: 0.5,
+            y: 0.97,
+            xref: 'paper',
+            yref: 'paper',
+            text: '当前阈值下没有显示样本',
+            showarrow: false,
+            font: {{size: 14, color: 'rgba(0,0,0,0.60)'}}
+        }});
+    }}
+    return layout;
+}}
+
+function renderTrendChart() {{
+    let threshold = parseFloat(multipleInput.value || String(defaultMultiple));
+    if (!Number.isFinite(threshold)) {{
+        threshold = defaultMultiple;
+    }}
+    threshold = Math.max(minVisibleMultiple, threshold);
+    multipleInput.value = threshold.toFixed(1);
+
+    const filtered = sourceSegments.filter(
+        row => row.trend_atr_multiple >= threshold
+    );
+    summaryBox.textContent = 'multiple >= ' + threshold.toFixed(1)
+        + '，显示 ' + filtered.length + ' / ' + sourceSegments.length + ' 段';
+
+    Plotly.react(
+        chartDiv,
+        buildSegmentTraces(filtered),
+        buildLayout(filtered.length),
+        {{
+            responsive: true,
+            displayModeBar: false,
+            displaylogo: false
+        }}
+    );
+}}
+
+toggleBtn.addEventListener('click', () => {{
+    sidebar.classList.toggle('open');
+}});
+multipleInput.addEventListener('input', renderTrendChart);
+renderTrendChart();
+</script>
+</body>
+</html>"""
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_text)
-    print(f'[HTML] saved trend analysis chart: {html_path}')
+    print('[HTML] saved trend analysis chart.')
 
 
 def compute_running_ols_diagnostics(seg: pd.DataFrame,
@@ -3892,7 +4442,7 @@ def export_constraint_trend_case_html(
         '<body>', '<body style="margin:0;overflow:hidden;">', 1)
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_text)
-    print(f'[HTML] saved trend test chart: {html_path}')
+    print('[HTML] saved trend test chart.')
 
 
 # ============================================================
@@ -4240,6 +4790,11 @@ if __name__ == '__main__':
         f'{startdate}-{enddate}'
     )
     save_name = run_name
+    trend_multiple_df = build_trend_multiple_summary_df(
+        underlying.reset_index(drop=True),
+        trend_analysis_df,
+        BAR_SECONDS,
+    )
 
     if len(trend_analysis_df) > 0:
         trend_stats_name = f'{save_name} trend_line_segments.xlsx'
@@ -4253,6 +4808,16 @@ if __name__ == '__main__':
             './result/%s long no wd outcome/trend_stats/' % file_name
             + trend_stats_name
         )
+
+    if len(trend_multiple_df) > 0:
+        trend_multiple_dir = get_html_output_dir(file_name, TREND_MULTIPLE_FOLDER)
+        os.makedirs(trend_multiple_dir, exist_ok=True)
+        trend_multiple_name = f'{save_name} trend_multiple_summary.xlsx'
+        trend_multiple_path = os.path.join(trend_multiple_dir, trend_multiple_name)
+        writer = pd.ExcelWriter(trend_multiple_path, engine='xlsxwriter')
+        trend_multiple_df.to_excel(writer, sheet_name='trend_multiple', index=False)
+        writer.close()
+        print(trend_multiple_path)
 
     if DEBUG_TREND_SEARCH and len(trend_debug_df) > 0:
         debug_name = f'{save_name} trend_search_debug.csv'
@@ -4279,6 +4844,11 @@ if __name__ == '__main__':
 
     if EXPORT_INTERACTIVE_HTML and len(trend_analysis_df) > 0:
         factor = underlying['open'].iloc[0]
+        case_trend_df = build_filtered_trend_case_df(
+            underlying.reset_index(drop=True),
+            trend_analysis_df,
+            TREND_HTML_DEFAULT_MULTIPLE,
+        )
         export_trend_analysis_html(
             file_name=file_name,
             save_name=save_name,
@@ -4287,14 +4857,19 @@ if __name__ == '__main__':
             factor=factor,
             debug_df=trend_debug_df,
         )
+        export_trend_multiple_ranked_html(
+            file_name=file_name,
+            save_name=save_name,
+            trend_multiple_df=trend_multiple_df,
+        )
 
-        case_count = min(TREND_TEST_CASE_COUNT, len(trend_analysis_df))
+        case_count = min(TREND_TEST_CASE_COUNT, len(case_trend_df))
         for case_idx in range(case_count):
             export_constraint_trend_case_html(
                 file_name=file_name,
                 save_name=save_name,
                 underlying1=underlying.reset_index(drop=True),
-                trend_df=trend_analysis_df,
+                trend_df=case_trend_df,
                 factor=factor,
                 case_index=case_idx,
                 w_min=TREND_W_MIN_BARS,
@@ -4311,6 +4886,13 @@ if __name__ == '__main__':
             save_name + ' trend_analysis interactive.html'
         )
         webbrowser.open(os.path.abspath(trend_html_path))
+        if len(trend_multiple_df) > 0:
+            trend_multiple_dir = get_html_output_dir(file_name, TREND_MULTIPLE_FOLDER)
+            trend_multiple_path = os.path.join(
+                trend_multiple_dir,
+                save_name + ' trend_multiple_ranked interactive.html'
+            )
+            webbrowser.open(os.path.abspath(trend_multiple_path))
 
     if AUTO_OPEN_DASHBOARD and len(trend_analysis_df) > 0:
         import webbrowser
@@ -4399,12 +4981,17 @@ if __name__ == '__main__':
                 min_samples=TREND_MIN_PROGRESS_SAMPLES,
                 improvement_capture_target=TREND_IMPROVEMENT_CAPTURE_TARGET,
             )
+            filtered_case_df = build_filtered_trend_case_df(
+                underlying,
+                trend_analysis_df,
+                TREND_HTML_DEFAULT_MULTIPLE,
+            )
             print(f'[Trend] trade_extreme_df rows: {len(trade_extreme_df)}, '
                   f'trend_analysis_df rows: {len(trend_analysis_df)}, '
                   f'window_scan_df rows: {len(window_scan_df)}')
-            if TREND_TEST_MODE and len(trend_analysis_df) > 0:
+            if TREND_TEST_MODE and len(filtered_case_df) > 0:
                 print_trend_test_case_summary(
-                    trend_df=trend_analysis_df,
+                    trend_df=filtered_case_df,
                     window_scan_df=window_scan_df,
                     test_case_index=TREND_TEST_CASE_INDEX,
                     test_windows=TREND_TEST_WINDOWS,
@@ -4929,6 +5516,16 @@ if __name__ == '__main__':
             factor=factor
         )
         if len(trend_analysis_df) > 0:
+            trend_multiple_df = build_trend_multiple_summary_df(
+                underlying1,
+                trend_analysis_df,
+                BAR_SECONDS,
+            )
+            filtered_case_df = build_filtered_trend_case_df(
+                underlying1,
+                trend_analysis_df,
+                TREND_HTML_DEFAULT_MULTIPLE,
+            )
             export_trend_analysis_html(
                 file_name=file_name,
                 save_name=save_name,
@@ -4936,16 +5533,24 @@ if __name__ == '__main__':
                 trend_df=trend_analysis_df,
                 factor=factor
             )
-            if TREND_TEST_MODE:
-                case_count = min(TREND_TEST_CASE_COUNT, len(trend_analysis_df))
-                print(f'[HTML] exporting first {case_count} trend test cases...')
+            export_trend_multiple_ranked_html(
+                file_name=file_name,
+                save_name=save_name,
+                trend_multiple_df=trend_multiple_df,
+            )
+            if TREND_TEST_MODE and len(filtered_case_df) > 0:
+                case_count = min(TREND_TEST_CASE_COUNT, len(filtered_case_df))
+                print(
+                    f'[HTML] exporting first {case_count} trend test cases '
+                    f'(multiple >= {TREND_HTML_DEFAULT_MULTIPLE:.1f})...'
+                )
                 for case_idx in range(case_count):
                     case_save_name = f'{save_name} case_{case_idx + 1:02d}'
                     export_trend_test_case_html(
                         file_name=file_name,
                         save_name=case_save_name,
                         underlying1=underlying1,
-                        trend_df=trend_analysis_df,
+                        trend_df=filtered_case_df,
                         window_scan_df=window_scan_df,
                         factor=factor,
                         test_case_index=case_idx,
@@ -4968,6 +5573,13 @@ if __name__ == '__main__':
                     html_dir,
                     save_name + ' trend_analysis interactive.html')
                 webbrowser.open(os.path.abspath(html_path))
+                if len(trend_multiple_df) > 0:
+                    trend_multiple_dir = get_html_output_dir(
+                        file_name, TREND_MULTIPLE_FOLDER)
+                    trend_multiple_path = os.path.join(
+                        trend_multiple_dir,
+                        save_name + ' trend_multiple_ranked interactive.html')
+                    webbrowser.open(os.path.abspath(trend_multiple_path))
 
     # plt.show()
 
