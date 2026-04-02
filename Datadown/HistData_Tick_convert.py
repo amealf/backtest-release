@@ -9,6 +9,7 @@ import os
 import re
 import csv
 import zipfile
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -16,21 +17,33 @@ from tqdm import tqdm
 
 # ========= 路径设置 =========
 base_dir = r"D:\Code\data"
-zip_dir = os.path.join(base_dir, "")
+zip_dir = os.path.join(base_dir, "archive")
 
 # K 线周期（秒），例如 5 / 15 / 30 / 300
-bar_interval_seconds = 15
+bar_interval_seconds = 30
+
+# Zip range examples: all | 2023-latest | 2023-2024 | 202301-202403
+zip_selection = "2023-latest"
 
 _label = f"{bar_interval_seconds}s"
-extract_dir = os.path.join(base_dir, "extracted_tick")
-convert_dir = os.path.join(base_dir, f"converted_{_label}")
-out_file = os.path.join(base_dir, f"xagusd_{_label}_all.csv")
+run_date = datetime.now().strftime("%Y%m%d")
+run_dir = os.path.join(base_dir, run_date)
+extract_dir = os.path.join(run_dir, "extracted_tick")
+convert_dir = os.path.join(run_dir, f"converted_{_label}")
+yearly_dir = os.path.join(run_dir, f"yearly_{_label}")
+out_file = os.path.join(run_dir, f"xagusd_{_label}_all.csv")
 
 # 价格来源：bid / ask / mid
 price_source = "bid"
 
-# HistData 时间若需转 UTC，可设为 True（原始常用 EST 固定时区）
-convert_est_to_utc = False
+# HistData timestamps are interpreted in New York local time.
+# America/New_York will apply DST automatically.
+source_timezone = "America/New_York"
+convert_new_york_to_utc = False
+trading_timezone = "America/New_York"
+
+# Silver maintenance break uses New York local time.
+# 17:00-18:00 stays on the New York clock and DST is automatic.
 
 # ========= 白银交易时间 =========
 # CME COMEX 白银每日 17:00-18:00 (EST) 休市
@@ -91,6 +104,26 @@ def parse_hist_ts(dt_series: pd.Series) -> pd.Series:
     return out
 
 
+def localize_source_timestamps(ts: pd.Series) -> pd.Series:
+    localized = pd.DatetimeIndex(ts).tz_localize(
+        source_timezone,
+        ambiguous="infer",
+        nonexistent="shift_forward",
+    )
+    return pd.Series(localized, index=ts.index)
+
+
+def to_trading_clock(ts: pd.Series | pd.DatetimeIndex) -> pd.DatetimeIndex:
+    idx = pd.DatetimeIndex(ts)
+    if idx.tz is None:
+        idx = idx.tz_localize(
+            source_timezone,
+            ambiguous="infer",
+            nonexistent="shift_forward",
+        )
+    return idx.tz_convert(trading_timezone)
+
+
 def normalize_tick_columns(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
     统一成四列：dt, bid, ask, vol
@@ -129,7 +162,8 @@ def normalize_tick_columns(df_raw: pd.DataFrame) -> pd.DataFrame:
 
 def _is_in_close_period(ts: pd.DatetimeIndex) -> pd.Series:
     """判断时间戳是否落在白银收盘时段 [17:00, 18:00)"""
-    return (ts.hour >= SILVER_CLOSE_HOUR_START) & (ts.hour < SILVER_CLOSE_HOUR_END)
+    local_ts = to_trading_clock(ts)
+    return (local_ts.hour >= SILVER_CLOSE_HOUR_START) & (local_ts.hour < SILVER_CLOSE_HOUR_END)
 
 
 def _get_trading_session_date(ts: pd.DatetimeIndex) -> pd.Series:
@@ -138,10 +172,11 @@ def _get_trading_session_date(ts: pd.DatetimeIndex) -> pd.Series:
     白银交易日从 18:00 开始到次日 17:00 结束，
     因此 18:00 之后的交易归属到「下一个日历日」。
     """
-    dates = ts.normalize()  # 日历日 00:00
+    local_ts = to_trading_clock(ts)
+    dates = local_ts.normalize()  # 日历日 00:00
     # 18:00 及之后的交易归属到下一个日历日
-    mask_next_day = ts.hour >= SILVER_CLOSE_HOUR_END
-    adj = pd.Series(dates, index=ts)
+    mask_next_day = local_ts.hour >= SILVER_CLOSE_HOUR_END
+    adj = pd.Series(dates)
     adj[mask_next_day] = adj[mask_next_day] + pd.Timedelta(days=1)
     return adj
 
@@ -174,9 +209,10 @@ def ticks_to_bars(df_tick: pd.DataFrame, interval_seconds: int = 30) -> pd.DataF
     df_tick["vol_num"] = clean_numeric_series(df_tick["vol"]).fillna(0.0)
 
     df_tick = df_tick.dropna(subset=["ts", "bid", "ask"]).sort_values("ts")
+    df_tick["ts"] = localize_source_timestamps(df_tick["ts"])
 
-    if convert_est_to_utc:
-        df_tick["ts"] = df_tick["ts"] + pd.Timedelta(hours=5)
+    if convert_new_york_to_utc:
+        df_tick["ts"] = df_tick["ts"].dt.tz_convert("UTC")
 
     if price_source == "bid":
         df_tick["px"] = df_tick["bid"]
@@ -258,14 +294,82 @@ def extract_one_zip(zip_path: str, target_root: str) -> str:
         return os.path.join(target_root, chosen)
 
 
+def extract_zip_period(zip_name: str) -> str:
+    match = re.search(r"_T(\d{6})\.zip$", zip_name, flags=re.IGNORECASE)
+    if not match:
+        raise ValueError(f"unsupported zip name: {zip_name}")
+    return match.group(1)
+
+
+def normalize_period_token(token: str, is_start: bool) -> str:
+    token = token.strip()
+    if re.fullmatch(r"\d{4}", token):
+        return f"{token}{'01' if is_start else '12'}"
+    if re.fullmatch(r"\d{6}", token):
+        return token
+    raise ValueError(f"invalid period token: {token}")
+
+
+def parse_selected_period(selection: str, available_periods: list[str]) -> tuple[str, str]:
+    choice = selection.strip().lower()
+    if not choice or choice == "all":
+        return available_periods[0], available_periods[-1]
+
+    if "-" not in choice:
+        raise ValueError("selection must look like all, YYYY-latest, YYYY-YYYY, or YYYYMM-YYYYMM")
+
+    start_token, end_token = [part.strip() for part in choice.split("-", 1)]
+    start_period = normalize_period_token(start_token, is_start=True)
+    end_period = (
+        available_periods[-1]
+        if end_token == "latest"
+        else normalize_period_token(end_token, is_start=False)
+    )
+
+    if start_period > end_period:
+        raise ValueError(f"invalid selection: {selection}")
+    return start_period, end_period
+
+
+def select_zip_files(zips: list[str], selection: str) -> tuple[list[str], str, str]:
+    zip_items = [(name, extract_zip_period(name)) for name in zips]
+    available_periods = sorted(period for _, period in zip_items)
+    start_period, end_period = parse_selected_period(selection, available_periods)
+
+    selected = [
+        name for name, period in zip_items
+        if start_period <= period <= end_period
+    ]
+    if not selected:
+        raise ValueError(f"no zip files matched selection: {selection}")
+
+    return selected, start_period, end_period
+
+
+def save_yearly_outputs(result: pd.DataFrame) -> None:
+    os.makedirs(yearly_dir, exist_ok=True)
+
+    for year, year_df in result.groupby(result["time"].dt.year, sort=True):
+        year_out = year_df.copy()
+        year_out["time"] = year_out["time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        year_file = os.path.join(yearly_dir, f"xagusd_{_label}_{year}.csv")
+        year_out.to_csv(year_file, index=False, header=False)
+        print(f"Year output: {year_file}  rows={len(year_out)}")
+
+
 def main():
     os.makedirs(extract_dir, exist_ok=True)
     os.makedirs(convert_dir, exist_ok=True)
+    os.makedirs(yearly_dir, exist_ok=True)
 
     zips = [f for f in os.listdir(zip_dir) if f.lower().endswith(".zip")]
     zips.sort()
     if not zips:
         raise ValueError(f"目录中没有 zip 文件: {zip_dir}")
+
+    selection = zip_selection.strip() or "all"
+    zips, start_period, end_period = select_zip_files(zips, selection)
+    print(f"Selected period: {start_period}-{end_period}  zips={len(zips)}")
 
     all_bars = []
 
@@ -315,6 +419,7 @@ def main():
     result = pd.concat(all_bars, ignore_index=True)
     result["time"] = pd.to_datetime(result["time"], errors="coerce")
     result = result.dropna(subset=["time"]).sort_values("time")
+    save_yearly_outputs(result)
     result["time"] = result["time"].dt.strftime("%Y-%m-%d %H:%M:%S")
 
     result.to_csv(out_file, index=False, header=False)

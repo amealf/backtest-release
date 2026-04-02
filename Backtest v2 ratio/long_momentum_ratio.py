@@ -31,33 +31,53 @@ start_time = time.time()
 # User Config
 # ============================================================
 # 数据
-DATA_FOLDER_PATH = r"D:\Code\data\converted_15s\\"
-DATA_FILE_NAME = "HISTDATA_COM_ASCII_XAGUSD_T202512_15s"
+data_folder_path = r"D:\Code\data\20260326\\"
+data_file_name = "xagusd_30s_all"
 
 # 回测区间
-start_index = 1000
-end_index = 5000  # 或 'latest'
+# data_selection_mode:
+# 'index' = 使用 start_index / end_index，在原始数据上按切片语义 [start_index, end_index) 取数
+# 'date' = 使用 start_date / end_date，在原始数据上按时间 between 取数
+data_selection_mode = 'date'
+start_index = 5000
+end_index = 10000  # 或 'latest'
+start_date = '20250601'
+end_date = '20250610'  # 或 'latest'
 only_close = False
+
+# 重采样设置：设为 '' 表示直接使用原始周期
+# 例如 '1min' / '5min' / '15min' / '1H'
+resample_rule = '5min'
+
+# 运行模式：
+# 'manual' = 使用当前参数直接回测，并弹出 K 线买卖点图
+# 'grid' = 执行网格搜索，并输出参数结果图
+run_mode = 'grid'
 
 # 参数循环
 for_num_1 = 1
 for_num_2 = 1
+# WARNING: `for_num_3` / `step3` 目前没有形成独立第三重网格循环。
 for_num_3 = 1
 step1 = 0.001
 step2 = 0.001
 step3 = 0.01
 
-# 策略参数（分钟输入，自动换算 bars）
-open_bar_minutes = 50.0
-open_threshold_cfg = 0.0020
-open_withdrawal_threshold_cfg = 0.0013
-close_bar_minutes = open_bar_minutes
-close_threshold_cfg = 0.001
-open_continous_threshold_cfg = open_threshold_cfg
+# 策略参数（直接使用 bar 数，单位是当前实际回测周期）
+OPEN_BAR = 20
+open_threshold_cfg = 0.004
+open_continous_threshold_cfg = 0.005 # 暂时
+open_withdrawal_threshold_cfg = open_threshold_cfg # 暂时
+
+CLOSE_BAR = OPEN_BAR
+close_threshold_cfg = open_threshold_cfg
+# 当前先不过分依赖固定回撤倍率。
+# 持仓阶段实际回撤阈值使用：
+# max(close_withdrawal_threshold_cfg, 从 low_index 到当前最高点最大涨幅的 2/3)
 close_withdrawal_threshold_cfg = open_withdrawal_threshold_cfg
 
 # 双策略参数（保留）
-open_bar2_minutes = np.nan  # np.nan 表示不启用
+OPEN_BAR2 = np.nan  # np.nan 表示不启用
 open_threshold2_cfg = np.nan
 open_continous_threshold2_cfg = 0.003
 close_withdrawal_threshold2_cfg = 0.003
@@ -70,8 +90,8 @@ THRESHOLD_MODE = 'adaptive_directional_test'
 # 测试版自适应方向波动基准:
 # 当前 bar 为 t 时，只使用 (t - basis_span - basis_subwindow, t) 的历史 bar。
 # 基准按每根 15s bar 独立重算，和是否持仓无关。
-basis_span_minutes = 5 * open_bar_minutes
-basis_subwindow_minutes = open_bar_minutes
+BASIS_SPAN_BARS = 5 * OPEN_BAR
+BASIS_SUBWINDOW_BARS = OPEN_BAR
 BASIS_AGGREGATION_METHOD = 'mean'
 
 # 当 THRESHOLD_MODE='adaptive_directional_test' 时，
@@ -95,28 +115,172 @@ EXPORT_INTERACTIVE_HTML = True
 EXPORT_STATS = True
 ACCENT_BLUE = '#1F77B4'
 SELL_WD_COLOR = 'green'
-SELL_SPEED_COLOR = 'black'
+SELL_SPEED_COLOR = '#D4AA00'
 HTML_CROSSHAIR_ENABLED = False
 HTML_CROSSHAIR_COLOR = 'rgba(255, 120, 120, 0.45)'
+HTML_AXIS_COLOR = '#2A3F5F'
 HTML_SHOW_TRADE_COUNT_BADGE = True
+CANDLE_UP_EDGE_COLOR = 'rgba(185, 185, 185, 0.9)'
+CANDLE_DOWN_EDGE_COLOR = 'rgba(85, 85, 85, 0.9)'
+CANDLE_UP_FILL_COLOR = 'rgba(245, 245, 245, 0.9)'
+CANDLE_DOWN_FILL_COLOR = 'rgba(120, 120, 120, 0.9)'
+CANDLE_UP_FILL_COLOR_MPL = (0.96, 0.96, 0.96, 0.9)
+CANDLE_DOWN_FILL_COLOR_MPL = (0.47, 0.47, 0.47, 0.9)
 # 静态图保存开关：默认不保存 PDF/PNG（保留 HTML 导出）
 SAVE_STATIC_PLOT = False
 # 当 SAVE_STATIC_PLOT=True 时决定保存为 PDF 或 PNG
 SAVE_PLOT_AS_PDF = False
 
 
-def minutes_to_bars(minutes: float, bar_seconds: int, name: str) -> int:
-    raw = (minutes * 60.0) / bar_seconds
-    bars = max(1, int(round(raw)))
-    if not np.isclose(raw, bars):
-        print(f'[Config] {name}: {minutes}min -> {raw:.4f} bars, rounded to {bars}')
-    return bars
+def detect_bar_seconds_from_df(df: pd.DataFrame) -> int:
+    dates = pd.to_datetime(df['Date'], errors='coerce')
+    diffs = dates.diff().dropna()
+    if len(diffs) > 50:
+        diffs = diffs.iloc[:50]
+    median_delta = diffs.median()
+    if pd.isna(median_delta):
+        raise ValueError('Cannot detect bar period from Date column.')
+    total_seconds = int(median_delta.total_seconds())
+    if total_seconds <= 0:
+        raise ValueError(f'Invalid detected bar period: {total_seconds}')
+    return total_seconds
 
 
-def minutes_to_bars_optional(minutes: float, bar_seconds: int, name: str):
-    if pd.isna(minutes):
-        return np.nan
-    return minutes_to_bars(minutes, bar_seconds, name)
+def get_long_gap_marker_positions(
+        df: pd.DataFrame,
+        min_gap: pd.Timedelta = pd.Timedelta(days=1),
+        use_actual_index: bool = False) -> list[float]:
+    if df.empty or 'Date' not in df.columns or len(df) < 2:
+        return []
+
+    dates = pd.to_datetime(df['Date'], errors='coerce')
+    positions = []
+    for pos in range(1, len(dates)):
+        prev_dt = dates.iloc[pos - 1]
+        curr_dt = dates.iloc[pos]
+        if pd.isna(prev_dt) or pd.isna(curr_dt):
+            continue
+        if curr_dt - prev_dt <= min_gap:
+            continue
+        if use_actual_index:
+            try:
+                prev_x = float(df.index[pos - 1])
+                curr_x = float(df.index[pos])
+                gap_x = (prev_x + curr_x) / 2.0
+            except Exception:
+                gap_x = float(pos) - 0.5
+        else:
+            gap_x = float(pos) - 0.5
+        positions.append(gap_x)
+    return positions
+
+
+def add_long_gap_shapes(fig, df: pd.DataFrame) -> None:
+    for gap_x in get_long_gap_marker_positions(df, use_actual_index=True):
+        fig.add_shape(
+            type='line',
+            x0=gap_x,
+            x1=gap_x,
+            y0=0,
+            y1=1,
+            xref='x',
+            yref='paper',
+            layer='above',
+            line=dict(color='rgba(128, 128, 128, 0.30)', width=1.0, dash='dash'),
+        )
+
+
+def draw_long_gap_lines(ax, df: pd.DataFrame) -> None:
+    for gap_x in get_long_gap_marker_positions(df):
+        ax.axvline(
+            x=gap_x,
+            color='gray',
+            alpha=0.30,
+            linestyle='--',
+            linewidth=1.0,
+            zorder=0,
+        )
+
+
+def resample_ohlc_df(df: pd.DataFrame, rule: str):
+    resample_rule = (rule or '').strip()
+    if not resample_rule:
+        return df.copy(), detect_bar_seconds_from_df(df)
+
+    temp = df.copy()
+    temp['Date'] = pd.to_datetime(temp['Date'], errors='coerce')
+    temp = temp.dropna(subset=['Date']).sort_values('Date')
+    temp = temp.set_index('Date')
+    agg = {
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+    }
+    if 'vol' in temp.columns:
+        agg['vol'] = 'sum'
+    temp = temp.resample(resample_rule).agg(agg)
+    temp = temp.dropna(subset=['open', 'high', 'low', 'close']).reset_index()
+    temp['Date'] = temp['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    if 'vol' not in temp.columns:
+        temp['vol'] = 0.0
+    return temp, detect_bar_seconds_from_df(temp)
+
+
+def format_period_label(resample_rule: str, bar_seconds: int) -> str:
+    rule = (resample_rule or '').strip()
+    if rule:
+        return rule.replace(' ', '')
+    if bar_seconds % 3600 == 0:
+        hours = bar_seconds // 3600
+        return f'{hours}h'
+    if bar_seconds % 60 == 0:
+        minutes = bar_seconds // 60
+        return f'{minutes}min'
+    return f'{bar_seconds}s'
+
+
+def make_safe_range_token(value) -> str:
+    text = str(value).strip()
+    return (
+        text.replace(':', '-')
+        .replace(' ', '_')
+        .replace('/', '-')
+        .replace('\\', '-')
+    )
+
+
+def parse_selection_datetime(value, is_end: bool = False) -> pd.Timestamp:
+    text = str(value).strip()
+    if len(text) == 8 and text.isdigit():
+        ts = pd.to_datetime(text, format='%Y%m%d', errors='coerce')
+        if pd.isna(ts):
+            raise ValueError(f'Invalid date value: {value}')
+        if is_end:
+            ts = ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+        return ts
+
+    ts = pd.to_datetime(text, errors='coerce')
+    if pd.isna(ts):
+        raise ValueError(f'Invalid date value: {value}')
+    return ts
+
+
+def should_drop_incomplete_initial_resampled_bar(
+        raw_df: pd.DataFrame,
+        resample_rule: str) -> bool:
+    rule = (resample_rule or '').strip()
+    if not rule or raw_df.empty:
+        return False
+
+    first_ts = pd.to_datetime(raw_df['Date'].iloc[0], errors='coerce')
+    if pd.isna(first_ts):
+        return False
+
+    try:
+        return first_ts != first_ts.floor(rule)
+    except Exception:
+        return False
 
 
 # ============================================================
@@ -279,6 +443,325 @@ def get_outcome_withdrawal(sers):
     return with_high, withdrawal
 
 
+def build_summary_metrics(
+        perf_outcome: pd.DataFrame,
+        transactions_df: pd.DataFrame,
+        initial_capital: float) -> dict:
+    capital_curve = perf_outcome['capital'].astype(float)
+    final_capital = (
+        float(capital_curve.iloc[-1])
+        if len(capital_curve) else float(initial_capital)
+    )
+    total_return_pct = (
+        (final_capital / float(initial_capital) - 1.0) * 100.0
+        if initial_capital != 0 else np.nan
+    )
+
+    outcome_high, biggest_wd_abs = get_outcome_withdrawal(capital_curve)
+    biggest_wd_pct = (
+        (biggest_wd_abs / outcome_high) * 100.0
+        if outcome_high not in (0, np.nan) and not pd.isna(outcome_high)
+        else np.nan
+    )
+
+    closed_trades = transactions_df[transactions_df['Type'] != 'long'].copy()
+    trade_num = int(len(closed_trades))
+    trade_returns = pd.to_numeric(closed_trades['Percent'], errors='coerce') - 1.0
+    trade_returns = trade_returns.dropna()
+
+    win_trades = trade_returns[trade_returns > 0]
+    loss_trades = trade_returns[trade_returns < 0]
+    win_rate_pct = (
+        float((trade_returns > 0).mean() * 100.0)
+        if len(trade_returns) > 0 else np.nan
+    )
+    avg_trade_return_pct = (
+        float(trade_returns.mean() * 100.0)
+        if len(trade_returns) > 0 else np.nan
+    )
+    median_trade_return_pct = (
+        float(trade_returns.median() * 100.0)
+        if len(trade_returns) > 0 else np.nan
+    )
+
+    payoff_ratio = np.nan
+    if len(win_trades) > 0 and len(loss_trades) > 0:
+        avg_win = float(win_trades.mean())
+        avg_loss = float(loss_trades.mean())
+        if avg_loss != 0:
+            payoff_ratio = avg_win / abs(avg_loss)
+
+    profit_factor = np.nan
+    gross_profit = float(win_trades.sum()) if len(win_trades) > 0 else 0.0
+    gross_loss = float(abs(loss_trades.sum())) if len(loss_trades) > 0 else 0.0
+    if gross_loss > 0:
+        profit_factor = gross_profit / gross_loss
+
+    bar_returns = capital_curve.pct_change().dropna()
+    sharpe_ratio = np.nan
+    if len(bar_returns) > 1:
+        std = float(bar_returns.std(ddof=1))
+        if std > 0:
+            sharpe_ratio = float(
+                bar_returns.mean() / std * np.sqrt(len(bar_returns))
+            )
+
+    return {
+        'final_capital': final_capital,
+        'total_return_pct': total_return_pct,
+        'outcome_high': float(outcome_high),
+        'biggest_wd_abs': float(biggest_wd_abs),
+        'biggest_wd_pct': biggest_wd_pct,
+        'trade_num': trade_num,
+        'win_rate_pct': win_rate_pct,
+        'avg_trade_return_pct': avg_trade_return_pct,
+        'median_trade_return_pct': median_trade_return_pct,
+        'payoff_ratio': payoff_ratio,
+        'profit_factor': profit_factor,
+        'sharpe_ratio': sharpe_ratio,
+    }
+
+
+def load_existing_outcome_stats(path: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_excel(path, index_col=0)
+    return df[~df.index.duplicated(keep='last')]
+
+
+def build_progress_marks(total_count: int) -> dict[int, int]:
+    if total_count <= 0:
+        return {}
+    return {
+        max(1, int(np.ceil(total_count * pct / 100.0))): pct
+        for pct in (20, 40, 60, 80, 100)
+    }
+
+
+def print_search_progress(
+        completed_count: int,
+        total_count: int,
+        progress_marks: dict[int, int],
+        printed_marks: set[int]) -> None:
+    if total_count <= 0:
+        return
+    for mark in sorted(progress_marks):
+        pct = progress_marks[mark]
+        if completed_count >= mark and pct not in printed_marks:
+            print(f'[Grid] progress: {pct}% ({completed_count}/{total_count})')
+            printed_marks.add(pct)
+
+
+def build_planned_param_tags_long_ratio(
+        threshold_mode: str,
+        for_num_1_cfg: int,
+        for_num_2_cfg: int,
+        step1_cfg: float,
+        step2_cfg: float,
+        open_bar_cfg: int,
+        close_bar_cfg: int,
+        open_threshold_cfg: float,
+        open_withdrawal_threshold_cfg: float,
+        close_threshold_cfg: float,
+        open_continous_threshold_cfg: float,
+        close_withdrawal_threshold_cfg: float,
+        basis_span_bars_cfg: int,
+        basis_subwindow_bars_cfg: int) -> set[str]:
+    planned_tags = set()
+    for num in range(int(for_num_1_cfg)):
+        for i in range(int(for_num_2_cfg)):
+            open_bar = int(open_bar_cfg)
+            close_bar = int(close_bar_cfg)
+            if threshold_mode == 'adaptive_directional_test':
+                open_threshold = float(OPEN_POS_MULTIPLIER)
+                open_withdrawal_threshold = float(OPEN_WD_NEG_MULTIPLIER)
+                close_threshold = float(CLOSE_SPEED_POS_MULTIPLIER)
+                open_continous_threshold = float(OPEN_CONTINOUS_POS_MULTIPLIER + (i * step1_cfg))
+                close_withdrawal_threshold = float(CLOSE_WD_NEG_MULTIPLIER + (num * step2_cfg))
+                if min(
+                        open_threshold,
+                        open_withdrawal_threshold,
+                        close_threshold,
+                        open_continous_threshold,
+                        close_withdrawal_threshold,
+                        OPEN_POS_MIN_THRESHOLD,
+                        OPEN_CONTINOUS_POS_MIN_THRESHOLD,
+                        CLOSE_SPEED_POS_MIN_THRESHOLD,
+                        OPEN_WD_NEG_MIN_THRESHOLD,
+                        CLOSE_WD_NEG_MIN_THRESHOLD) < 0:
+                    continue
+                if open_continous_threshold < open_threshold:
+                    continue
+            else:
+                open_threshold = float(open_threshold_cfg)
+                open_withdrawal_threshold = float(open_withdrawal_threshold_cfg)
+                close_threshold = float(close_threshold_cfg)
+                open_continous_threshold = float(open_continous_threshold_cfg + (i * step1_cfg))
+                close_withdrawal_threshold = float(close_withdrawal_threshold_cfg + (num * step2_cfg))
+                if open_threshold < open_withdrawal_threshold:
+                    continue
+                if open_continous_threshold < open_threshold:
+                    continue
+                if open_continous_threshold < close_withdrawal_threshold:
+                    continue
+
+            planned_tags.add(build_long_param_tag(
+                threshold_mode,
+                open_bar,
+                open_threshold,
+                open_continous_threshold,
+                open_withdrawal_threshold,
+                close_bar,
+                close_threshold,
+                close_withdrawal_threshold,
+                basis_span_bars=(
+                    basis_span_bars_cfg
+                    if threshold_mode == 'adaptive_directional_test' else None
+                ),
+                basis_subwindow_bars=(
+                    basis_subwindow_bars_cfg
+                    if threshold_mode == 'adaptive_directional_test' else None
+                ),
+            ))
+    return planned_tags
+
+
+def compute_intrabar_withdrawal_metrics(
+        raw_df: pd.DataFrame,
+        resampled_df: pd.DataFrame,
+        bar_seconds: int,
+        metric_kind: str = 'ratio') -> pd.DataFrame:
+    columns = ['Date', 'intrabar_wd', 'intrabar_raw_count', 'intrabar_wd_max20']
+    if raw_df.empty or resampled_df.empty or int(bar_seconds) <= 0:
+        return pd.DataFrame(columns=columns)
+
+    raw = raw_df[['Date', 'open', 'high', 'low', 'close']].copy()
+    res = resampled_df[['Date']].copy()
+    raw['Date'] = pd.to_datetime(raw['Date'], errors='coerce')
+    res['Date'] = pd.to_datetime(res['Date'], errors='coerce')
+    raw = raw.dropna(subset=['Date']).sort_values('Date').reset_index(drop=True)
+    res = res.dropna(subset=['Date']).sort_values('Date').reset_index(drop=True)
+    if raw.empty or res.empty:
+        return pd.DataFrame(columns=columns)
+
+    bar_ends = res['Date'].shift(-1)
+    bar_ends.iloc[-1] = res.iloc[-1]['Date'] + pd.Timedelta(seconds=int(bar_seconds))
+
+    raw_times = raw['Date'].to_numpy()
+    res_times = res['Date'].to_numpy()
+    end_times = bar_ends.to_numpy()
+    left_index = raw_times.searchsorted(res_times, side='left')
+    right_index = raw_times.searchsorted(end_times, side='left')
+
+    metrics = []
+    raw_counts = []
+    for left, right in zip(left_index, right_index):
+        left = int(left)
+        right = int(right)
+        raw_counts.append(max(right - left, 0))
+        intrabar_slice = raw.iloc[left:right]
+        if len(intrabar_slice) <= 1:
+            metrics.append(0.0)
+            continue
+
+        with_high, withdrawal = get_withdrawal(
+            intrabar_slice,
+            0,
+            0,
+            switch0=True,
+        )
+        if pd.isna(with_high) or pd.isna(withdrawal):
+            metrics.append(np.nan)
+        elif metric_kind == 'absolute':
+            metrics.append(float(withdrawal))
+        else:
+            metrics.append(float(withdrawal / with_high if with_high != 0 else 0.0))
+
+    metric_df = pd.DataFrame({
+        'Date': res['Date'],
+        'intrabar_wd': metrics,
+        'intrabar_raw_count': raw_counts,
+    })
+    metric_df['intrabar_wd_max20'] = (
+        metric_df['intrabar_wd'].rolling(20, min_periods=1).max()
+    )
+    return metric_df
+
+
+def prompt_manual_intrabar_precheck(
+        raw_df: pd.DataFrame,
+        resampled_df: pd.DataFrame,
+        bar_seconds: int,
+        open_threshold_values,
+        open_cont_threshold_values,
+        metric_kind: str = 'ratio') -> None:
+    metric_df = compute_intrabar_withdrawal_metrics(
+        raw_df,
+        resampled_df,
+        bar_seconds,
+        metric_kind=metric_kind,
+    )
+    if metric_df.empty:
+        return
+
+    open_series = pd.Series(open_threshold_values, index=metric_df.index, dtype='float64')
+    open_cont_series = pd.Series(
+        open_cont_threshold_values,
+        index=metric_df.index,
+        dtype='float64',
+    )
+    compare_df = metric_df.copy()
+    compare_df['open_threshold'] = open_series
+    compare_df['open_cont_threshold'] = open_cont_series
+
+    valid_mask = compare_df[
+        ['intrabar_wd_max20', 'open_threshold', 'open_cont_threshold']
+    ].notna().all(axis=1)
+    risk_mask = valid_mask & (
+        (compare_df['intrabar_wd_max20'] >= compare_df['open_threshold'])
+        | (compare_df['intrabar_wd_max20'] >= compare_df['open_cont_threshold'])
+    )
+    risk_df = compare_df.loc[risk_mask].copy()
+    if len(risk_df) == 0:
+        print('[Precheck] no obvious intrabar reversal conflict found.')
+        return
+
+    valid_count = int(valid_mask.sum())
+    risk_ratio = (len(risk_df) / valid_count) if valid_count > 0 else 0.0
+    print('[Precheck] intrabar reversal risk detected in manual mode.')
+    print(
+        '[Precheck] risky bars: '
+        + f'{len(risk_df)} / {valid_count} ({risk_ratio * 100:.2f}%)'
+    )
+
+    sample_df = risk_df.head(10)
+    for idx, row in sample_df.iterrows():
+        if metric_kind == 'absolute':
+            print(
+                '  idx=' + str(idx)
+                + ' date=' + str(row['Date'])
+                + f' intrabar_max20={row["intrabar_wd_max20"]:.6f}'
+                + f' open={row["open_threshold"]:.6f}'
+                + f' open_cont={row["open_cont_threshold"]:.6f}'
+            )
+        else:
+            print(
+                '  idx=' + str(idx)
+                + ' date=' + str(row['Date'])
+                + f' intrabar_max20={row["intrabar_wd_max20"] * 100:.4f}%'
+                + f' open={row["open_threshold"] * 100:.4f}%'
+                + f' open_cont={row["open_cont_threshold"] * 100:.4f}%'
+            )
+
+    print(
+        '[Precheck] suggestion: raise open_threshold / open_continous_threshold, '
+        + 'or use a finer resample_rule.'
+    )
+    answer = input('Continue backtest? [y/N]: ').strip().lower()
+    if answer not in ('y', 'yes'):
+        raise SystemExit('Stopped by user after intrabar precheck.')
+
+
 def get_decrease_with_base(df):
     """
     返回跌幅及其对应的真实基准 high。
@@ -436,8 +919,8 @@ def _aggregate_directional_basis(values: np.ndarray, method: str) -> float:
 def precompute_long_adaptive_bases(
         quote: pd.DataFrame,
         bar_seconds: int,
-        basis_span_minutes: float,
-        basis_subwindow_minutes: float,
+        basis_span_bars: int,
+        basis_subwindow_bars: int,
         aggregation_method: str = 'mean') -> pd.DataFrame:
     """
     预计算做多策略的测试版自适应方向波动基准。
@@ -450,12 +933,10 @@ def precompute_long_adaptive_bases(
     - 反向基准: mean(get_decrease_with_base(window) / base_high)
     """
     quote = quote.copy()
-    span_bars = minutes_to_bars(
-        basis_span_minutes, bar_seconds, 'basis_span'
-    )
-    subwindow_bars = minutes_to_bars(
-        basis_subwindow_minutes, bar_seconds, 'basis_subwindow'
-    )
+    span_bars = int(basis_span_bars)
+    subwindow_bars = int(basis_subwindow_bars)
+    if span_bars <= 0 or subwindow_bars <= 0:
+        raise ValueError('basis_span_bars and basis_subwindow_bars must be positive.')
     required_history_bars = span_bars + subwindow_bars - 1
 
     dates = pd.to_datetime(quote['Date'], errors='coerce')
@@ -539,15 +1020,15 @@ def export_first_long_basis_snapshot_excel(
         quote: pd.DataFrame,
         open_bar: int,
         bar_seconds: int,
-        basis_span_minutes_cfg: float,
-        basis_subwindow_minutes_cfg: float):
+        basis_span_bars_cfg: int,
+        basis_subwindow_bars_cfg: int):
     """
     导出首个 basis 有效时刻的调试快照。
 
     sheets:
     - summary: 首个 basis 时刻与参数摘要
-    - ohlc_open_bar: 当时过去 open_bar_minutes 的全部 OHLC
-    - basis_windows: 当时 basis_span_minutes 内所有子窗口的正/反向波动明细
+    - ohlc_open_bar: 当时过去 open_bar 个 bar 的全部 OHLC
+    - basis_windows: 当时 basis_span_bars 内所有子窗口的正/反向波动明细
     """
     if 'adaptive_basis_ready' not in quote.columns:
         return
@@ -558,12 +1039,10 @@ def export_first_long_basis_snapshot_excel(
         return
 
     current_idx = int(ready_index[0])
-    span_bars = minutes_to_bars(
-        basis_span_minutes_cfg, bar_seconds, 'basis_span'
-    )
-    subwindow_bars = minutes_to_bars(
-        basis_subwindow_minutes_cfg, bar_seconds, 'basis_subwindow'
-    )
+    span_bars = int(basis_span_bars_cfg)
+    subwindow_bars = int(basis_subwindow_bars_cfg)
+    if span_bars <= 0 or subwindow_bars <= 0:
+        raise ValueError('basis_span_bars_cfg and basis_subwindow_bars_cfg must be positive.')
     required_history_bars = span_bars + subwindow_bars - 1
 
     open_bar_start = max(0, current_idx - open_bar)
@@ -632,10 +1111,8 @@ def export_first_long_basis_snapshot_excel(
         'adaptive_pos_basis': quote.at[current_idx, 'adaptive_pos_basis'],
         'adaptive_neg_basis': quote.at[current_idx, 'adaptive_neg_basis'],
         'open_bar_bars': open_bar,
-        'open_bar_minutes': open_bar * bar_seconds / 60.0,
-        'basis_span_minutes': basis_span_minutes_cfg,
-        'basis_subwindow_minutes': basis_subwindow_minutes_cfg,
-        'basis_span_window_count': span_bars,
+        'bar_seconds': bar_seconds,
+        'basis_span_bars': span_bars,
         'basis_subwindow_bars': subwindow_bars,
         'basis_required_history_bars': required_history_bars,
         'ohlc_open_bar_start_index': open_bar_start,
@@ -646,7 +1123,7 @@ def export_first_long_basis_snapshot_excel(
     }])
 
     debug_name = 'stats ' + save_name + ' first basis snapshot.xlsx'
-    debug_dir = './result/%s long outcome/stats excel/' % file_name
+    debug_dir = './result/%s long_momentum_ratio outcome/stats excel/' % file_name
     os.makedirs(debug_dir, exist_ok=True)
     debug_path = os.path.join(debug_dir, debug_name)
 
@@ -710,11 +1187,11 @@ def build_long_param_tag(
         close_bar: int,
         close_threshold: float,
         close_withdrawal_threshold: float,
-        basis_span_minutes: float | None = None,
-        basis_subwindow_minutes: float | None = None) -> str:
+        basis_span_bars: int | None = None,
+        basis_subwindow_bars: int | None = None) -> str:
     if threshold_mode == 'adaptive_directional_test':
         return (
-            f'adt bs{basis_span_minutes:g} bw{basis_subwindow_minutes:g}'
+            f'adt bs{basis_span_bars:g} bw{basis_subwindow_bars:g}'
             + ' om' + str(round(open_bar, 4))
             + ' opm' + str(round(open_threshold, 4))
             + ' ocpm' + str(round(open_continous_threshold, 4))
@@ -761,13 +1238,13 @@ def plot_long_adaptive_threshold_chart(
         underlying_ratio.low,
         underlying_ratio.close,
         width=0.7,
-        colorup='salmon',
-        colordown='#2ca02c'
+        colorup=CANDLE_UP_FILL_COLOR_MPL,
+        colordown=CANDLE_DOWN_FILL_COLOR_MPL
     )
+    draw_long_gap_lines(ax_price, underlying1)
 
     basis_series = [
-        ('pos_basis', 'pos_basis_t', '#d62728'),
-        ('neg_basis', 'neg_basis_t', '#1f77b4'),
+        ('shared_basis', 'basis_max_t', ACCENT_BLUE),
     ]
 
     for col, label, color in basis_series:
@@ -784,12 +1261,11 @@ def plot_long_adaptive_threshold_chart(
                 alpha=0.9,
             )
 
-    ax_price.set_title(title)
     ax_price.xaxis.set_major_locator(plt.MaxNLocator(12))
     ax_price.spines['top'].set_visible(False)
     ax_price.spines['right'].set_visible(False)
     ax_threshold.spines['top'].set_visible(False)
-    ax_threshold.set_ylabel('directional basis mean (%)')
+    ax_threshold.set_ylabel('basis max (%)')
     ax_threshold.tick_params(axis='y', colors='black')
 
     handles_1, labels_1 = ax_price.get_legend_handles_labels()
@@ -806,6 +1282,7 @@ def export_interactive_html_long_basis(
         title: str,
         underlying1: pd.DataFrame,
         detail_df: pd.DataFrame,
+        transactions_df: pd.DataFrame,
         factor: float):
     if go is None or make_subplots is None:
         print('[HTML] plotly is not installed, skip basis html export.')
@@ -854,7 +1331,7 @@ def export_interactive_html_long_basis(
         cols=1,
         shared_xaxes=True,
         vertical_spacing=0.03,
-        row_heights=[0.67, 0.33],
+        row_heights=[0.76, 0.24],
     )
     x_index = underlying1.index.to_numpy()
     x_min = int(x_index[0]) if len(x_index) > 0 else 0
@@ -894,6 +1371,7 @@ def export_interactive_html_long_basis(
             + 'close: ' + _price_text(row['close']) + '<br>'
             + 'pos_basis: ' + _safe_pct(pref_data, 'pos_basis') + '%' + '<br>'
             + 'neg_basis: ' + _safe_pct(pref_data, 'neg_basis') + '%' + '<br>'
+            + 'shared_basis: ' + _safe_pct(pref_data, 'shared_basis') + '%' + '<br>'
             + 'basis_ready: ' + _safe_val(pref_data, 'basis_ready', 0) + '<br>'
             + 'index: ' + str(idx)
         )
@@ -908,18 +1386,136 @@ def export_interactive_html_long_basis(
         hovertext=candle_texts,
         hoverinfo='text',
         increasing=dict(
-            line=dict(color='salmon', width=0.8),
-            fillcolor='rgba(250, 128, 114, 0.28)'
+            line=dict(color=CANDLE_UP_EDGE_COLOR, width=0.8),
+            fillcolor=CANDLE_UP_FILL_COLOR
         ),
         decreasing=dict(
-            line=dict(color='#2ca02c', width=0.8),
-            fillcolor='rgba(44, 160, 44, 0.28)'
+            line=dict(color=CANDLE_DOWN_EDGE_COLOR, width=0.8),
+            fillcolor=CANDLE_DOWN_FILL_COLOR
         )
     ), row=1, col=1)
+    add_long_gap_shapes(fig_html, underlying1)
+
+    long_record = transactions_df.copy()
+    long_record['target'] = long_record['Price'] / factor * 100
+    long_record = long_record[long_record.Type == 'long']
+    if len(long_record) != 0:
+        long_texts = []
+        for idx, row in long_record.iterrows():
+            pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+            long_texts.append(
+                _date_text(row['Date']) + '<br>'
+                + 'high: ' + _safe_val(pref_data, 'high') + '<br>'
+                + 'total_inc: ' + _safe_val(pref_data, 't_inc_per', 2) + '%' + '<br>'
+                + 'execution: ' + _safe_val(pref_data, 'execution') + '<br>'
+                + 'shared_basis: ' + _safe_pct(pref_data, 'shared_basis') + '%' + '<br>'
+                + 'frozen_shared_basis: ' + _safe_pct(pref_data, 'frozen_shared_basis') + '%' + '<br>'
+                + 'frozen_open_cont: ' + _safe_pct(pref_data, 'frozen_open_cont_threshold') + '%' + '<br>'
+                + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                + 'low_price: ' + _safe_val(pref_data, 'low_price') + '<br>'
+                + 'new_opening_count: ' + _safe_val(pref_data, 'new_opening_count') + '<br>'
+                + 'index: ' + str(idx)
+            )
+        fig_html.add_trace(go.Scatter(
+            x=long_record.index,
+            y=long_record['target'],
+            mode='markers',
+            marker=dict(color='red', size=4),
+            name='long',
+            text=long_texts,
+            hovertemplate='%{text}<extra></extra>'
+        ), row=1, col=1)
+
+    sell_record = transactions_df.copy()
+    sell_record['target'] = sell_record['Price'] / factor * 100
+    sell_record = sell_record[sell_record.Type == 'sell']
+    if len(sell_record) != 0:
+        close_type_1_df = sell_record[sell_record['Close_type'] == 1]
+        if len(close_type_1_df) != 0:
+            sell_1_texts = []
+            for idx, row in close_type_1_df.iterrows():
+                pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+                sell_1_texts.append(
+                    _date_text(row['Date']) + '<br>'
+                    + 'low: ' + _safe_val(pref_data, 'low') + '<br>'
+                    + 'hld_wd_per: ' + _safe_val(pref_data, 'hld_wd_per', 2) + '%' + '<br>'
+                    + 'holding_inc: ' + _safe_val(pref_data, 'holding_inc', 2) + '<br>'
+                    + 'max_inc: ' + _safe_val(pref_data, 'max_inc', 2) + '%' + '<br>'
+                    + 'max_wd: ' + _safe_val(pref_data, 'max_wd', 2) + '%' + '<br>'
+                    + 'execution2: ' + _safe_val(pref_data, 'execution') + '<br>'
+                    + 'period: ' + _safe_val(pref_data, 'period') + '<br>'
+                    + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                    + 'high_date: ' + _safe_val(pref_data, 'high_date') + '<br>'
+                    + 'high_price: ' + _safe_val(pref_data, 'high_price') + '<br>'
+                    + 'index: ' + str(idx)
+                )
+            fig_html.add_trace(go.Scatter(
+                x=close_type_1_df.index,
+                y=close_type_1_df['target'],
+                mode='markers',
+                marker=dict(color=SELL_WD_COLOR, size=4),
+                name='sell_1',
+                text=sell_1_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ), row=1, col=1)
+
+        close_type_2_df = sell_record[sell_record['Close_type'] == 2]
+        if len(close_type_2_df) != 0:
+            sell_2_texts = []
+            for idx, row in close_type_2_df.iterrows():
+                pref_data = detail_df.loc[idx] if idx in detail_df.index else pd.Series(dtype='object')
+                sell_2_texts.append(
+                    _date_text(row['Date']) + '<br>'
+                    + 'low: ' + _safe_val(pref_data, 'low') + '<br>'
+                    + 'hld_wd_per: ' + _safe_val(pref_data, 'hld_wd_per', 2) + '%' + '<br>'
+                    + 'max_inc: ' + _safe_val(pref_data, 'max_inc', 2) + '%' + '<br>'
+                    + 'max_wd: ' + _safe_val(pref_data, 'max_wd', 2) + '%' + '<br>'
+                    + 'execution2: ' + _safe_val(pref_data, 'execution') + '<br>'
+                    + 'period: ' + _safe_val(pref_data, 'period') + '<br>'
+                    + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
+                    + 'high_date: ' + _safe_val(pref_data, 'high_date') + '<br>'
+                    + 'high_price: ' + _safe_val(pref_data, 'high_price') + '<br>'
+                    + 'index: ' + str(idx)
+                )
+            fig_html.add_trace(go.Scatter(
+                x=close_type_2_df.index,
+                y=close_type_2_df['target'],
+                mode='markers',
+                marker=dict(color=SELL_SPEED_COLOR, size=4),
+                name='sell_2',
+                text=sell_2_texts,
+                hovertemplate='%{text}<extra></extra>'
+            ), row=1, col=1)
+
+    trade_seq = transactions_df[
+        transactions_df['Type'].isin(['long', 'sell'])].copy()
+    trade_seq = trade_seq.sort_index()
+    trade_seq['target'] = trade_seq['Price'] / factor * 100
+    line_x = []
+    line_y = []
+    buy_idx = None
+    buy_y = None
+    for idx, row in trade_seq.iterrows():
+        if row['Type'] == 'long':
+            buy_idx = idx
+            buy_y = row['target']
+        elif row['Type'] == 'sell' and buy_idx is not None:
+            line_x.extend([buy_idx, idx, None])
+            line_y.extend([buy_y, row['target'], None])
+            buy_idx = None
+            buy_y = None
+    if len(line_x) > 0:
+        fig_html.add_trace(go.Scatter(
+            x=line_x,
+            y=line_y,
+            mode='lines',
+            line=dict(color=ACCENT_BLUE, width=2),
+            name='trade_link',
+            hoverinfo='skip'
+        ), row=1, col=1)
 
     basis_configs = [
-        ('pos_basis', 'pos_basis_t', '#d62728'),
-        ('neg_basis', 'neg_basis_t', '#1f77b4'),
+        ('shared_basis', 'basis_max_t', ACCENT_BLUE),
     ]
     for col, label, color in basis_configs:
         if col not in detail_df.columns:
@@ -937,6 +1533,7 @@ def export_interactive_html_long_basis(
                 + 'close: ' + _price_text(row['close']) + '<br>'
                 + 'pos_basis: ' + _safe_pct(pref_data, 'pos_basis') + '%' + '<br>'
                 + 'neg_basis: ' + _safe_pct(pref_data, 'neg_basis') + '%' + '<br>'
+                + 'shared_basis: ' + _safe_pct(pref_data, 'shared_basis') + '%' + '<br>'
                 + 'basis_ready: ' + _safe_val(pref_data, 'basis_ready', 0) + '<br>'
                 + 'index: ' + str(idx)
             )
@@ -951,12 +1548,18 @@ def export_interactive_html_long_basis(
         ), row=2, col=1)
 
     fig_html.update_layout(
-        title=title,
+        title=None,
         template='plotly_white',
         autosize=True,
         hovermode='closest',
-        legend=dict(orientation='h', yanchor='bottom', y=1.01, xanchor='left', x=0),
-        margin=dict(l=42, r=42, t=45, b=45, pad=0),
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.01,
+            xanchor='left',
+            x=0,
+        ),
+        margin=dict(l=42, r=42, t=52, b=45, pad=0),
         hoverlabel=dict(
             bgcolor='rgba(255, 255, 255, 0.70)',
             bordercolor='rgba(0, 0, 0, 0.45)',
@@ -966,6 +1569,7 @@ def export_interactive_html_long_basis(
     fig_html.update_xaxes(
         title=None,
         tickfont=dict(size=10),
+        color=HTML_AXIS_COLOR,
         showgrid=False,
         rangeslider=dict(visible=False),
         range=[x_min - x_left_pad, x_max + x_right_pad],
@@ -978,6 +1582,7 @@ def export_interactive_html_long_basis(
     fig_html.update_xaxes(
         title=None,
         tickfont=dict(size=10),
+        color=HTML_AXIS_COLOR,
         showgrid=False,
         range=[x_min - x_left_pad, x_max + x_right_pad],
         autorange=False,
@@ -988,21 +1593,35 @@ def export_interactive_html_long_basis(
     fig_html.update_yaxes(
         title='price (base=100)',
         tickfont=dict(size=10),
+        color=HTML_AXIS_COLOR,
         showgrid=False,
         row=1,
         col=1,
         **y_spike_cfg
     )
     fig_html.update_yaxes(
-        title='basis mean (%)',
+        title='basis max (%)',
         tickfont=dict(size=10),
+        color=HTML_AXIS_COLOR,
         showgrid=False,
         row=2,
         col=1,
         **y2_spike_cfg
     )
 
-    html_dir = './result/%s long outcome/html' % file_name
+    subplot_top = float(fig_html.layout.yaxis2.domain[1])
+    fig_html.add_shape(
+        type='line',
+        x0=0,
+        x1=1,
+        y0=subplot_top,
+        y1=subplot_top,
+        xref='paper',
+        yref='paper',
+        line=dict(color=HTML_AXIS_COLOR, width=1),
+    )
+
+    html_dir = './result/%s long_momentum_ratio outcome/html' % file_name
     os.makedirs(html_dir, exist_ok=True)
     html_path = os.path.join(
         html_dir,
@@ -1055,6 +1674,18 @@ def export_interactive_html_long(
     if go is None:
         print('[HTML] plotly is not installed, skip html export.')
         return
+
+    def _safe_pct(pref_data, key, digits=4):
+        if isinstance(pref_data, pd.Series) and key in pref_data.index:
+            val = pref_data[key]
+        else:
+            return 'nan'
+        if pd.isna(val):
+            return 'nan'
+        try:
+            return str(round(float(val) * 100, digits))
+        except Exception:
+            return str(val)
 
     def _safe_val(pref_data, key, digits=None):
         if isinstance(pref_data, pd.Series) and key in pref_data.index:
@@ -1121,14 +1752,15 @@ def export_interactive_html_long(
         close=underlying1['close'] / factor * 100,
         name='price',
         increasing=dict(
-            line=dict(color='salmon', width=0.8),
-            fillcolor='rgba(250, 128, 114, 0.28)'
+            line=dict(color=CANDLE_UP_EDGE_COLOR, width=0.8),
+            fillcolor=CANDLE_UP_FILL_COLOR
         ),
         decreasing=dict(
-            line=dict(color='#2ca02c', width=0.8),
-            fillcolor='rgba(44, 160, 44, 0.28)'
+            line=dict(color=CANDLE_DOWN_EDGE_COLOR, width=0.8),
+            fillcolor=CANDLE_DOWN_FILL_COLOR
         )
     ))
+    add_long_gap_shapes(fig_html, underlying1)
 
     long_record = transactions_df.copy()
     long_record['target'] = long_record['Price'] / factor * 100
@@ -1142,6 +1774,9 @@ def export_interactive_html_long(
                 + 'high: ' + _safe_val(pref_data, 'high') + '<br>'
                 + 'total_inc: ' + _safe_val(pref_data, 't_inc_per', 2) + '%' + '<br>'
                 + 'execution: ' + _safe_val(pref_data, 'execution') + '<br>'
+                + 'shared_basis: ' + _safe_pct(pref_data, 'shared_basis') + '%' + '<br>'
+                + 'frozen_shared_basis: ' + _safe_pct(pref_data, 'frozen_shared_basis') + '%' + '<br>'
+                + 'frozen_open_cont: ' + _safe_pct(pref_data, 'frozen_open_cont_threshold') + '%' + '<br>'
                 + 'low_date: ' + _safe_val(pref_data, 'low_date') + '<br>'
                 + 'low_price: ' + _safe_val(pref_data, 'low_price') + '<br>'
                 + 'new_opening_count: ' + _safe_val(pref_data, 'new_opening_count') + '<br>'
@@ -1298,7 +1933,7 @@ def export_interactive_html_long(
         )
     )
 
-    html_dir = './result/%s long outcome/html' % file_name
+    html_dir = './result/%s long_momentum_ratio outcome/html' % file_name
     os.makedirs(html_dir, exist_ok=True)
     html_path = os.path.join(html_dir, save_name + ' Long interactive.html')
     html_text = fig_html.to_html(
@@ -1360,6 +1995,10 @@ class MomentumStrategy(BaseStrategy):
         self.analysis_increase = 0
         self.holding_start_index = 0
         self.increase_start_index = 0
+        self.frozen_shared_basis = np.nan
+        self.frozen_open_threshold = np.nan
+        self.frozen_open_cont_threshold = np.nan
+        self.frozen_open_wd_threshold = np.nan
         self.holding_increase_percent = np.nan
         self.HIGH_MATCH_EPS = 1e-10
 
@@ -1377,12 +2016,16 @@ class MomentumStrategy(BaseStrategy):
             'low_date', 'low_price',
             'high_date', 'high_price',
             'last_index', 'new_opening_count',
-            'basis_ready', 'pos_basis', 'neg_basis',
+            'basis_ready', 'pos_basis', 'neg_basis', 'shared_basis',
             'active_open_threshold',
             'active_open_cont_threshold',
             'active_open_wd_threshold',
             'active_close_threshold',
             'active_close_wd_threshold',
+            'frozen_shared_basis',
+            'frozen_open_threshold',
+            'frozen_open_cont_threshold',
+            'frozen_open_wd_threshold',
         ]
 
     def get_default_columns(self) -> dict:
@@ -1398,12 +2041,83 @@ class MomentumStrategy(BaseStrategy):
         """每根K线记录策略状态到signal"""
         ctx.signal.at[ctx.index, 'last_index'] = self.last_index
         ctx.signal.at[ctx.index, 'new_opening_count'] = self.new_opening_count
+        ctx.signal.at[ctx.index, 'frozen_shared_basis'] = self.frozen_shared_basis
+        ctx.signal.at[ctx.index, 'frozen_open_threshold'] = self.frozen_open_threshold
+        ctx.signal.at[ctx.index, 'frozen_open_cont_threshold'] = (
+            self.frozen_open_cont_threshold
+        )
+        ctx.signal.at[ctx.index, 'frozen_open_wd_threshold'] = (
+            self.frozen_open_wd_threshold
+        )
 
     @staticmethod
     def _apply_min_threshold(value, min_threshold):
         if pd.isna(value):
             return np.nan
         return max(float(value), float(min_threshold))
+
+    def _clear_frozen_open_thresholds(self):
+        self.frozen_shared_basis = np.nan
+        self.frozen_open_threshold = np.nan
+        self.frozen_open_cont_threshold = np.nan
+        self.frozen_open_wd_threshold = np.nan
+
+    def _has_frozen_open_thresholds(self) -> bool:
+        return not any(pd.isna(v) for v in (
+            self.frozen_open_threshold,
+            self.frozen_open_cont_threshold,
+            self.frozen_open_wd_threshold,
+        ))
+
+    def _build_frozen_open_thresholds(
+            self,
+            quote: pd.DataFrame,
+            low_index: int) -> dict | None:
+        p = self.params
+        threshold_mode = p.get('threshold_mode', 'fixed')
+        if threshold_mode == 'fixed':
+            return {
+                'frozen_shared_basis': np.nan,
+                'open_threshold': float(p['open_threshold']),
+                'open_continous_threshold': float(p['open_continous_threshold']),
+                'open_withdrawal_threshold': float(p['open_withdrawal_threshold']),
+            }
+
+        if low_index <= 0:
+            return None
+
+        basis_row = quote.iloc[low_index - 1]
+        pos_basis = basis_row['adaptive_pos_basis']
+        neg_basis = basis_row['adaptive_neg_basis']
+        if pd.isna(pos_basis) or pd.isna(neg_basis):
+            return None
+
+        shared_basis = max(float(pos_basis), float(neg_basis))
+        return {
+            'frozen_shared_basis': shared_basis,
+            'open_threshold': self._apply_min_threshold(
+                shared_basis * p['open_threshold'],
+                p['open_min_threshold'],
+            ),
+            'open_continous_threshold': self._apply_min_threshold(
+                shared_basis * p['open_continous_threshold'],
+                p['open_cont_min_threshold'],
+            ),
+            'open_withdrawal_threshold': self._apply_min_threshold(
+                shared_basis * p['open_withdrawal_threshold'],
+                p['open_wd_min_threshold'],
+            ),
+        }
+
+    def _apply_frozen_open_thresholds(self, frozen_thresholds: dict):
+        self.frozen_shared_basis = frozen_thresholds['frozen_shared_basis']
+        self.frozen_open_threshold = frozen_thresholds['open_threshold']
+        self.frozen_open_cont_threshold = (
+            frozen_thresholds['open_continous_threshold']
+        )
+        self.frozen_open_wd_threshold = (
+            frozen_thresholds['open_withdrawal_threshold']
+        )
 
     def _resolve_thresholds(self, ctx: BarContext) -> dict:
         quote = ctx.quote
@@ -1414,6 +2128,7 @@ class MomentumStrategy(BaseStrategy):
         threshold_mode = p.get('threshold_mode', 'fixed')
         pos_basis = np.nan
         neg_basis = np.nan
+        shared_basis = np.nan
         basis_ready = 1
 
         if threshold_mode == 'fixed':
@@ -1432,25 +2147,27 @@ class MomentumStrategy(BaseStrategy):
                 if 'adaptive_neg_basis' in quote.columns else np.nan
             )
             basis_ready = int((not pd.isna(pos_basis)) and (not pd.isna(neg_basis)))
+            if basis_ready:
+                shared_basis = max(float(pos_basis), float(neg_basis))
 
             open_threshold = self._apply_min_threshold(
-                pos_basis * p['open_threshold'],
+                shared_basis * p['open_threshold'],
                 p['open_min_threshold'],
             )
             open_continous_threshold = self._apply_min_threshold(
-                pos_basis * p['open_continous_threshold'],
+                shared_basis * p['open_continous_threshold'],
                 p['open_cont_min_threshold'],
             )
             open_withdrawal_threshold = self._apply_min_threshold(
-                neg_basis * p['open_withdrawal_threshold'],
+                shared_basis * p['open_withdrawal_threshold'],
                 p['open_wd_min_threshold'],
             )
             close_threshold = self._apply_min_threshold(
-                pos_basis * p['close_threshold'],
+                shared_basis * p['close_threshold'],
                 p['close_min_threshold'],
             )
             close_withdrawal_threshold = self._apply_min_threshold(
-                neg_basis * p['close_withdrawal_threshold'],
+                shared_basis * p['close_withdrawal_threshold'],
                 p['close_wd_min_threshold'],
             )
         else:
@@ -1459,6 +2176,7 @@ class MomentumStrategy(BaseStrategy):
         signal.at[index, 'basis_ready'] = basis_ready
         signal.at[index, 'pos_basis'] = pos_basis
         signal.at[index, 'neg_basis'] = neg_basis
+        signal.at[index, 'shared_basis'] = shared_basis
         signal.at[index, 'active_open_threshold'] = open_threshold
         signal.at[index, 'active_open_cont_threshold'] = open_continous_threshold
         signal.at[index, 'active_open_wd_threshold'] = open_withdrawal_threshold
@@ -1489,6 +2207,21 @@ class MomentumStrategy(BaseStrategy):
         open_withdrawal_threshold = thresholds['open_withdrawal_threshold']
         close_threshold = thresholds['close_threshold']
         close_withdrawal_threshold = thresholds['close_withdrawal_threshold']
+        if self._has_frozen_open_thresholds():
+            open_threshold = self.frozen_open_threshold
+            open_continous_threshold = self.frozen_open_cont_threshold
+            open_withdrawal_threshold = self.frozen_open_wd_threshold
+            signal.at[index, 'active_open_threshold'] = open_threshold
+            signal.at[index, 'active_open_cont_threshold'] = open_continous_threshold
+            signal.at[index, 'active_open_wd_threshold'] = open_withdrawal_threshold
+            signal.at[index, 'frozen_shared_basis'] = self.frozen_shared_basis
+            signal.at[index, 'frozen_open_threshold'] = self.frozen_open_threshold
+            signal.at[index, 'frozen_open_cont_threshold'] = (
+                self.frozen_open_cont_threshold
+            )
+            signal.at[index, 'frozen_open_wd_threshold'] = (
+                self.frozen_open_wd_threshold
+            )
 
         # 1. last_index 赋值
         if self.new_opening:
@@ -1530,6 +2263,27 @@ class MomentumStrategy(BaseStrategy):
                                       rtol=0.0, atol=self.HIGH_MATCH_EPS):
                             self.low_index = i
                             break
+                    candidate_frozen_thresholds = self._build_frozen_open_thresholds(
+                        quote,
+                        self.low_index,
+                    )
+                    if candidate_frozen_thresholds is None:
+                        self.new_opening = True
+                        self.new_opening_count = 1
+                        self.var0 = 0
+                        self.first_cond1_price = 0
+                        self.analysis_increase = 0
+                        self._clear_frozen_open_thresholds()
+                        return None
+                    self._apply_frozen_open_thresholds(candidate_frozen_thresholds)
+                    signal.at[index, 'frozen_shared_basis'] = self.frozen_shared_basis
+                    signal.at[index, 'frozen_open_threshold'] = self.frozen_open_threshold
+                    signal.at[index, 'frozen_open_cont_threshold'] = (
+                        self.frozen_open_cont_threshold
+                    )
+                    signal.at[index, 'frozen_open_wd_threshold'] = (
+                        self.frozen_open_wd_threshold
+                    )
                     signal.at[index, 'low_index'] = self.low_index
                     signal.at[index, 'low_date'] = str(
                         signal.at[self.low_index, 'date'])
@@ -1599,6 +2353,7 @@ class MomentumStrategy(BaseStrategy):
                 self.new_opening_count = 0
                 self.first_cond1_price = 0
                 self.analysis_increase = 0
+                self._clear_frozen_open_thresholds()
 
             # var0=4: 涨速不够 reset
             if self.var0 == 4:
@@ -1617,6 +2372,7 @@ class MomentumStrategy(BaseStrategy):
                 self.new_opening_count = ii - self.recent_low_index + 1
                 self.first_cond1_price = 0
                 self.analysis_increase = 0
+                self._clear_frozen_open_thresholds()
 
             # 开仓信号
             if signal.at[index, 'total_inc_signal'] == 1:
@@ -1644,6 +2400,7 @@ class MomentumStrategy(BaseStrategy):
         self.new_opening_count = ctx.integer_index - result.low_index
         self.var0 = 0
         self.new_opening = True
+        self._clear_frozen_open_thresholds()
 
     def adjust_and_validate_open_execution(self, ctx: BarContext,
                                            result: OpenResult,
@@ -1684,7 +2441,7 @@ class MomentumStrategy(BaseStrategy):
         open_continous_threshold2 = p['open_continous_threshold2']
         thresholds = self._resolve_thresholds(ctx)
         close_threshold = thresholds['close_threshold']
-        close_withdrawal_threshold = thresholds['close_withdrawal_threshold']
+        close_withdrawal_threshold_floor = thresholds['close_withdrawal_threshold']
 
         # 初始化
         if self.new_opening:
@@ -1715,6 +2472,18 @@ class MomentumStrategy(BaseStrategy):
                 signal.at[index, 'speed_close_signal'] = 1
 
         # 回撤条件
+        holding_high = float(holding_slice['high'].max())
+        low_price = float(quote.iloc[self.low_index]['low'])
+        max_increase_abs = max(holding_high - low_price, 0.0)
+        dynamic_withdrawal_abs = max_increase_abs * (2.0 / 3.0)
+        dynamic_close_withdrawal_threshold = (
+            dynamic_withdrawal_abs / holding_high if holding_high != 0 else 0
+        )
+        if dynamic_close_withdrawal_threshold > close_withdrawal_threshold_floor:
+            close_withdrawal_threshold = dynamic_close_withdrawal_threshold
+        else:
+            close_withdrawal_threshold = close_withdrawal_threshold_floor
+
         with_high, holding_withdrawal = get_withdrawal(
             holding_slice, close_withdrawal_threshold, ii, switch0=True)
         holding_withdrawal_percent = (
@@ -1734,12 +2503,11 @@ class MomentumStrategy(BaseStrategy):
                 signal.at[index, 'holding_wd_signal'] = 1
 
         period = ii - self.holding_start_index + 1
-        signal.at[index, 'high_price'] = max(holding_slice['high'])
+        signal.at[index, 'high_price'] = holding_high
 
         # 回撤平仓
         if signal.at[index, 'holding_wd_signal'] == 1:
-            exec_price = (max(holding_slice['high'])
-                          * (1 - close_withdrawal_threshold))
+            exec_price = holding_high * (1 - close_withdrawal_threshold)
             if exec_price > quote.loc[index, 'open']:
                 exec_price = quote.loc[index, 'open']
             return CloseResult(
@@ -1847,72 +2615,224 @@ class MomentumStrategy(BaseStrategy):
 if __name__ == '__main__':
 
     # --- 数据加载 ---
-    folder_path = DATA_FOLDER_PATH
-    file_name = DATA_FILE_NAME
+    folder_path = data_folder_path
+    file_name = data_file_name
 
-    df, ROUND_PRECISION, BAR_SECONDS = load_data(folder_path, file_name)
-    open_bar_cfg = minutes_to_bars(open_bar_minutes, BAR_SECONDS, 'open_bar')
-    close_bar_cfg = minutes_to_bars(close_bar_minutes, BAR_SECONDS, 'close_bar')
-    open_bar2_cfg = minutes_to_bars_optional(
-        open_bar2_minutes, BAR_SECONDS, 'open_bar2'
+    native_df, ROUND_PRECISION, NATIVE_BAR_SECONDS = load_data(folder_path, file_name)
+    run_mode = str(run_mode).strip().lower()
+    if run_mode not in ('manual', 'grid'):
+        raise ValueError("run_mode must be 'manual' or 'grid'.")
+    data_selection_mode = str(data_selection_mode).strip().lower()
+    if data_selection_mode not in ('index', 'date'):
+        raise ValueError("data_selection_mode must be 'index' or 'date'.")
+
+    if data_selection_mode == 'index':
+        range_start_label = start_index
+        range_end_label = end_index
+        if end_index == 'latest':
+            native_preview_df = native_df.iloc[int(start_index):].copy()
+        else:
+            native_preview_df = native_df.iloc[int(start_index):int(end_index)].copy()
+        print(f'[Main] native index range: ({start_index}, {end_index})')
+    else:
+        native_dates = pd.to_datetime(native_df['Date'], errors='coerce')
+        if native_dates.isna().all():
+            raise ValueError('Date column cannot be parsed for date selection.')
+        start_ts = parse_selection_datetime(start_date, is_end=False)
+        end_text = str(end_date).strip()
+        if end_text.lower() == 'latest':
+            date_mask = native_dates >= start_ts
+        else:
+            end_ts = parse_selection_datetime(end_text, is_end=True)
+            if end_ts < start_ts:
+                raise ValueError('end_date must be >= start_date.')
+            date_mask = native_dates.between(start_ts, end_ts, inclusive='both')
+        native_preview_df = native_df.loc[date_mask].copy()
+        range_start_label = start_date
+        range_end_label = end_date
+        print(f'[Main] native date range: {start_date} -> {end_date}')
+
+    if len(native_preview_df) == 0:
+        raise ValueError(
+            f'No data in selected range: {range_start_label} -> {range_end_label}'
+        )
+    print(
+        f'[Main] native time range: '
+        + f'{native_preview_df.iloc[0]["Date"]} -> {native_preview_df.iloc[-1]["Date"]}'
     )
+
+    if (resample_rule or '').strip():
+        preview_df, BAR_SECONDS = resample_ohlc_df(native_preview_df, resample_rule)
+        print(f'[Data] resampled to {resample_rule}  |  bar period: {BAR_SECONDS}s')
+        if (
+            len(preview_df) > 0
+            and should_drop_incomplete_initial_resampled_bar(
+                native_preview_df, resample_rule)
+        ):
+            dropped_bar_date = preview_df.iloc[0]['Date']
+            preview_df = preview_df.iloc[1:].reset_index(drop=True)
+            print(
+                '[Data] dropped incomplete initial resampled bar: '
+                + str(dropped_bar_date)
+            )
+    else:
+        preview_df = native_preview_df.copy()
+        BAR_SECONDS = NATIVE_BAR_SECONDS
+        print(f'[Data] using native period  |  bar period: {BAR_SECONDS}s')
+    if len(preview_df) == 0:
+        raise ValueError('No data remains after resampling the selected native range.')
+
+    period_label = format_period_label(resample_rule, BAR_SECONDS)
+    open_bar_cfg = int(OPEN_BAR)
+    close_bar_cfg = int(CLOSE_BAR)
+    open_bar2_cfg = np.nan if pd.isna(OPEN_BAR2) else int(OPEN_BAR2)
+    basis_span_bars_cfg = int(BASIS_SPAN_BARS)
+    basis_subwindow_bars_cfg = int(BASIS_SUBWINDOW_BARS)
+    if min(open_bar_cfg, close_bar_cfg, basis_span_bars_cfg, basis_subwindow_bars_cfg) <= 0:
+        raise ValueError('OPEN_BAR, CLOSE_BAR, BASIS_SPAN_BARS, BASIS_SUBWINDOW_BARS must be positive.')
 
     # 创建输出文件夹
     os.makedirs('./result', exist_ok=True)
-    os.makedirs(f'./result/{file_name} long outcome/perf', exist_ok=True)
-    os.makedirs(f'./result/{file_name} long outcome/trans', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long_momentum_ratio outcome/perf', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long_momentum_ratio outcome/trans', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
     last_stats_html_path = None
 
-    # 选择回测时间区间
-    startdate = start_index
-    enddate = end_index
-
-    preview_df = df[df.index > startdate]
-    if enddate != 'latest':
-        preview_df = preview_df[preview_df.index < enddate]
-    if len(preview_df) == 0:
-        raise ValueError(
-            f'No data in selected range: START_INDEX={startdate}, END_INDEX={enddate}'
-        )
-    print(f'[Main] backtest index range: ({startdate}, {enddate})')
     print(f'[Main] backtest time range: {preview_df.iloc[0]["Date"]} -> {preview_df.iloc[-1]["Date"]}')
 
-    df5 = df[df.index > startdate]
-    if enddate != 'latest':
-        df5 = df5[df5.index < enddate].reset_index(drop=True)
+    df5 = preview_df.reset_index(drop=True).copy()
     underlying = df5.copy()
+    run_name = (
+        f'period_{period_label} '
+        + f'{make_safe_range_token(range_start_label)}-'
+        + f'{make_safe_range_token(range_end_label)}'
+    )
+    dashboard_outcome_stats_path = (
+        './result/%s long_momentum_ratio outcome/outcome stats/' % file_name
+        + run_name + ' outcome_stats.xlsx'
+    )
 
     only_close_cfg = only_close
     if only_close_cfg:
         underlying.open = underlying.low = underlying.high = underlying.close
 
+    export_stats_enabled = EXPORT_STATS or (run_mode == 'manual')
+    export_interactive_html_enabled = (
+        EXPORT_INTERACTIVE_HTML or (run_mode == 'manual')
+    )
+
     threshold_mode = THRESHOLD_MODE
-    basis_span_minutes_cfg = basis_span_minutes
-    basis_subwindow_minutes_cfg = basis_subwindow_minutes
     print(f'[Main] threshold mode: {threshold_mode}')
 
     if threshold_mode == 'adaptive_directional_test':
         underlying = precompute_long_adaptive_bases(
             underlying,
             BAR_SECONDS,
-            basis_span_minutes_cfg,
-            basis_subwindow_minutes_cfg,
+            basis_span_bars_cfg,
+            basis_subwindow_bars_cfg,
             aggregation_method=BASIS_AGGREGATION_METHOD,
         )
 
+    if run_mode == 'manual' and (resample_rule or '').strip():
+        if threshold_mode == 'adaptive_directional_test':
+            shared_basis_series = pd.concat(
+                [
+                    underlying['adaptive_pos_basis'].astype(float),
+                    underlying['adaptive_neg_basis'].astype(float),
+                ],
+                axis=1,
+            ).max(axis=1)
+            open_threshold_series = (
+                shared_basis_series
+                * float(OPEN_POS_MULTIPLIER)
+            ).clip(lower=float(OPEN_POS_MIN_THRESHOLD))
+            open_cont_threshold_series = (
+                shared_basis_series
+                * float(OPEN_CONTINOUS_POS_MULTIPLIER)
+            ).clip(lower=float(OPEN_CONTINOUS_POS_MIN_THRESHOLD))
+        else:
+            open_threshold_series = pd.Series(
+                float(open_threshold_cfg),
+                index=underlying.index,
+                dtype='float64',
+            )
+            open_cont_threshold_series = pd.Series(
+                float(open_continous_threshold_cfg),
+                index=underlying.index,
+                dtype='float64',
+            )
+
+        prompt_manual_intrabar_precheck(
+            native_preview_df,
+            preview_df,
+            BAR_SECONDS,
+            open_threshold_series,
+            open_cont_threshold_series,
+            metric_kind='ratio',
+        )
+
     # --- 参数循环 ---
-    for_num_1_cfg = for_num_1
-    for_num_2_cfg = for_num_2
-    for_num_3_cfg = for_num_3
+    if run_mode == 'manual':
+        for_num_1_cfg = 1
+        for_num_2_cfg = 1
+        for_num_3_cfg = 1
+        num_range = [0]
+        i_range = [0]
+    else:
+        for_num_1_cfg = for_num_1
+        for_num_2_cfg = for_num_2
+        for_num_3_cfg = for_num_3
+        num_range = range(for_num_1_cfg)
+        i_range = range(for_num_2_cfg)
     print(for_num_1_cfg, for_num_2_cfg, for_num_3_cfg)
     step1_cfg = step1
     step2_cfg = step2
     step3_cfg = step3
+    executed_run_count = 0
+    if run_mode == 'grid':
+        outcome_stats = load_existing_outcome_stats(dashboard_outcome_stats_path)
+        existing_param_tags = set(outcome_stats.index.astype(str).tolist())
+        if len(existing_param_tags) > 0:
+            print(
+                '[Grid] loaded existing stats rows: '
+                + str(len(existing_param_tags))
+            )
+        planned_param_tags = build_planned_param_tags_long_ratio(
+            threshold_mode,
+            int(for_num_1_cfg),
+            int(for_num_2_cfg),
+            float(step1_cfg),
+            float(step2_cfg),
+            int(open_bar_cfg),
+            int(close_bar_cfg),
+            float(open_threshold_cfg),
+            float(open_withdrawal_threshold_cfg),
+            float(close_threshold_cfg),
+            float(open_continous_threshold_cfg),
+            float(close_withdrawal_threshold_cfg),
+            int(basis_span_bars_cfg),
+            int(basis_subwindow_bars_cfg),
+        )
+        completed_param_tags = planned_param_tags.intersection(existing_param_tags)
+        total_search_space = len(planned_param_tags)
+        progress_marks = build_progress_marks(total_search_space)
+        printed_progress_marks = set()
+        print_search_progress(
+            len(completed_param_tags),
+            total_search_space,
+            progress_marks,
+            printed_progress_marks,
+        )
+    else:
+        existing_param_tags = set()
+        completed_param_tags = set()
+        total_search_space = 0
+        progress_marks = {}
+        printed_progress_marks = set()
 
-    for num in range(for_num_1_cfg):
-        for i in range(for_num_2_cfg):
+    for num in num_range:
+        for i in i_range:
             print(f'{str(num)} {str(i)}\n')
 
             # 策略参数
@@ -1936,10 +2856,13 @@ if __name__ == '__main__':
                 close_withdrawal_threshold = (
                     close_withdrawal_threshold_cfg + (num * step2_cfg)
                 )
-            # 双策略
+
+            # WARNING: legacy secondary strategy parameters are preserved only as comments/traces.
             open_bar2 = open_bar2_cfg
             open_threshold2_runtime = open_threshold2_cfg
             open_continous_threshold2_runtime = open_continous_threshold2_cfg
+            # WARNING: `close_withdrawal_threshold2` still follows the first loop index
+            # and is not consumed by MomentumStrategy in the current implementation.
             close_withdrawal_threshold2_runtime = close_withdrawal_threshold2_cfg + (num * step3_cfg)
             commision_percent = COMMISION_PERCENT
             capital = CAPITAL
@@ -1974,25 +2897,27 @@ if __name__ == '__main__':
                     print('open_continous_threshold不可小于close_withdrawal_threshold')
                     continue
 
-            # Window_Increase 预计算
-            arr = underlying[['low', 'high', 'open', 'close']].to_numpy(dtype=float)
-            n = arr.shape[0]
-            win = open_bar
-            window_increase = np.full(n, np.nan, dtype=float)
-            for end in range(win - 1, n):
-                start = end - win + 1
-                w = arr[start:end + 1]
-                win_low = w[0, 0]
-                win_high = w[0, 1] if w[0, 2] >= w[0, 3] else w[0, 3]
-                for j in range(1, win):
-                    low_j, high_j, close_j = w[j, 0], w[j, 1], w[j, 3]
-                    if low_j <= win_low:
-                        win_low = low_j
-                        win_high = close_j
-                    elif high_j > win_high:
-                        win_high = high_j
-                window_increase[end] = win_high - win_low
-            underlying['Window_Increase'] = window_increase
+            param_tag = build_long_param_tag(
+                threshold_mode,
+                open_bar,
+                open_threshold,
+                open_continous_threshold,
+                open_withdrawal_threshold,
+                close_bar,
+                close_threshold,
+                close_withdrawal_threshold,
+                basis_span_bars=(
+                    basis_span_bars_cfg
+                    if threshold_mode == 'adaptive_directional_test' else None
+                ),
+                basis_subwindow_bars=(
+                    basis_subwindow_bars_cfg
+                    if threshold_mode == 'adaptive_directional_test' else None
+                ),
+            )
+            if run_mode == 'grid' and param_tag in existing_param_tags:
+                print('[Grid] skip existing param: ' + param_tag)
+                continue
 
             # ====== 使用引擎运行回测 ======
             params = {
@@ -2017,7 +2942,8 @@ if __name__ == '__main__':
             strategy = MomentumStrategy(params)
             engine = BacktestEngine(
                 underlying, strategy, capital,
-                ROUND_PRECISION, commision_percent)
+                ROUND_PRECISION, commision_percent,
+                show_progress=(run_mode != 'grid'))
             (df_signal, signal, close_counts) = engine.run()
             withdrawal_close_count = close_counts.get(1, 0)
             speed_close_count = close_counts.get(2, 0)
@@ -2033,24 +2959,6 @@ if __name__ == '__main__':
                 Capital_outcome = 100
             perf_outcome = performance.reset_index(
                 drop=True)[['date', 'capital']]
-            param_tag = build_long_param_tag(
-                threshold_mode,
-                open_bar,
-                open_threshold,
-                open_continous_threshold,
-                open_withdrawal_threshold,
-                close_bar,
-                close_threshold,
-                close_withdrawal_threshold,
-                basis_span_minutes=(
-                    basis_span_minutes_cfg
-                    if threshold_mode == 'adaptive_directional_test' else None
-                ),
-                basis_subwindow_minutes=(
-                    basis_subwindow_minutes_cfg
-                    if threshold_mode == 'adaptive_directional_test' else None
-                ),
-            )
             count_tag = (
                 str(round(withdrawal_close_count, 4))
                 + '+' + str(round(speed_close_count, 4))
@@ -2058,7 +2966,7 @@ if __name__ == '__main__':
             result_tag = param_tag + ' ' + count_tag
 
             # 打印结果
-            print(str(startdate) + '-' + str(enddate))
+            print(str(range_start_label) + '-' + str(range_end_label))
             print('total close count = '
                   + str(withdrawal_close_count + speed_close_count))
             print('withdrawal close count = '
@@ -2069,11 +2977,11 @@ if __name__ == '__main__':
             print('profit: ' + str(round(performance.capital.iloc[-1], 2)))
 
             # ====== Plot (fig1) ======
-            save_name = str(startdate) + '-' + str(enddate) + ' ' + result_tag
+            save_name = run_name + ' ' + result_tag
 
             if (
                     threshold_mode == 'adaptive_directional_test'
-                    and EXPORT_STATS
+                    and export_stats_enabled
             ):
                 export_first_long_basis_snapshot_excel(
                     file_name=file_name,
@@ -2081,17 +2989,17 @@ if __name__ == '__main__':
                     quote=underlying,
                     open_bar=open_bar,
                     bar_seconds=BAR_SECONDS,
-                    basis_span_minutes_cfg=basis_span_minutes_cfg,
-                    basis_subwindow_minutes_cfg=basis_subwindow_minutes_cfg,
+                    basis_span_bars_cfg=basis_span_bars_cfg,
+                    basis_subwindow_bars_cfg=basis_subwindow_bars_cfg,
                 )
 
             fig1_title = str(Capital_outcome) + ' ' + save_name
             if SAVE_STATIC_PLOT:
                 plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-                fig1_path = ('./result/%s long outcome/' % file_name
+                fig1_path = ('./result/%s long_momentum_ratio outcome/' % file_name
                              + ' ' + str(Capital_outcome)
                              + save_name + f' Long.{plot_ext}')
-                close_fig = (for_num_2_cfg != 1) or (len(transactions_df) == 0)
+                close_fig = (run_mode != 'manual') or (len(transactions_df) == 0)
                 plot_backtest_chart(
                     underlying, transactions_df, perf_outcome,
                     title=fig1_title,
@@ -2115,7 +3023,7 @@ if __name__ == '__main__':
                     ['holding_wd', 'holding_inc', 'execution'],
                     axis=1, inplace=True)
 
-            if threshold_mode == 'adaptive_directional_test' and EXPORT_STATS:
+            if threshold_mode == 'adaptive_directional_test' and export_stats_enabled:
                 underlying1_stats = underlying.reset_index(drop=True)
                 factor_stats = underlying1_stats['open'].iloc[0]
                 last_stats_html_path = export_interactive_html_long_basis(
@@ -2124,104 +3032,156 @@ if __name__ == '__main__':
                     title='adaptive thresholds ' + str(Capital_outcome) + ' ' + save_name,
                     underlying1=underlying1_stats,
                     detail_df=detail_df,
+                    transactions_df=transactions_df,
                     factor=factor_stats,
                 )
 
             perf_name = (
                 param_tag + ' ' + count_tag
-                + ' ' + 'Long ' + str(startdate) + '-' + str(enddate)
+                + ' ' + run_name + ' Long'
                 + ' ' + str(Capital_outcome)
                 + ' ' + 'perf.xlsx'
             )
-            writer1 = pd.ExcelWriter(
-                './result/%s long outcome/perf/' % file_name + perf_name,
-                engine='xlsxwriter')
-            detail_df.to_excel(writer1, sheet_name='stats')
-            workbook = writer1.book
-            worksheet = writer1.sheets['stats']
-            worksheet.set_default_row(15)
-            fmt = workbook.add_format()
-            fmt.set_font_name('Microsoft YaHei UI Light')
-            fmt.set_align('justify')
-            fmt.set_align('center')
-            fmt.set_align('vjustify')
-            fmt.set_align('vcenter')
-            fmt.set_font_size(12)
-            fmt1 = workbook.add_format({'num_format': '0'})
-            fmt1.set_font_name('Microsoft YaHei UI Light')
-            fmt1.set_align('justify')
-            fmt1.set_align('center')
-            fmt1.set_align('vjustify')
-            fmt1.set_align('vcenter')
-            worksheet.set_column('A:A', 7, fmt1)
-            worksheet.set_column('B:B', 18.5, fmt1)
-            worksheet.set_column('C:C', 12, fmt)
-            worksheet.set_column('D:D', 10, fmt)
-            worksheet.set_column('E:E', 9, fmt)
-            worksheet.set_column('F:F', 12, fmt)
-            worksheet.set_column('G:G', 11, fmt)
-            worksheet.set_column('H:H', 11, fmt)
-            worksheet.set_column('I:I', 11, fmt)
-            worksheet.set_column('J:J', 13, fmt)
-            worksheet.set_column('K:K', 9, fmt1)
-            worksheet.set_column('L:L', 8, fmt1)
-            worksheet.set_column('M:O', 8, fmt)
-            worksheet.set_column('P:P', 7.8, fmt1)
-            worksheet.set_column('Q:R', 10, fmt)
-            worksheet.set_column('S:S', 11.8, fmt)
-            worksheet.set_column('T:Y', 10.4, fmt)
-            worksheet.set_column('Z:Z', 22, fmt)
-            worksheet.freeze_panes(1, 2)
-            writer1.close()
+            if export_stats_enabled:
+                writer1 = pd.ExcelWriter(
+                    './result/%s long_momentum_ratio outcome/perf/' % file_name + perf_name,
+                    engine='xlsxwriter')
+                detail_df.to_excel(writer1, sheet_name='stats')
+                workbook = writer1.book
+                worksheet = writer1.sheets['stats']
+                worksheet.set_default_row(15)
+                fmt = workbook.add_format()
+                fmt.set_font_name('Microsoft YaHei UI Light')
+                fmt.set_align('justify')
+                fmt.set_align('center')
+                fmt.set_align('vjustify')
+                fmt.set_align('vcenter')
+                fmt.set_font_size(12)
+                fmt1 = workbook.add_format({'num_format': '0'})
+                fmt1.set_font_name('Microsoft YaHei UI Light')
+                fmt1.set_align('justify')
+                fmt1.set_align('center')
+                fmt1.set_align('vjustify')
+                fmt1.set_align('vcenter')
+                worksheet.set_column('A:A', 7, fmt1)
+                worksheet.set_column('B:B', 18.5, fmt1)
+                worksheet.set_column('C:C', 12, fmt)
+                worksheet.set_column('D:D', 10, fmt)
+                worksheet.set_column('E:E', 9, fmt)
+                worksheet.set_column('F:F', 12, fmt)
+                worksheet.set_column('G:G', 11, fmt)
+                worksheet.set_column('H:H', 11, fmt)
+                worksheet.set_column('I:I', 11, fmt)
+                worksheet.set_column('J:J', 13, fmt)
+                worksheet.set_column('K:K', 9, fmt1)
+                worksheet.set_column('L:L', 8, fmt1)
+                worksheet.set_column('M:O', 8, fmt)
+                worksheet.set_column('P:P', 7.8, fmt1)
+                worksheet.set_column('Q:R', 10, fmt)
+                worksheet.set_column('S:S', 11.8, fmt)
+                worksheet.set_column('T:Y', 10.4, fmt)
+                worksheet.set_column('Z:Z', 22, fmt)
+                worksheet.freeze_panes(1, 2)
+                writer1.close()
 
-            if len(transactions_df) != 0:
-                writer2 = pd.ExcelWriter(
-                    './result/%s long outcome/trans/' % file_name
-                    + param_tag + ' ' + count_tag + ' '
-                    + 'Long ' + str(startdate) + '-' + str(enddate)
-                    + ' ' + str(Capital_outcome)
-                    + ' ' + 'trans.xlsx', engine='xlsxwriter')
-                transactions_df.reset_index(
-                    drop=False).to_excel(writer2, sheet_name='stats')
-                workbook2 = writer2.book
-                worksheet2 = writer2.sheets['stats']
-                worksheet2.set_default_row(21)
-                fmt3 = workbook2.add_format()
-                fmt3.set_num_format('0')
-                fmt3.set_font_name('Microsoft YaHei UI Light')
-                fmt3.set_align('justify')
-                fmt3.set_align('center')
-                fmt3.set_align('vjustify')
-                fmt3.set_align('vcenter')
-                worksheet2.set_column('B:B', 17, fmt3)
-                fmt2 = workbook2.add_format()
-                fmt2.set_font_name('Microsoft YaHei UI Light')
-                fmt2.set_align('justify')
-                fmt2.set_align('center')
-                fmt2.set_align('vjustify')
-                fmt2.set_align('vcenter')
-                fmt2.set_font_size(12)
-                worksheet2.set_column('A:A', 11, fmt2)
-                worksheet2.set_column('C:D', 11, fmt2)
-                worksheet2.set_column('E:E', 14, fmt2)
-                worksheet2.set_column('F:G', 13, fmt2)
-                writer2.close()
+                if len(transactions_df) != 0:
+                    writer2 = pd.ExcelWriter(
+                        './result/%s long_momentum_ratio outcome/trans/' % file_name
+                        + param_tag + ' ' + count_tag + ' '
+                        + run_name + ' Long'
+                        + ' ' + str(Capital_outcome)
+                        + ' ' + 'trans.xlsx', engine='xlsxwriter')
+                    transactions_df.reset_index(
+                        drop=False).to_excel(writer2, sheet_name='stats')
+                    workbook2 = writer2.book
+                    worksheet2 = writer2.sheets['stats']
+                    worksheet2.set_default_row(21)
+                    fmt3 = workbook2.add_format()
+                    fmt3.set_num_format('0')
+                    fmt3.set_font_name('Microsoft YaHei UI Light')
+                    fmt3.set_align('justify')
+                    fmt3.set_align('center')
+                    fmt3.set_align('vjustify')
+                    fmt3.set_align('vcenter')
+                    worksheet2.set_column('B:B', 17, fmt3)
+                    fmt2 = workbook2.add_format()
+                    fmt2.set_font_name('Microsoft YaHei UI Light')
+                    fmt2.set_align('justify')
+                    fmt2.set_align('center')
+                    fmt2.set_align('vjustify')
+                    fmt2.set_align('vcenter')
+                    fmt2.set_font_size(12)
+                    worksheet2.set_column('A:A', 11, fmt2)
+                    worksheet2.set_column('C:D', 11, fmt2)
+                    worksheet2.set_column('E:E', 14, fmt2)
+                    worksheet2.set_column('F:G', 13, fmt2)
+                    writer2.close()
 
             # Stats
             outcome_index = param_tag
-            perf_temp = perf_outcome[-1:].capital.iloc[0] - 100
-            outcome_stats.at[outcome_index, 'capital'] = perf_temp + 100
-            trade_num = len(transactions_df) / 2
-            outcome_stats.at[outcome_index, 'trade_num'] = trade_num
-            outcome_high, outcome_wd = get_outcome_withdrawal(
-                perf_outcome.capital)
-            outcome_stats.at[outcome_index, 'outcome_high'] = outcome_high
-            outcome_stats.at[outcome_index, 'biggest_wd'] = outcome_wd
+            summary_metrics = build_summary_metrics(
+                perf_outcome,
+                transactions_df,
+                initial_capital=capital,
+            )
+            summary_row = {
+                'threshold_mode': threshold_mode,
+                'period_label': period_label,
+                'range_start_label': range_start_label,
+                'range_end_label': range_end_label,
+                'basis_span_bars': (
+                    basis_span_bars_cfg
+                    if threshold_mode == 'adaptive_directional_test'
+                    else np.nan
+                ),
+                'basis_subwindow_bars': (
+                    basis_subwindow_bars_cfg
+                    if threshold_mode == 'adaptive_directional_test'
+                    else np.nan
+                ),
+                'open_bar': open_bar,
+                'close_bar': close_bar,
+                'open_threshold': open_threshold,
+                'open_continous_threshold': open_continous_threshold,
+                'open_withdrawal_threshold': open_withdrawal_threshold,
+                'close_threshold': close_threshold,
+                'close_withdrawal_threshold': close_withdrawal_threshold,
+                'withdrawal_close_count': withdrawal_close_count,
+                'speed_close_count': speed_close_count,
+            }
+            for metric_name, metric_value in summary_metrics.items():
+                summary_row[metric_name] = metric_value
+            summary_row['capital'] = summary_metrics['final_capital']
+            summary_row['trade_num'] = summary_metrics['trade_num']
+            summary_row['outcome_high'] = summary_metrics['outcome_high']
+            summary_row['biggest_wd'] = summary_metrics['biggest_wd_abs']
+            for metric_name, metric_value in summary_row.items():
+                outcome_stats.at[outcome_index, metric_name] = metric_value
+            existing_param_tags.add(str(outcome_index))
+            if run_mode == 'grid':
+                completed_param_tags.add(str(outcome_index))
+                print_search_progress(
+                    len(completed_param_tags),
+                    total_search_space,
+                    progress_marks,
+                    printed_progress_marks,
+                )
+            executed_run_count += 1
 
     print("\ntime = --- %s seconds ---" % (time.time() - start_time))
 
+    if len(outcome_stats) == 0:
+        raise ValueError('No parameter combination was executed.')
+    if run_mode == 'grid' and executed_run_count == 0:
+        print('[Grid] no new parameter executed in this run.')
+
+    outcome_stats.index.name = 'param_tag'
+    os.makedirs('./result/%s long_momentum_ratio outcome/outcome stats/' % file_name,
+                exist_ok=True)
+    outcome_stats.to_excel(dashboard_outcome_stats_path)
+
     # 多参数对比图
-    if for_num_2_cfg > 1:
+    if run_mode == 'grid' and len(outcome_stats) > 1:
         fig_stat_1 = plt.figure('stats', figsize=(18, 9))
         left = 0.033
         width = 0.943
@@ -2241,28 +3201,31 @@ if __name__ == '__main__':
         ax_stat_1.xaxis.set_major_locator(plt.MaxNLocator(12))
         plt.xticks(rotation=70)
         fig_stat_1.legend()
-        plt.title('stats ' + str(startdate) + '-' + str(enddate))
-        os.makedirs('./result/stats %s long outcome/' % file_name, exist_ok=True)
+        plt.title('stats ' + run_name)
+        os.makedirs('./result/stats %s long_momentum_ratio outcome/' % file_name, exist_ok=True)
         stats_plot_ext = 'pdf' if SAVE_PLOT_AS_PDF else 'png'
-        plt.savefig('./result/stats %s long outcome/' % file_name
-                    + ' ' + save_name + ' '
+        plt.savefig('./result/stats %s long_momentum_ratio outcome/' % file_name
+                    + ' ' + run_name + ' '
                     + str(for_num_1_cfg) + ' '
                     + str(for_num_2_cfg) + ' '
                     + f'all outcome.{stats_plot_ext}', dpi=1000)
-        outcome_stats.to_excel('./result/stats %s long outcome/' % file_name
-                               + ' ' + save_name + ' '
-                               + str(for_num_1_cfg) + ' '
-                               + str(for_num_2_cfg) + ' '
-                               + 'all outcome.xlsx')
+        legacy_outcome_stats_path = (
+            './result/stats %s long_momentum_ratio outcome/' % file_name
+            + ' ' + run_name + ' '
+            + str(for_num_1_cfg) + ' '
+            + str(for_num_2_cfg) + ' '
+            + 'all outcome.xlsx'
+        )
+        outcome_stats.to_excel(legacy_outcome_stats_path)
     else:
         disk_path = './result/'
         open_excel = False
         if open_excel:
             os.startfile(
-                disk_path + '%s long outcome/perf/' % file_name + perf_name)
+                disk_path + '%s long_momentum_ratio outcome/perf/' % file_name + perf_name)
 
     # ====== 交互式图 (fig2) ======
-    if for_num_2_cfg == 1:
+    if run_mode == 'manual' and executed_run_count == 1:
         fig2 = plt.figure(figsize=(18, 9))
         left = 0.043
         width = 0.943
@@ -2327,10 +3290,17 @@ if __name__ == '__main__':
                 low_date = pref_data['low_date']
                 new_opening_count = pref_data['new_opening_count']
                 low_price = pref_data['low_price']
+                shared_basis = round(pref_data['shared_basis'] * 100, 4)
+                frozen_shared_basis = round(pref_data['frozen_shared_basis'] * 100, 4)
+                frozen_open_cont = round(
+                    pref_data['frozen_open_cont_threshold'] * 100, 4)
                 text = (date[:-5] + ' ' + date[-5:] + '\n'
                         + 'high: ' + str(high) + '\n'
                         + 'total_inc: ' + str(t_inc_per) + '%' + '\n'
                         + 'execution: ' + str(execution) + '\n'
+                        + 'shared_basis: ' + str(shared_basis) + '%' + '\n'
+                        + 'frozen_shared_basis: ' + str(frozen_shared_basis) + '%' + '\n'
+                        + 'frozen_open_cont: ' + str(frozen_open_cont) + '%' + '\n'
                         + 'low_date: ' + str(low_date) + '\n'
                         + 'low_price: ' + str(low_price) + '\n'
                         + 'new_opening_count: '
@@ -2469,7 +3439,7 @@ if __name__ == '__main__':
         fig2_title = (
             ' ' + str(round(Capital_outcome, 2))
             + ' ' + result_tag
-            + ' ' + str(startdate) + '-' + str(enddate)
+            + ' ' + run_name
         )
         plt.title('%s' % fig2_title)
 
@@ -2481,7 +3451,9 @@ if __name__ == '__main__':
         candlestick2_ohlc(ax2, underlying_ratio.open, underlying_ratio.high,
                           underlying_ratio.low, underlying_ratio.close,
                           width=0.7,
-                          colorup='salmon', colordown='#2ca02c')
+                          colorup=CANDLE_UP_FILL_COLOR_MPL,
+                          colordown=CANDLE_DOWN_FILL_COLOR_MPL)
+        draw_long_gap_lines(ax2, underlying1)
 
         # 蓝线连接买卖点 (fig2)
         trade_seq = transactions_df[
@@ -2503,7 +3475,7 @@ if __name__ == '__main__':
                 buy_idx = None
                 buy_y = None
         ax2.xaxis.set_major_locator(plt.MaxNLocator(12))
-        if EXPORT_INTERACTIVE_HTML:
+        if export_interactive_html_enabled:
             export_interactive_html_long(
                 file_name=file_name,
                 save_name=save_name,
@@ -2515,7 +3487,7 @@ if __name__ == '__main__':
             )
         plt.show()
 
-    if EXPORT_STATS and last_stats_html_path:
+    if export_stats_enabled and last_stats_html_path:
         try:
             if hasattr(os, 'startfile'):
                 os.startfile(last_stats_html_path)

@@ -48,15 +48,15 @@ DATA_FILE_NAME = "xagusd_30s_all"
 # START_INDEX / END_INDEX 按当前实际回测周期解释。
 # 采用切片语义 [START_INDEX, END_INDEX)。
 # 例如 RESAMPLE_RULE = '30min' 时，0~150 表示前 150 根 30 分钟 bar。
-START_INDEX = 0
-END_INDEX = 3000  # 或 'latest'
+START_INDEX = 5000
+END_INDEX = 10000  # 或 'latest'
 ONLY_CLOSE = False
 
 # 重采样设置：设为 '' 表示直接使用当前原始周期
 # 例如 '1min' / '5min' / '15min' / '1H'
-RESAMPLE_RULE = ''
-TREND_W_MIN_BARS = 3
-TREND_W_MAX_BARS = 50
+RESAMPLE_RULE = '1H'
+TREND_W_MIN_BARS = 1
+TREND_W_MAX_BARS = 10
 DEBUG_TREND_SEARCH = False
 DEBUG_RECORD_FROM_INDEX = None
 # DEBUG_TREND_SEARCH = True
@@ -352,6 +352,7 @@ def build_trend_multiple_summary_df(quote: pd.DataFrame,
             'trend_atr_multiple',
             'duration_bars',
             'duration_minutes',
+            'segment_max_drawdown_pct',
             'low_date',
             'high_date',
             'end_date',
@@ -384,6 +385,7 @@ def build_trend_multiple_summary_df(quote: pd.DataFrame,
             'trend_atr_multiple',
             'duration_bars',
             'duration_minutes',
+            'segment_max_drawdown_pct',
             'low_date',
             'high_date',
             'end_date',
@@ -402,6 +404,21 @@ def build_trend_multiple_summary_df(quote: pd.DataFrame,
     else:
         summary_df['duration_minutes'] = np.nan
 
+    segment_max_drawdown_pct_values = []
+    for _, row in summary_df.iterrows():
+        low_index = int(row['low_index'])
+        high_index = int(row['high_index'])
+        seg = quote.iloc[low_index:high_index + 1]
+        if len(seg) == 0:
+            segment_max_drawdown_pct_values.append(np.nan)
+            continue
+        max_wd = get_max_wd(seg)
+        if pd.notna(max_wd):
+            segment_max_drawdown_pct_values.append(float(max_wd) * 100.0)
+        else:
+            segment_max_drawdown_pct_values.append(np.nan)
+    summary_df['segment_max_drawdown_pct'] = segment_max_drawdown_pct_values
+
     summary_df = summary_df.sort_values(
         ['trend_atr_multiple', 'duration_bars', 'trade_id'],
         ascending=[False, False, True]
@@ -414,6 +431,7 @@ def build_trend_multiple_summary_df(quote: pd.DataFrame,
         'trend_atr_multiple',
         'duration_bars',
         'duration_minutes',
+        'segment_max_drawdown_pct',
         'low_date',
         'high_date',
         'end_date',
@@ -438,6 +456,7 @@ def export_trend_multiple_ranked_html(file_name: str,
 
     plot_df = trend_multiple_df.copy()
     hover_text = []
+    drawdown_hover_text = []
     for _, row in plot_df.iterrows():
         duration_minutes = (
             f"{float(row['duration_minutes']):.2f}"
@@ -449,10 +468,20 @@ def export_trend_multiple_ranked_html(file_name: str,
             f"trend_multiple: {float(row['trend_atr_multiple']):.4f}<br>"
             f"duration_bars: {int(row['duration_bars'])}<br>"
             f"duration_minutes: {duration_minutes}<br>"
+            f"segment_max_drawdown_pct: {float(row['segment_max_drawdown_pct']):.4f}%<br>"
             f"low_time: {row['low_date']}<br>"
             f"high_time: {row['high_date']}<br>"
             f"end_time: {row['end_date']}<br>"
             f"total_return_pct: {float(row['total_return_pct']):.4f}%"
+        )
+        drawdown_hover_text.append(
+            f"rank: {int(row['multiple_rank'])}<br>"
+            f"segment: {int(row['trade_id'])}<br>"
+            f"segment_max_drawdown_pct: {float(row['segment_max_drawdown_pct']):.4f}%<br>"
+            f"trend_multiple: {float(row['trend_atr_multiple']):.4f}<br>"
+            f"duration_bars: {int(row['duration_bars'])}<br>"
+            f"low_time: {row['low_date']}<br>"
+            f"high_time: {row['high_date']}"
         )
 
     fig_html = go.Figure()
@@ -466,13 +495,31 @@ def export_trend_multiple_ranked_html(file_name: str,
         ),
         name='trend_multiple',
     ))
+    fig_html.add_trace(go.Bar(
+        x=plot_df['multiple_rank'].astype(int).tolist(),
+        y=plot_df['segment_max_drawdown_pct'].astype(float).tolist(),
+        hovertext=drawdown_hover_text,
+        hovertemplate='%{hovertext}<extra></extra>',
+        marker=dict(
+            color='rgba(255, 99, 71, 0.24)',
+        ),
+        name='segment_max_drawdown_pct',
+    ))
 
     fig_html.update_layout(
         title='Trend Multiple Ranked Segments',
         template='plotly_white',
         autosize=True,
         hovermode='closest',
-        showlegend=False,
+        barmode='overlay',
+        showlegend=True,
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.01,
+            xanchor='left',
+            x=0,
+        ),
         xaxis=dict(
             title='rank by trend_multiple',
             tickfont=dict(size=10),
@@ -483,7 +530,7 @@ def export_trend_multiple_ranked_html(file_name: str,
             tickfont=dict(size=10),
             showgrid=False,
         ),
-        margin=dict(l=42, r=25, t=48, b=45, pad=0),
+        margin=dict(l=42, r=25, t=58, b=45, pad=0),
         hoverlabel=dict(
             bgcolor='rgba(255, 255, 255, 0.50)',
             bordercolor='rgba(0, 0, 0, 0.45)',
@@ -3472,26 +3519,30 @@ html, body {{
 #app {{
     width: 100%;
     height: 100%;
-    display: flex;
-    flex-direction: row;
     position: relative;
 }}
 #sidebar {{
-    width: 250px;
-    height: 100%;
+    width: 286px;
+    max-height: calc(100% - 28px);
     box-sizing: border-box;
-    padding: 18px 16px;
-    border-right: 1px solid rgba(0,0,0,0.10);
-    background: rgba(248,249,250,0.98);
-    transform: translateX(-100%);
+    padding: 18px 16px 16px 16px;
+    border: 1px solid rgba(0,0,0,0.10);
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.14);
+    background: rgba(248,249,250,0.97);
+    backdrop-filter: blur(10px);
+    transform: translateX(calc(-100% - 18px));
     transition: transform 0.22s ease;
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 3;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 6;
+    overflow-y: auto;
+    pointer-events: none;
 }}
 #sidebar.open {{
     transform: translateX(0);
+    pointer-events: auto;
 }}
 #sidebar h2 {{
     margin: 0 0 14px 0;
@@ -3508,13 +3559,52 @@ html, body {{
     font-size: 13px;
     color: #22344f;
 }}
-#sidebar input {{
+#sidebar input,
+#sidebar select {{
     width: 100%;
     box-sizing: border-box;
     padding: 8px 10px;
     border: 1px solid rgba(0,0,0,0.20);
     border-radius: 8px;
     font-size: 14px;
+    background: rgba(255,255,255,0.96);
+    color: #22344f;
+}}
+#sidebar input[type=number] {{
+    appearance: textfield;
+    -moz-appearance: textfield;
+}}
+#sidebar input[type=number]::-webkit-outer-spin-button,
+#sidebar input[type=number]::-webkit-inner-spin-button {{
+    -webkit-appearance: none;
+    margin: 0;
+}}
+#sidebar .number-wrap {{
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+}}
+#sidebar .number-wrap input {{
+    flex: 1 1 auto;
+}}
+#sidebar .stepper {{
+    flex: 0 0 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}}
+#sidebar .step-btn {{
+    flex: 1 1 auto;
+    padding: 0;
+    border: 1px solid rgba(0,0,0,0.16);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.96);
+    color: #20324d;
+    font-size: 12px;
+    cursor: pointer;
+}}
+#sidebar .step-btn:hover {{
+    background: rgba(236,242,248,0.96);
 }}
 #sidebar .hint {{
     margin-top: 10px;
@@ -3523,10 +3613,10 @@ html, body {{
     color: rgba(0,0,0,0.62);
 }}
 #toggle-btn {{
-    position: absolute;
+    position: fixed;
     top: 14px;
     left: 14px;
-    z-index: 5;
+    z-index: 7;
     padding: 8px 12px;
     border: 1px solid rgba(0,0,0,0.18);
     border-radius: 10px;
@@ -3534,12 +3624,15 @@ html, body {{
     color: #20324d;
     font-size: 14px;
     cursor: pointer;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.12);
+    transition: left 0.22s ease;
+}}
+#toggle-btn.sidebar-open {{
+    left: 314px;
 }}
 #main {{
-    flex: 1 1 auto;
     width: 100%;
     height: 100%;
-    min-width: 0;
     position: relative;
 }}
 #summary {{
@@ -3602,11 +3695,116 @@ const xMin = {x_min};
 const xMax = {x_max};
 const xLeftPad = {x_left_pad};
 const xRightPad = {x_right_pad};
-const multipleInput = document.getElementById('multiple-input');
 const sidebar = document.getElementById('sidebar');
 const toggleBtn = document.getElementById('toggle-btn');
+sidebar.innerHTML = ''
+    + '<h2>筛选设置</h2>'
+    + '<div class="field">'
+    + '  <label for="multiple-input">最小 multiple</label>'
+    + '  <div class="number-wrap">'
+    + '    <input id="multiple-input" type="number" min="' + minVisibleMultiple.toFixed(1) + '" step="0.1" value="' + defaultMultiple.toFixed(1) + '">'
+    + '    <div class="stepper">'
+    + '      <button id="multiple-step-up" class="step-btn" type="button" aria-label="increase">▲</button>'
+    + '      <button id="multiple-step-down" class="step-btn" type="button" aria-label="decrease">▼</button>'
+    + '    </div>'
+    + '  </div>'
+    + '</div>'
+    + '<div class="field">'
+    + '  <label for="multiple-select">可用阈值</label>'
+    + '  <select id="multiple-select"></select>'
+    + '</div>'
+    + '<div class="hint">'
+    + '  默认阈值为 ' + defaultMultiple.toFixed(1) + '。<br>'
+    + '  小于 ' + minVisibleMultiple.toFixed(1) + ' 的样本不会显示。<br>'
+    + '  high point 的 hover 第一行显示 multiple。'
+    + '</div>'
+    + '<div id="summary"></div>';
+toggleBtn.textContent = '筛选';
+const multipleInput = document.getElementById('multiple-input');
+const multipleSelect = document.getElementById('multiple-select');
+const multipleStepUp = document.getElementById('multiple-step-up');
+const multipleStepDown = document.getElementById('multiple-step-down');
 const summaryBox = document.getElementById('summary');
 const chartDiv = document.getElementById('chart');
+
+function buildAvailableThresholds() {{
+    const values = [];
+    const seen = new Set();
+
+    function pushValue(rawValue) {{
+        const num = Number(rawValue);
+        if (!Number.isFinite(num)) {{
+            return;
+        }}
+        const rounded = Number(Math.max(minVisibleMultiple, num).toFixed(1));
+        const key = rounded.toFixed(1);
+        if (seen.has(key)) {{
+            return;
+        }}
+        seen.add(key);
+        values.push(rounded);
+    }}
+
+    pushValue(minVisibleMultiple);
+    pushValue(defaultMultiple);
+    sourceSegments.forEach(row => {{
+        pushValue(row.trend_atr_multiple);
+    }});
+    values.sort((a, b) => a - b);
+    return values;
+}}
+
+const availableThresholds = buildAvailableThresholds();
+
+function syncMultipleSelect(threshold) {{
+    const targetValue = threshold.toFixed(1);
+    const existing = Array.from(multipleSelect.options).find(
+        option => option.value === targetValue
+    );
+    const customOption = multipleSelect.querySelector('option[data-custom="1"]');
+
+    if (existing) {{
+        if (customOption) {{
+            customOption.remove();
+        }}
+        multipleSelect.value = targetValue;
+        return;
+    }}
+
+    if (customOption) {{
+        customOption.value = targetValue;
+        customOption.textContent = '当前值 ' + targetValue;
+    }} else {{
+        const option = document.createElement('option');
+        option.value = targetValue;
+        option.textContent = '当前值 ' + targetValue;
+        option.setAttribute('data-custom', '1');
+        multipleSelect.insertBefore(option, multipleSelect.firstChild);
+    }}
+    multipleSelect.value = targetValue;
+}}
+
+function populateMultipleSelect() {{
+    multipleSelect.innerHTML = '';
+    availableThresholds.forEach(value => {{
+        const option = document.createElement('option');
+        option.value = value.toFixed(1);
+        option.textContent = value.toFixed(1);
+        multipleSelect.appendChild(option);
+    }});
+}}
+
+function normalizeThreshold(rawValue) {{
+    let threshold = parseFloat(rawValue);
+    if (!Number.isFinite(threshold)) {{
+        threshold = defaultMultiple;
+    }}
+    threshold = Math.max(minVisibleMultiple, threshold);
+    threshold = Number(threshold.toFixed(1));
+    multipleInput.value = threshold.toFixed(1);
+    syncMultipleSelect(threshold);
+    return threshold;
+}}
 
 function buildSegmentTraces(filtered) {{
     const traces = [{{
@@ -3808,12 +4006,9 @@ function buildLayout(filteredCount) {{
 }}
 
 function renderTrendChart() {{
-    let threshold = parseFloat(multipleInput.value || String(defaultMultiple));
-    if (!Number.isFinite(threshold)) {{
-        threshold = defaultMultiple;
-    }}
-    threshold = Math.max(minVisibleMultiple, threshold);
-    multipleInput.value = threshold.toFixed(1);
+    const threshold = normalizeThreshold(
+        multipleInput.value || String(defaultMultiple)
+    );
 
     const filtered = sourceSegments.filter(
         row => row.trend_atr_multiple >= threshold
@@ -3835,8 +4030,24 @@ function renderTrendChart() {{
 
 toggleBtn.addEventListener('click', () => {{
     sidebar.classList.toggle('open');
+    toggleBtn.classList.toggle('sidebar-open', sidebar.classList.contains('open'));
 }});
 multipleInput.addEventListener('input', renderTrendChart);
+multipleSelect.addEventListener('change', () => {{
+    multipleInput.value = multipleSelect.value;
+    renderTrendChart();
+}});
+multipleStepUp.addEventListener('click', () => {{
+    const current = normalizeThreshold(multipleInput.value);
+    multipleInput.value = (current + 0.1).toFixed(1);
+    renderTrendChart();
+}});
+multipleStepDown.addEventListener('click', () => {{
+    const current = normalizeThreshold(multipleInput.value);
+    multipleInput.value = Math.max(minVisibleMultiple, current - 0.1).toFixed(1);
+    renderTrendChart();
+}});
+populateMultipleSelect();
 renderTrendChart();
 </script>
 </body>
@@ -3986,7 +4197,9 @@ def export_constraint_trend_case_html(
     high_idx = int(case_row['high_index'])
     end_idx = int(case_row['end_index']) if pd.notna(case_row['end_index']) else high_idx
     constraint_w = int(case_row['constraint_w_bars'])
-    view = underlying1.iloc[low_idx:end_idx + 1].copy()
+    context_bars = max(0, int(w_max))
+    view_start_idx = max(0, low_idx - context_bars)
+    view = underlying1.iloc[view_start_idx:end_idx + 1].copy()
     seg = underlying1.iloc[low_idx:high_idx + 1].copy()
     x_left = 0
     x_right = len(view) - 1
@@ -3994,17 +4207,20 @@ def export_constraint_trend_case_html(
     x_right_pad = x_left_pad
     x_view_left = x_left - x_left_pad
     x_view_right = x_right + x_right_pad
-    high_pos = high_idx - low_idx
-    end_pos = end_idx - low_idx
+    low_pos = low_idx - view_start_idx
+    high_pos = high_idx - view_start_idx
+    end_pos = end_idx - view_start_idx
     plot_x = list(range(len(view)))
-    seg_x = list(range(len(seg)))
+    seg_x = list(range(low_pos, low_pos + len(seg)))
     x_span = max(1, x_right - x_left)
     x_dtick = max(1, int(round(x_span / 8.0)))
     case_hovertext = []
     for bar_no, (abs_idx, row_view) in enumerate(view.iterrows(), start=0):
+        bars_from_low = bar_no - low_pos
         case_hovertext.append(
             f'bar_no: {bar_no}<br>'
             f'bar_index: {int(abs_idx)}<br>'
+            f'bars_from_low: {bars_from_low}<br>'
             f'time: {row_view["Date"]}<br>'
             f'open: {float(row_view["open"] / factor * 100):.4f}<br>'
             f'high: {float(row_view["high"] / factor * 100):.4f}<br>'
@@ -4080,14 +4296,14 @@ def export_constraint_trend_case_html(
         ), row=1, col=1)
 
     fig_html.add_trace(go.Scatter(
-        x=[0],
+        x=[low_pos],
         y=[float(case_row['low_price']) / factor * 100],
         mode='markers',
         marker=dict(color='#1F77B4', size=6),
         name='low',
         hovertemplate=(
             f'segment: {segment_id}<br>'
-            'bar_no: 0<br>'
+            f'bar_no: {low_pos}<br>'
             f'low_index: {low_idx}<br>'
             f'low_date: {case_row["low_date"]}<br>'
             f'low_price: {float(case_row["low_price"]):.4f}<extra></extra>'
@@ -4147,14 +4363,15 @@ def export_constraint_trend_case_html(
     has_row2_data = False
     if len(diag_x) > 0:
         has_row2_data = True
+        shifted_diag_x = [low_pos + int(x) for x in diag_x]
         aligned_diag_x, aligned_slope_y = align_series_to_view(
-            x_left, x_right, diag_x, diag_slope_pct
+            x_left, x_right, shifted_diag_x, diag_slope_pct
         )
         _, aligned_downward_y = align_series_to_view(
-            x_left, x_right, diag_x, diag_max_downward_dev_pct
+            x_left, x_right, shifted_diag_x, diag_max_downward_dev_pct
         )
         _, aligned_residual_std_y = align_series_to_view(
-            x_left, x_right, diag_x, diag_residual_std_pct
+            x_left, x_right, shifted_diag_x, diag_residual_std_pct
         )
         fig_html.add_trace(go.Scatter(
             x=aligned_diag_x,

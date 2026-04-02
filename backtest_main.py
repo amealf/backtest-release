@@ -25,6 +25,25 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
 
+def _get_long_gap_marker_positions(
+        df: pd.DataFrame,
+        min_gap: pd.Timedelta = pd.Timedelta(days=1)) -> list[float]:
+    if df.empty or 'Date' not in df.columns or len(df) < 2:
+        return []
+
+    dates = pd.to_datetime(df['Date'], errors='coerce')
+    positions = []
+    for pos in range(1, len(dates)):
+        prev_dt = dates.iloc[pos - 1]
+        curr_dt = dates.iloc[pos]
+        if pd.isna(prev_dt) or pd.isna(curr_dt):
+            continue
+        if curr_dt - prev_dt <= min_gap:
+            continue
+        positions.append(float(pos) - 0.5)
+    return positions
+
+
 # ============================================================
 # Data Loading & Validation
 # ============================================================
@@ -285,12 +304,14 @@ class BacktestEngine:
     """
 
     def __init__(self, quote, strategy: BaseStrategy, capital: float,
-                 round_precision: int, commision_percent: float):
+                 round_precision: int, commision_percent: float,
+                 show_progress: bool = True):
         self.quote = quote
         self.strategy = strategy
         self.capital = capital
         self.round_precision = round_precision
         self.commision_percent = commision_percent
+        self.show_progress = show_progress
 
     def run(self):
         signal = self._init_signal_df()
@@ -356,7 +377,7 @@ class BacktestEngine:
             self.strategy.on_bar_record(ctx)
 
             integer_index += 1
-            if integer_index in progress_marks:
+            if self.show_progress and integer_index in progress_marks:
                 pct = progress_marks[integer_index]
                 if pct not in printed_marks:
                     print(f'[Engine] progress: {pct}% ({integer_index}/{total_rows})')
@@ -470,6 +491,15 @@ def plot_backtest_chart(underlying, transactions_df, perf_outcome,
                       width=0.7,
                       colorup='salmon',
                       colordown='#2ca02c')
+    for gap_x in _get_long_gap_marker_positions(underlying1):
+        ax.axvline(
+            x=gap_x,
+            color='gray',
+            alpha=0.30,
+            linestyle='--',
+            linewidth=1.0,
+            zorder=0,
+        )
 
     # 买卖标记
     open_record = transactions_df[transactions_df.Type == open_type]
