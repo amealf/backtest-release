@@ -27,11 +27,17 @@ AUTO_OPEN_BROWSER = True
 # 手动指定结果大文件夹。
 # 例: PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long_momentum outcome"
 # 留空时，页面继续使用“选择结果文件夹”按钮。
-PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long_momentum outcome"
+PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long outcome"
 
 PROGRAM_ID_CLASSIC = "classic"
 PROGRAM_ID_CLASSIC_ATR = "classic_atr"
 PROGRAM_ID_RATIO = "ratio"
+RESULT_DIR_SUFFIXES = (
+    " long outcome",
+    " long_momentum outcome",
+    " long_momentum_ATR outcome",
+    " long_momentum_ratio outcome",
+)
 
 
 def _num(value):
@@ -350,7 +356,19 @@ def _preset_root() -> Path | None:
     root = Path(PRESET_RESULT_DIR).expanduser()
     if not root.is_absolute():
         root = (PROJECT_ROOT / root).resolve()
-    return root.resolve()
+    root = root.resolve()
+    if root.exists() and root.is_dir():
+        return root
+    for suffix in RESULT_DIR_SUFFIXES:
+        if not root.name.endswith(suffix):
+            continue
+        prefix = root.name[: -len(suffix)]
+        for alt_suffix in RESULT_DIR_SUFFIXES:
+            candidate = root.with_name(prefix + alt_suffix)
+            if candidate.exists() and candidate.is_dir():
+                return candidate.resolve()
+        break
+    return root
 
 
 def _file_entry(path: Path, root: Path) -> dict:
@@ -1211,6 +1229,16 @@ detailParamDefs=function(){return[{id:"inputBar",field:"open_bar"},{id:"inputThr
 selKey=function(){const record=syncAvailableParams();return record?.selection_key||detailParamDefs().map(def=>keyOf($(def.id)?.value)).join("|")}
 inputsFrom=function(record){applyParamValue($("inputBar"),record?.open_bar??"",false);applyParamValue($("inputThreshold"),record?.open_threshold??"",false);applyParamValue($("inputCont"),record?.open_continous_threshold??"",false);applyParamValue($("inputWd"),record?.withdrawal_limit??"",false);syncAvailableParams()}
 loadSummary=async function(file){setStatus("正在读取 outcome_stats");const programId=state.programId||detectProgramId(state.folderLabel)||"classic";const queryProgram="program_id="+encodeURIComponent(programId);state.summary=file.relative_path?await fetchJson("/api/preset-summary?path="+encodeURIComponent(pathOf(file)||file.name)+"&"+queryProgram):await upload("/api/summary?"+queryProgram,file);state.programId=state.summary?.program_id||programId;configInput($("inputBar"),state.summary.controls.open_bar);configInput($("inputThreshold"),state.summary.controls.open_threshold);configInput($("inputCont"),state.summary.controls.open_continous_threshold);const wdInput=$("inputWd");if(wdInput){configInput(wdInput,state.summary.controls.withdrawal_limit)}overview();const record=recordByKey(state.summary.default_key);if(record){await setRecord(record,false)}else{syncAvailableParams()}setStatus("批次已载入");return state.summary}
+bootstrapPreset();
+</script>'''
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function detectProgramIdFromText(text){const lowered=String(text||"").toLowerCase();if(lowered.includes("long_momentum_ratio outcome"))return "ratio";if(lowered.includes("long_momentum_atr outcome"))return "classic_atr";if(lowered.includes("long_momentum outcome"))return "classic";if(/(^|\\s)(opm|ocpm|cpm|cwm|adt|bs|bw)\\S*/i.test(lowered))return "ratio";if(/(^|\\s)(oa|oca|owa|ca)\\S*/i.test(lowered))return "classic_atr";return ""}
+function detectProgramIdByFiles(files,folderLabel){const labelHit=detectProgramIdFromText(folderLabel);if(labelHit)return labelHit;const joined=(files||[]).slice(0,120).map(file=>String(file.name||"")+" "+String(pathOf(file)||"")).join("\\n");const fileHit=detectProgramIdFromText(joined);if(fileHit)return fileHit;return files&&files.length?"classic":""}
+folderChanged=function(files,folderLabel){const nextLabel=folderLabel||((files&&files.length)?(rel(files[0]).split("/")[0]||"已选择目录"):"");const programId=detectProgramIdByFiles(files,nextLabel)||"classic";state.programId=programId;const result=folderChangedBaseProgram(files,nextLabel);state.programId=programId;return result}
+loadSummary=async function(file){setStatus("正在读取 outcome_stats");const programId=state.programId||detectProgramIdByFiles(state.files,state.folderLabel)||"classic";const queryProgram="program_id="+encodeURIComponent(programId);state.summary=file.relative_path?await fetchJson("/api/preset-summary?path="+encodeURIComponent(pathOf(file)||file.name)+"&"+queryProgram):await upload("/api/summary?"+queryProgram,file);state.programId=state.summary?.program_id||programId;configInput($("inputBar"),state.summary.controls.open_bar);configInput($("inputThreshold"),state.summary.controls.open_threshold);configInput($("inputCont"),state.summary.controls.open_continous_threshold);const wdInput=$("inputWd");if(wdInput){configInput(wdInput,state.summary.controls.withdrawal_limit)}overview();const record=recordByKey(state.summary.default_key);if(record){await setRecord(record,false)}else{syncAvailableParams()}setStatus("批次已载入");return state.summary}
 bootstrapPreset();
 </script>'''
 )
