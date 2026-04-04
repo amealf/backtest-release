@@ -1341,6 +1341,100 @@ bootstrapPreset();
 </script>'''
 )
 
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function withdrawalLinkedToThreshold(){if(!state.summary?.records?.length){return false}const programId=state.summary?.program_id||state.programId||"";if(programId==="ratio"){return false}let seen=false;for(const row of state.summary.records){const threshold=keyOf(row?.open_threshold);const withdrawal=keyOf(row?.withdrawal_limit);if(!threshold||!withdrawal){return false}if(threshold!==withdrawal){return false}seen=true}return seen}
+function syncWithdrawalUiState(){const wdInput=$("inputWd");if(!wdInput){return}const label=wdInput.parentElement?.querySelector(".label");const linked=withdrawalLinkedToThreshold();if(label){label.textContent=linked?"回撤限制（随速度）":"回撤限制"}const ui=ensureParamUi(wdInput);if(linked){wdInput.disabled=true;if(ui){ui.select.disabled=true;ui.up.disabled=true;ui.down.disabled=true}return}const values=paramValues(wdInput);wdInput.disabled=!values.length;syncParamUi(wdInput)}
+const readParamSelectionsLinkedWithdrawal=readParamSelections;readParamSelections=function(){const out=readParamSelectionsLinkedWithdrawal();if(withdrawalLinkedToThreshold()){out.withdrawal_limit=out.open_threshold||out.withdrawal_limit||""}return out}
+const filterParamRowsLinkedWithdrawal=filterParamRows;filterParamRows=function(selections,ignoreField){if(!withdrawalLinkedToThreshold()){return filterParamRowsLinkedWithdrawal(selections,ignoreField)}const rows=state.summary?.records||[];const ignorePair=ignoreField==="open_threshold"||ignoreField==="withdrawal_limit";return rows.filter(row=>detailParamDefs().every(def=>{if(ignorePair&&(def.field==="open_threshold"||def.field==="withdrawal_limit")){return true}if(def.field===ignoreField){return true}const selected=def.field==="withdrawal_limit"?(selections.open_threshold||selections.withdrawal_limit):selections[def.field];return !selected||keyOf(row[def.field])===selected}))}
+const syncAvailableParamsLinkedWithdrawal=syncAvailableParams;syncAvailableParams=function(){const record=syncAvailableParamsLinkedWithdrawal();if(withdrawalLinkedToThreshold()){const threshold=keyOf($("inputThreshold")?.value);const wdInput=$("inputWd");if(wdInput&&threshold&&keyOf(wdInput.value)!==threshold){applyParamValue(wdInput,threshold,false)}}syncWithdrawalUiState();return record}
+const inputsFromLinkedWithdrawal=inputsFrom;inputsFrom=function(record){inputsFromLinkedWithdrawal(record);if(withdrawalLinkedToThreshold()){$("inputWd")&&applyParamValue($("inputWd"),record?.open_threshold??record?.withdrawal_limit??"",false)}syncWithdrawalUiState()}
+const loadSummaryLinkedWithdrawal=loadSummary;loadSummary=async function(file){const result=await loadSummaryLinkedWithdrawal(file);syncWithdrawalUiState();return result}
+const resetUiLinkedWithdrawal=resetUi;resetUi=function(){resetUiLinkedWithdrawal();const wdInput=$("inputWd");if(!wdInput){return}wdInput.disabled=false;const label=wdInput.parentElement?.querySelector(".label");if(label){label.textContent="回撤限制"}}
+const setupLayoutLinkedWithdrawal=setupLayout;setupLayout=function(){setupLayoutLinkedWithdrawal();syncWithdrawalUiState()}
+setupLayout();
+syncWithdrawalUiState();
+bootstrapPreset();
+</script>'''
+)
+
+PAGE = PAGE.replace(
+    "</style>",
+    """
+.param-select option.param-option-unavailable{color:#d99;background:#fff4f4}
+</style>"""
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function paramFieldMeta(el){const id=el?.id;return detailParamDefs().find(def=>def.id===id)||null}
+function paramUniverseValues(el){const meta=paramFieldMeta(el);if(!meta){return paramValues(el)}const controlValues=state.summary?.controls?.[meta.field]?.values;if(Array.isArray(controlValues)&&controlValues.length){return sortParamKeys(controlValues)}try{const allValues=JSON.parse(el?.dataset?.allValues||"[]");return sortParamKeys(allValues)}catch(error){return paramValues(el)}}
+paramValues=function(el){try{const allowed=JSON.parse(el?.dataset?.allowedValues||"[]");if(Array.isArray(allowed)&&allowed.length){return allowed}}catch(error){}try{return JSON.parse(el?.dataset?.values||"[]")}catch(error){return[]}}
+syncParamUi=function(el){const ui=ensureParamUi(el);if(!ui)return;const allowedValues=paramValues(el);const current=keyOf(el.value);if(current&&ui.select.value!==current){ui.select.value=current}const index=allowedValues.indexOf(current);const disabled=!!el.disabled||!allowedValues.length;ui.select.disabled=!!el.disabled;ui.up.disabled=disabled||index<0||index>=allowedValues.length-1;ui.down.disabled=disabled||index<=0}
+renderParamOptions=function(el,values){const ui=ensureParamUi(el);const allowed=sortParamKeys(values);const universe=paramUniverseValues(el);el.dataset.values=JSON.stringify(allowed);el.dataset.allowedValues=JSON.stringify(allowed);el.dataset.allValues=JSON.stringify(universe);const hasUniverse=universe.length>0;el.disabled=!hasUniverse;if(!hasUniverse){el.value="";el.removeAttribute("min");el.removeAttribute("max");if(ui){ui.select.innerHTML="";const option=document.createElement("option");option.value="";option.textContent="暂无参数";ui.select.appendChild(option)}syncParamUi(el);return allowed}el.min=universe[0];el.max=universe[universe.length-1];if(ui){ui.select.innerHTML="";for(const value of universe){const option=document.createElement("option");const enabled=allowed.includes(value);option.value=value;option.textContent=formatParamDisplay(value);option.className=enabled?"param-option-available":"param-option-unavailable";if(!enabled){option.disabled=true;option.style.color="#d99";option.style.backgroundColor="#fff4f4"}ui.select.appendChild(option)}}return allowed}
+const syncAvailableParamsShowUnavailable=syncAvailableParams;syncAvailableParams=function(){const record=syncAvailableParamsShowUnavailable();for(const def of detailParamDefs()){const el=$(def.id);if(el){syncParamUi(el)}}return record}
+bootstrapPreset();
+</script>'''
+)
+
+PAGE = PAGE.replace(
+    "</style>",
+    """
+.param-select option[data-unavailable="1"]{color:#e5a2a2;background:#fff3f3}
+</style>"""
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function paramFieldMetaFinal(el){const id=el?.id;return detailParamDefs().find(def=>def.id===id)||null}
+function paramUniverseValuesFinal(el){const meta=paramFieldMetaFinal(el);if(!meta){return[]}const controlValues=state.summary?.controls?.[meta.field]?.values;if(Array.isArray(controlValues)&&controlValues.length){return sortParamKeys(controlValues)}try{return sortParamKeys(JSON.parse(el?.dataset?.allValues||"[]"))}catch(error){return[]}}
+function paramAllowedValuesFinal(el,selections){const meta=paramFieldMetaFinal(el);if(!meta){return[]}return sortParamKeys(filterParamRows(selections||readParamSelections(),meta.field).map(row=>row?.[meta.field]))}
+function rebuildParamSelectFinal(el,allowed){const ui=ensureParamUi(el);if(!ui){return}const universe=paramUniverseValuesFinal(el);el.dataset.allowedValues=JSON.stringify(allowed);el.dataset.values=JSON.stringify(allowed);el.dataset.allValues=JSON.stringify(universe);el.disabled=!universe.length;if(!universe.length){ui.select.innerHTML="";const option=document.createElement("option");option.value="";option.textContent="暂无参数";ui.select.appendChild(option);syncParamUi(el);return}ui.select.innerHTML="";const allowedSet=new Set(allowed);for(const value of universe){const option=document.createElement("option");const enabled=allowedSet.has(value);option.value=value;option.textContent=formatParamDisplay(value);option.className=enabled?"param-option-available":"param-option-unavailable";option.dataset.unavailable=enabled?"0":"1";if(!enabled){option.disabled=true;option.style.color="#e5a2a2";option.style.backgroundColor="#fff3f3"}ui.select.appendChild(option)}const current=keyOf(el.value);if(current&&ui.select.value!==current){ui.select.value=current}syncParamUi(el)}
+function refreshUnavailableParamOptionsFinal(){if(!state.summary?.records?.length){return null}const selections=readParamSelections();for(const def of detailParamDefs()){const el=$(def.id);if(!el){continue}const allowed=paramAllowedValuesFinal(el,selections);rebuildParamSelectFinal(el,allowed)}return true}
+paramFieldMeta=paramFieldMetaFinal;
+paramUniverseValues=paramUniverseValuesFinal;
+renderParamOptions=function(el,values){const allowed=sortParamKeys(values);rebuildParamSelectFinal(el,allowed);return allowed}
+const syncAvailableParamsUnavailableFinal=syncAvailableParams;syncAvailableParams=function(){const record=syncAvailableParamsUnavailableFinal();refreshUnavailableParamOptionsFinal();return record}
+const loadSummaryUnavailableFinal=loadSummary;loadSummary=async function(file){const result=await loadSummaryUnavailableFinal(file);refreshUnavailableParamOptionsFinal();return result}
+const resetUiUnavailableFinal=resetUi;resetUi=function(){resetUiUnavailableFinal();for(const def of detailParamDefs()){const el=$(def.id);if(!el){continue}delete el.dataset.allowedValues;delete el.dataset.allValues}}
+window.paramFieldMeta=paramFieldMetaFinal;
+window.paramUniverseValues=paramUniverseValuesFinal;
+bootstrapPreset();
+</script>'''
+)
+
+PAGE = PAGE.replace(
+    '当前三元参数组合没有对应结果。',
+    '无数据'
+)
+PAGE = PAGE.replace(
+    '当前三元参数组合没有对应 trans.xlsx。',
+    '无数据'
+)
+PAGE = PAGE.replace(
+    '该参数组合没有结果',
+    '无数据'
+)
+
+PAGE = PAGE.replace(
+    "</style>",
+    """
+.param-select option.param-option-unavailable,.param-select option[data-unavailable="1"]{color:#152033 !important;background:#fff3f3 !important}
+</style>"""
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function paramUniverseSelectableFinal(el){if(typeof paramUniverseValuesFinal==="function"){return paramUniverseValuesFinal(el)}if(typeof paramUniverseValues==="function"){return paramUniverseValues(el)}return[]}
+function rebuildParamSelectSelectableFinal(el,allowed){const ui=ensureParamUi(el);if(!ui){return}const universe=paramUniverseSelectableFinal(el);el.dataset.allowedValues=JSON.stringify(allowed);el.dataset.values=JSON.stringify(allowed);el.dataset.allValues=JSON.stringify(universe);el.disabled=!universe.length;if(!universe.length){ui.select.innerHTML="";const option=document.createElement("option");option.value="";option.textContent="暂无参数";ui.select.appendChild(option);syncParamUi(el);return}ui.select.innerHTML="";const allowedSet=new Set(allowed);for(const value of universe){const option=document.createElement("option");const enabled=allowedSet.has(value);option.value=value;option.textContent=formatParamDisplay(value);option.className=enabled?"param-option-available":"param-option-unavailable";option.dataset.unavailable=enabled?"0":"1";if(!enabled){option.style.backgroundColor="#fff3f3"}ui.select.appendChild(option)}const current=keyOf(el.value);if(current&&ui.select.value!==current){ui.select.value=current}syncParamUi(el)}
+function syncAvailableParamsSelectableFinal(){if(!state.summary?.records?.length){return null}const defs=detailParamDefs();const selections=readParamSelections();for(const def of defs){const el=$(def.id);if(!el){continue}const universe=paramUniverseSelectableFinal(el);const current=selections[def.field];const next=universe.includes(current)?current:(universe[0]||"");selections[def.field]=next;if(keyOf(el.value)!==next){applyParamValue(el,next,false)}}if(typeof withdrawalLinkedToThreshold==="function"&&withdrawalLinkedToThreshold()){const threshold=keyOf($("inputThreshold")?.value);const wdInput=$("inputWd");if(wdInput&&threshold&&keyOf(wdInput.value)!==threshold){applyParamValue(wdInput,threshold,false)}selections.withdrawal_limit=threshold||selections.withdrawal_limit||""}for(const def of defs){const el=$(def.id);if(!el){continue}const allowed=sortParamKeys(filterParamRows(selections,def.field).map(row=>row?.[def.field]));rebuildParamSelectSelectableFinal(el,allowed)}if(typeof syncWithdrawalUiState==="function"){syncWithdrawalUiState()}const exactKey=defs.map(def=>keyOf($(def.id)?.value)).join("|");return recordByKey(exactKey)||null}
+syncAvailableParams=syncAvailableParamsSelectableFinal;
+selKey=function(){syncAvailableParamsSelectableFinal();return detailParamDefs().map(def=>keyOf($(def.id)?.value)).join("|")}
+const loadSummarySelectableFinal=loadSummary;loadSummary=async function(file){const result=await loadSummarySelectableFinal(file);syncAvailableParamsSelectableFinal();return result}
+bootstrapPreset();
+</script>'''
+)
+
 
 def run_dashboard_server() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
