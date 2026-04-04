@@ -1648,7 +1648,7 @@ if __name__ == '__main__':
     )
     dashboard_outcome_stats_path = (
         './result/%s long_momentum outcome/outcome stats/' % file_name
-        + run_name + ' outcome_stats.xlsx'
+        + 'long_momentum ' + run_name + ' outcome_stats.xlsx'
     )
     summary_dir = './result/stats %s long_momentum outcome/' % file_name
     os.makedirs(summary_dir, exist_ok=True)

@@ -1992,7 +1992,7 @@ if __name__ == '__main__':
     )
     dashboard_outcome_stats_path = (
         './result/%s long_momentum_ATR outcome/outcome stats/' % file_name
-        + run_name + ' outcome_stats.xlsx'
+        + 'long_momentum_ATR ' + run_name + ' outcome_stats.xlsx'
     )
 
     only_close_cfg = only_close

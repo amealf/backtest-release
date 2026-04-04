@@ -66,6 +66,13 @@ PARAM_PREFIX_TO_COLUMN = {
     "cwm": "close_withdrawal_threshold",
 }
 
+SUMMARY_PROGRAM_TAGS = (
+    "long_momentum_ratio",
+    "long_momentum_ATR",
+    "long_momentum_ARCH",
+    "long_momentum",
+)
+
 
 @dataclass(frozen=True)
 class DetailFile:
@@ -93,6 +100,43 @@ def resolve_result_dir(result_dir_value) -> Path:
     raise FileNotFoundError(
         "result dir does not exist. Checked:\n" + checked
     )
+
+
+def detect_summary_program_tag(result_dir: Path) -> str:
+    lowered = result_dir.name.lower()
+    for tag in SUMMARY_PROGRAM_TAGS:
+        if tag.lower() in lowered:
+            return tag
+    return "long_momentum"
+
+
+def resolve_summary_path(
+    outcome_stats_dir: Path,
+    run_name: str,
+    result_dir: Path,
+) -> Path:
+    expected_name = (
+        detect_summary_program_tag(result_dir)
+        + " "
+        + run_name
+        + " outcome_stats.xlsx"
+    )
+    preferred = outcome_stats_dir / expected_name
+    if preferred.exists():
+        return preferred
+
+    exact_legacy = outcome_stats_dir / f"{run_name} outcome_stats.xlsx"
+    if exact_legacy.exists():
+        return exact_legacy
+
+    matches = sorted(
+        outcome_stats_dir.glob(f"* {run_name} outcome_stats.xlsx"),
+        key=lambda path: path.stat().st_mtime_ns,
+        reverse=True,
+    )
+    if matches:
+        return matches[0]
+    return preferred
 
 
 def pick_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
@@ -356,7 +400,7 @@ def sync_result_dir(
 
     total_added = 0
     for run_name, items in sorted(by_run.items()):
-        summary_path = outcome_stats_dir / f"{run_name} outcome_stats.xlsx"
+        summary_path = resolve_summary_path(outcome_stats_dir, run_name, result_dir)
         summary_df = load_summary(summary_path)
         existing_tags = set(summary_df.index.astype(str))
         new_rows: list[tuple[str, dict[str, float]]] = []

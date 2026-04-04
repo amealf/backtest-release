@@ -32,9 +32,20 @@ PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_3
 PROGRAM_ID_CLASSIC = "classic"
 PROGRAM_ID_CLASSIC_ATR = "classic_atr"
 PROGRAM_ID_RATIO = "ratio"
+PROGRAM_TAG_CLASSIC = "long_momentum"
+PROGRAM_TAG_ARCH = "long_momentum_ARCH"
+PROGRAM_TAG_CLASSIC_ATR = "long_momentum_ATR"
+PROGRAM_TAG_RATIO = "long_momentum_ratio"
+SUMMARY_PROGRAM_TAGS = (
+    PROGRAM_TAG_RATIO,
+    PROGRAM_TAG_CLASSIC_ATR,
+    PROGRAM_TAG_ARCH,
+    PROGRAM_TAG_CLASSIC,
+)
 RESULT_DIR_SUFFIXES = (
     " long outcome",
     " long_momentum outcome",
+    " long_momentum_ARCH outcome",
     " long_momentum_ATR outcome",
     " long_momentum_ratio outcome",
 )
@@ -73,8 +84,18 @@ def _pick_col(df: pd.DataFrame, names: list[str]) -> str | None:
     return None
 
 
+def _strip_summary_program_tag(text: str) -> str:
+    stripped = str(text or "").strip()
+    lowered = stripped.lower()
+    for tag in SUMMARY_PROGRAM_TAGS:
+        prefix = tag.lower() + " "
+        if lowered.startswith(prefix):
+            return stripped[len(tag):].strip()
+    return stripped
+
+
 def _batch_label(file_name: str) -> str:
-    stem = Path(file_name).stem.strip()
+    stem = _strip_summary_program_tag(Path(file_name).stem.strip())
     lower = stem.lower()
     for suffix in (" outcome_stats",):
         if lower.endswith(suffix):
@@ -88,6 +109,14 @@ def _batch_label(file_name: str) -> str:
 
 def _detect_program_id(text: str | None) -> str | None:
     lowered = str(text or "").strip().lower()
+    if PROGRAM_TAG_RATIO.lower() in lowered:
+        return PROGRAM_ID_RATIO
+    if PROGRAM_TAG_CLASSIC_ATR.lower() in lowered:
+        return PROGRAM_ID_CLASSIC_ATR
+    if PROGRAM_TAG_ARCH.lower() in lowered:
+        return PROGRAM_ID_CLASSIC
+    if PROGRAM_TAG_CLASSIC.lower() in lowered:
+        return PROGRAM_ID_CLASSIC
     if "long_momentum_ratio outcome" in lowered:
         return PROGRAM_ID_RATIO
     if "long_momentum_atr outcome" in lowered:
@@ -385,6 +414,11 @@ def _preset_root() -> Path | None:
     return root
 
 
+def _is_ignored_result_file_name(name: str) -> bool:
+    lowered = str(name or "").strip().lower()
+    return bool(lowered) and lowered.startswith("~")
+
+
 def _file_entry(path: Path, root: Path) -> dict:
     stat = path.stat()
     return {
@@ -406,8 +440,11 @@ def _preset_files() -> dict:
 
     files = []
     for path in root.rglob("*"):
-        if path.is_file():
-            files.append(_file_entry(path, root))
+        if not path.is_file():
+            continue
+        if _is_ignored_result_file_name(path.name):
+            continue
+        files.append(_file_entry(path, root))
     files.sort(key=lambda item: item["last_modified"], reverse=True)
     return {
         "enabled": True,
@@ -1234,11 +1271,11 @@ PAGE = PAGE.replace(
     'bootstrapPreset();\n</script>',
     '''state.programId=state.programId||"";
 function detectProgramId(name){const lowered=String(name||"").toLowerCase();if(lowered.includes("long_momentum_ratio outcome"))return "ratio";if(lowered.includes("long_momentum_atr outcome"))return "classic_atr";if(lowered.includes("long_momentum outcome"))return "classic";return ""}
-function unsupportedFolderMessage(){return "当前目录名缺少策略标识。<br>请先运行旧目录重命名脚本，再选择结果大文件夹。"}
+function unsupportedFolderMessage(){return "当前结果目录还没识别出策略程序。<br>请检查 outcome_stats.xlsx 的文件名。"}
 const resetUiBaseProgram=resetUi;
 resetUi=function(){resetUiBaseProgram();state.programId=""}
 const folderChangedBaseProgram=folderChanged;
-folderChanged=function(files,folderLabel){const nextLabel=folderLabel||((files&&files.length)?(rel(files[0]).split("/")[0]||"已选择目录"):"");const programId=detectProgramId(nextLabel);if(files&&files.length&&!programId){resetUiBaseProgram();state.files=[...files];state.folderLabel=nextLabel;$("folderName").textContent=nextLabel||"未识别目录";$("metaFolder").textContent=nextLabel||"-";$("batchSelect").disabled=true;$("overviewEmpty").style.display="grid";$("overviewEmpty").innerHTML=unsupportedFolderMessage();if(typeof setOverview3dEmpty==="function"){setOverview3dEmpty(unsupportedFolderMessage())}setStatus("目录名未包含策略标识");return}state.programId=programId;const result=folderChangedBaseProgram(files,nextLabel);state.programId=programId;return result}
+folderChanged=function(files,folderLabel){const nextLabel=folderLabel||((files&&files.length)?(rel(files[0]).split("/")[0]||"已选择目录"):"");const programId=detectProgramId(nextLabel)||state.programId||(typeof detectProgramIdByFiles==="function"?detectProgramIdByFiles(files,nextLabel):"");if(files&&files.length&&!programId){resetUiBaseProgram();state.files=[...files];state.folderLabel=nextLabel;$("folderName").textContent=nextLabel||"未识别目录";$("metaFolder").textContent=nextLabel||"-";$("batchSelect").disabled=true;$("overviewEmpty").style.display="grid";$("overviewEmpty").innerHTML=unsupportedFolderMessage();if(typeof setOverview3dEmpty==="function"){setOverview3dEmpty(unsupportedFolderMessage())}setStatus("还没认出当前策略程序");return}state.programId=programId;const result=folderChangedBaseProgram(files,nextLabel);state.programId=programId;return result}
 detailParamDefs=function(){return[{id:"inputBar",field:"open_bar"},{id:"inputThreshold",field:"open_threshold"},{id:"inputCont",field:"open_continous_threshold"},{id:"inputWd",field:"withdrawal_limit"}]}
 selKey=function(){const record=syncAvailableParams();return record?.selection_key||detailParamDefs().map(def=>keyOf($(def.id)?.value)).join("|")}
 inputsFrom=function(record){applyParamValue($("inputBar"),record?.open_bar??"",false);applyParamValue($("inputThreshold"),record?.open_threshold??"",false);applyParamValue($("inputCont"),record?.open_continous_threshold??"",false);applyParamValue($("inputWd"),record?.withdrawal_limit??"",false);syncAvailableParams()}
@@ -1261,6 +1298,49 @@ PAGE = PAGE.replace(
     'function priceChart(price,trans){if(!price||!price.x.length){$("priceChart").style.display="none";$("priceEmpty").style.display="grid";$("priceEmpty").innerHTML="当前批次缺少可用的 perf.xlsx。";return}$("priceEmpty").style.display="none";$("priceChart").style.display="block";const candleX=price.x.map((_,index)=>index);const priceIndexMap=buildIndexMap(price.x);const shapes=gapShapes(price.x);const perfCapitalPoints=axisPoints(price.capital_x||[],price.capital_y||[],priceIndexMap);const traces=[{type:"candlestick",x:candleX,open:price.open,high:price.high,low:price.low,close:price.close,text:price.x,name:"price",increasing:{line:{color:CANDLE_UP_EDGE,width:0.8},fillcolor:CANDLE_UP_FILL},decreasing:{line:{color:CANDLE_DOWN_EDGE,width:0.8},fillcolor:CANDLE_DOWN_FILL},hovertemplate:"%{text}<br>open=%{open}<br>high=%{high}<br>low=%{low}<br>close=%{close}<extra></extra>"}];const capitalPoints=perfCapitalPoints.x.length?perfCapitalPoints:(trans?axisPoints(trans.capital_x,trans.capital_y,priceIndexMap):{x:[],y:[],text:[]});if(state.showCapitalOverlay&&capitalPoints.x.length)traces.unshift({type:"scatter",mode:"lines",x:capitalPoints.x,y:capitalPoints.y,text:capitalPoints.text,line:{color:ACCENT_BLUE,width:1.2},name:"capital",yaxis:"y2",hovertemplate:"%{text}<br>capital=%{y}<extra></extra>"});if(trans){const tradeLink=axisPoints(trans.trade_link_x,trans.trade_link_y,priceIndexMap,true);const buyPoints=axisPoints(trans.buy_points.x,trans.buy_points.y,priceIndexMap);const sellWdPoints=axisPoints(trans.sell_wd_points.x,trans.sell_wd_points.y,priceIndexMap);const sellSpeedPoints=axisPoints(trans.sell_speed_points.x,trans.sell_speed_points.y,priceIndexMap);if(tradeLink.x.length)traces.push({type:"scatter",mode:"lines",x:tradeLink.x,y:tradeLink.y,line:{color:ACCENT_BLUE,width:2},hoverinfo:"skip",name:"trade_link"});if(buyPoints.x.length)traces.push({type:"scatter",mode:"markers",x:buyPoints.x,y:buyPoints.y,text:buyPoints.text,marker:{color:"red",size:4},name:"buy",hovertemplate:"buy<br>%{text}<br>price=%{y}<extra></extra>"});if(sellWdPoints.x.length)traces.push({type:"scatter",mode:"markers",x:sellWdPoints.x,y:sellWdPoints.y,text:sellWdPoints.text,marker:{color:SELL_WD_COLOR,size:4},name:"sell_wd",hovertemplate:"sell_wd<br>%{text}<br>price=%{y}<extra></extra>"});if(sellSpeedPoints.x.length)traces.push({type:"scatter",mode:"markers",x:sellSpeedPoints.x,y:sellSpeedPoints.y,text:sellSpeedPoints.text,marker:{color:SELL_SPEED_COLOR,size:4},name:"sell_speed",hovertemplate:"sell_speed<br>%{text}<br>price=%{y}<extra></extra>"})}Plotly.newPlot($("priceChart"),traces,{margin:{l:48,r:52,t:12,b:36},paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"#fff",xaxis:numericAxis(price.x),yaxis:{title:"price",gridcolor:"#e8eef8",zeroline:false},yaxis2:{title:"capital",overlaying:"y",side:"right",showgrid:false,zeroline:false,visible:!!state.showCapitalOverlay},legend:{orientation:"h",yanchor:"bottom",y:1.02,xanchor:"left",x:0},shapes:shapes},{responsive:true,displayModeBar:false})}',
     'function priceChart(price,trans){if(!price||!price.x.length){$("priceChart").style.display="none";$("priceEmpty").style.display="grid";$("priceEmpty").innerHTML="当前批次缺少可用的 perf.xlsx。";return}$("priceEmpty").style.display="none";$("priceChart").style.display="block";const candleX=price.x.map((_,index)=>index);const priceIndexMap=buildIndexMap(price.x);const shapes=gapShapes(price.x);const perfCapitalPoints=axisPoints(price.capital_x||[],price.capital_y||[],priceIndexMap);const basePrice=Number(price.price_base);const scaleValue=value=>{if(value===null||value===undefined||value===\"\")return value;const num=Number(value);if(!Number.isFinite(num)||!Number.isFinite(basePrice)||basePrice===0)return num;return num/basePrice*100};const scaleAxisPoints=points=>({x:[...(points?.x||[])],y:(points?.y||[]).map(scaleValue),text:[...(points?.text||[])]});const traces=[{type:\"candlestick\",x:candleX,open:price.open,high:price.high,low:price.low,close:price.close,text:price.x,name:\"price\",increasing:{line:{color:CANDLE_UP_EDGE,width:0.8},fillcolor:CANDLE_UP_FILL},decreasing:{line:{color:CANDLE_DOWN_EDGE,width:0.8},fillcolor:CANDLE_DOWN_FILL},hovertemplate:\"%{text}<br>open=%{open:.4f}<br>high=%{high:.4f}<br>low=%{low:.4f}<br>close=%{close:.4f}<extra></extra>\"}];const capitalPoints=perfCapitalPoints.x.length?perfCapitalPoints:(trans?axisPoints(trans.capital_x,trans.capital_y,priceIndexMap):{x:[],y:[],text:[]});if(state.showCapitalOverlay&&capitalPoints.x.length)traces.unshift({type:\"scatter\",mode:\"lines\",x:capitalPoints.x,y:capitalPoints.y,text:capitalPoints.text,line:{color:ACCENT_BLUE,width:1.2},name:\"capital\",hovertemplate:\"%{text}<br>capital=%{y:.4f}<extra></extra>\"});if(trans){const tradeLink=scaleAxisPoints(axisPoints(trans.trade_link_x,trans.trade_link_y,priceIndexMap,true));const buyPoints=scaleAxisPoints(axisPoints(trans.buy_points.x,trans.buy_points.y,priceIndexMap));const sellWdPoints=scaleAxisPoints(axisPoints(trans.sell_wd_points.x,trans.sell_wd_points.y,priceIndexMap));const sellSpeedPoints=scaleAxisPoints(axisPoints(trans.sell_speed_points.x,trans.sell_speed_points.y,priceIndexMap));if(tradeLink.x.length)traces.push({type:\"scatter\",mode:\"lines\",x:tradeLink.x,y:tradeLink.y,line:{color:ACCENT_BLUE,width:2},hoverinfo:\"skip\",name:\"trade_link\"});if(buyPoints.x.length)traces.push({type:\"scatter\",mode:\"markers\",x:buyPoints.x,y:buyPoints.y,text:buyPoints.text,marker:{color:\"red\",size:4},name:\"buy\",hovertemplate:\"buy<br>%{text}<br>base100=%{y:.4f}<extra></extra>\"});if(sellWdPoints.x.length)traces.push({type:\"scatter\",mode:\"markers\",x:sellWdPoints.x,y:sellWdPoints.y,text:sellWdPoints.text,marker:{color:SELL_WD_COLOR,size:4},name:\"sell_wd\",hovertemplate:\"sell_wd<br>%{text}<br>base100=%{y:.4f}<extra></extra>\"});if(sellSpeedPoints.x.length)traces.push({type:\"scatter\",mode:\"markers\",x:sellSpeedPoints.x,y:sellSpeedPoints.y,text:sellSpeedPoints.text,marker:{color:SELL_SPEED_COLOR,size:4},name:\"sell_speed\",hovertemplate:\"sell_speed<br>%{text}<br>base100=%{y:.4f}<extra></extra>\"})}Plotly.newPlot($(\"priceChart\"),traces,{margin:{l:48,r:18,t:12,b:36},paper_bgcolor:\"rgba(0,0,0,0)\",plot_bgcolor:\"#fff\",xaxis:numericAxis(price.x),yaxis:{title:\"price (base=100)\",gridcolor:\"#e8eef8\",zeroline:false},legend:{orientation:\"h\",yanchor:\"bottom\",y:1.02,xanchor:\"left\",x:0},shapes:shapes},{responsive:true,displayModeBar:false})}'
 )
+
+PAGE = PAGE.replace(
+    'folderChanged=function(files,folderLabel){const nextLabel=folderLabel||((files&&files.length)?(rel(files[0]).split("/")[0]||"宸查€夋嫨鐩綍"):"");const programId=detectProgramIdByFiles(files,nextLabel)||"classic";state.programId=programId;const result=folderChangedBaseProgram(files,nextLabel);state.programId=programId;return result}',
+    'function isIgnoredResultFile(file){const name=String(file?.name||"").trim().toLowerCase();return !!name&&name.startsWith("~")}\nfolderChanged=function(files,folderLabel){const cleanFiles=[...(files||[])].filter(file=>!isIgnoredResultFile(file));const nextLabel=folderLabel||((cleanFiles&&cleanFiles.length)?(rel(cleanFiles[0]).split("/")[0]||"宸查€夋嫨鐩綍"):"");const programId=detectProgramIdByFiles(cleanFiles,nextLabel)||"classic";state.programId=programId;const result=folderChangedBaseProgram(cleanFiles,nextLabel);state.programId=programId;return result}'
+)
+
+
+PAGE = PAGE.replace(
+    'folderChanged=function(files,folderLabel){const nextLabel=folderLabel||((files&&files.length)?(rel(files[0]).split("/")[0]||"已选择目录"):"");const programId=detectProgramIdByFiles(files,nextLabel)||"classic";state.programId=programId;const result=folderChangedBaseProgram(files,nextLabel);state.programId=programId;return result}',
+    'function isIgnoredResultFile(file){const name=String(file?.name||"").trim().toLowerCase();return !!name&&name.startsWith("~")}\nfolderChanged=function(files,folderLabel){const cleanFiles=[...(files||[])].filter(file=>!isIgnoredResultFile(file));const nextLabel=folderLabel||((cleanFiles&&cleanFiles.length)?(rel(cleanFiles[0]).split("/")[0]||"已选择目录"):"");const programId=detectProgramIdByFiles(cleanFiles,nextLabel)||"classic";state.programId=programId;const result=folderChangedBaseProgram(cleanFiles,nextLabel);state.programId=programId;return result}'
+)
+
+PAGE = PAGE.replace(
+    '.rail-stack>.box,.rail-stack>.sel,.rail-stack>.btn{width:100%;box-sizing:border-box}',
+    '.rail-stack>.box,.rail-stack>.sel,.rail-stack>.btn{width:100%;box-sizing:border-box}.workspace-filter{display:grid;gap:6px}.workspace-filter .label{margin-bottom:0}.workspace-filter .sel{width:100%;box-sizing:border-box}'
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''const WORKSPACE_PROGRAMS=[{tag:"long_momentum",id:"classic",label:"long_momentum.py"},{tag:"long_momentum_ARCH",id:"classic",label:"long_momentum_ARCH.py"},{tag:"long_momentum_ATR",id:"classic_atr",label:"long_momentum_ATR.py"},{tag:"long_momentum_ratio",id:"ratio",label:"long_momentum_ratio.py"}];
+function workspaceProgramLabel(tag){const hit=WORKSPACE_PROGRAMS.find(item=>item.tag===tag);return hit?hit.label:tag||"-"}
+function workspaceProgramId(tag){const hit=WORKSPACE_PROGRAMS.find(item=>item.tag===tag);return hit?hit.id:"classic"}
+function detectSummaryProgramTag(text){const lowered=String(text||"").trim().toLowerCase();if(lowered.includes("long_momentum_ratio"))return "long_momentum_ratio";if(lowered.includes("long_momentum_atr"))return "long_momentum_ATR";if(lowered.includes("long_momentum_arch"))return "long_momentum_ARCH";if(lowered.includes("long_momentum"))return "long_momentum";return ""}
+function summaryStem(file){return String(file?.name||"").replace(/\\.xlsx$/i,"").trim()}
+function stripOutcomeStatsSuffix(text){return String(text||"").replace(/\\s+outcome_stats$/i,"").trim()}
+function stripProgramPrefix(text,programTag){const value=String(text||"").trim();if(!programTag)return value;const prefix=programTag.toLowerCase()+" ";if(value.toLowerCase().startsWith(prefix)){return value.slice(programTag.length).trim()}return value}
+function extractPeriodKey(text){const match=String(text||"").match(/\\bperiod_[^ ]+/i);return match?match[0]:""}
+function summaryFileMeta(file){const stem=stripOutcomeStatsSuffix(summaryStem(file));const programTag=detectSummaryProgramTag(file?.name)||detectSummaryProgramTag(pathOf(file))||detectSummaryProgramTag(state.folderLabel)||WORKSPACE_PROGRAMS[0].tag;const withoutProgram=stripProgramPrefix(stem,programTag);const periodKey=extractPeriodKey(withoutProgram);let fileLabel=withoutProgram;if(periodKey&&fileLabel.toLowerCase().startsWith(periodKey.toLowerCase()+" ")){fileLabel=fileLabel.slice(periodKey.length).trim()}if(!fileLabel){fileLabel=withoutProgram||stem}return{file:file,programTag:programTag,periodKey:periodKey||"未标记周期",fileLabel:fileLabel,sortName:withoutProgram||stem}}
+function uniqueKeepOrder(items){const out=[];const seen=new Set();for(const item of items){const key=String(item||"");if(seen.has(key))continue;seen.add(key);out.push(item)}return out}
+function setSimpleSelectOptions(node,options,placeholder){if(!node)return;node.innerHTML="";const first=document.createElement("option");first.value="";first.textContent=placeholder;node.appendChild(first);for(const item of options){const opt=document.createElement("option");opt.value=item.value;opt.textContent=item.label;node.appendChild(opt)}node.disabled=!options.length}
+function ensureWorkspaceFieldHost(hostId,labelText){let host=$(hostId);if(!host){host=document.createElement("div");host.id=hostId;host.className="workspace-filter";host.innerHTML='<div class="label">'+labelText+"</div>"}return host}
+function ensureWorkspaceSelectors(){const workspaceControls=$("workspaceControls");if(!workspaceControls)return;let batchSelect=$("batchSelect");if(!batchSelect){batchSelect=document.createElement("select");batchSelect.id="batchSelect";batchSelect.className="sel";batchSelect.disabled=true;batchSelect.innerHTML='<option value="">请选择统计文件</option>'}const programHost=ensureWorkspaceFieldHost("programSelectHost","回撤程序");let programSelect=$("programSelect");if(!programSelect){programSelect=document.createElement("select");programSelect.id="programSelect";programSelect.className="sel";programHost.appendChild(programSelect)}const periodHost=ensureWorkspaceFieldHost("periodSelectHost","数据周期");let periodSelect=$("periodSelect");if(!periodSelect){periodSelect=document.createElement("select");periodSelect.id="periodSelect";periodSelect.className="sel";periodHost.appendChild(periodSelect)}const batchHost=ensureWorkspaceFieldHost("batchSelectHost","统计文件");if(batchSelect.parentElement!==batchHost){batchHost.appendChild(batchSelect)}const pickBtn=$("pickBtn");if(batchHost.parentElement!==workspaceControls){if(pickBtn&&pickBtn.parentElement===workspaceControls){workspaceControls.insertBefore(batchHost,pickBtn)}else{workspaceControls.appendChild(batchHost)}}if(programHost.parentElement!==workspaceControls){workspaceControls.insertBefore(programHost,batchHost)}if(periodHost.parentElement!==workspaceControls){workspaceControls.insertBefore(periodHost,batchHost)}if(!programSelect.dataset.bound){programSelect.dataset.bound="1";programSelect.addEventListener("change",()=>refreshWorkspaceSelectors(true))}if(!periodSelect.dataset.bound){periodSelect.dataset.bound="1";periodSelect.addEventListener("change",()=>refreshWorkspaceSelectors(true))}if(!batchSelect.dataset.bound){batchSelect.dataset.bound="1";batchSelect.addEventListener("change",async()=>{const file=state.summaryFiles.find(item=>(pathOf(item)||item.name)===batchSelect.value);if(!file)return;try{await loadSummary(file)}catch(error){$("overviewChart").style.display="none";$("overviewEmpty").style.display="grid";$("overviewEmpty").innerHTML="汇总文件读取失败：<br>"+esc(error.message);setStatus("批次读取失败")}})}}
+function refreshWorkspaceSelectors(autoLoad){ensureWorkspaceSelectors();const programSelect=$("programSelect");const periodSelect=$("periodSelect");const batchSelect=$("batchSelect");if(!programSelect||!periodSelect||!batchSelect)return;const metas=[...(state.summaryFiles||[])].map(summaryFileMeta).sort((left,right)=>fileMtime(right.file)-fileMtime(left.file));const previousProgram=programSelect.value;const previousPeriod=periodSelect.value;const previousBatch=batchSelect.value;const programTags=uniqueKeepOrder(metas.map(meta=>meta.programTag));const programOptions=programTags.map(tag=>({value:tag,label:workspaceProgramLabel(tag)}));setSimpleSelectOptions(programSelect,programOptions,"请选择回撤程序");const selectedProgram=programTags.includes(previousProgram)?previousProgram:(programTags[0]||"");programSelect.value=selectedProgram;const programMetas=selectedProgram?metas.filter(meta=>meta.programTag===selectedProgram):metas;const periodKeys=uniqueKeepOrder(programMetas.map(meta=>meta.periodKey));const periodOptions=periodKeys.map(periodKey=>({value:periodKey,label:periodKey}));setSimpleSelectOptions(periodSelect,periodOptions,"请选择数据周期");const selectedPeriod=periodKeys.includes(previousPeriod)?previousPeriod:(periodKeys[0]||"");periodSelect.value=selectedPeriod;const batchMetas=programMetas.filter(meta=>!selectedPeriod||meta.periodKey===selectedPeriod);setSimpleSelectOptions(batchSelect,batchMetas.map(meta=>({value:pathOf(meta.file)||meta.file.name,label:meta.fileLabel})), "请选择统计文件");const batchValues=batchMetas.map(meta=>pathOf(meta.file)||meta.file.name);const nextBatch=batchValues.includes(previousBatch)?previousBatch:(batchValues[0]||"");batchSelect.value=nextBatch;if(nextBatch){state.programId=workspaceProgramId(selectedProgram);if(autoLoad){batchSelect.dispatchEvent(new Event("change"))}}}
+const setupLayoutForWorkspaceSelectors=setupLayout;setupLayout=function(){setupLayoutForWorkspaceSelectors();ensureWorkspaceSelectors();refreshWorkspaceSelectors(false)}
+const resetUiForWorkspaceSelectors=resetUi;resetUi=function(){resetUiForWorkspaceSelectors();ensureWorkspaceSelectors();setSimpleSelectOptions($("programSelect"),[],"请选择回撤程序");setSimpleSelectOptions($("periodSelect"),[],"请选择数据周期");setSimpleSelectOptions($("batchSelect"),[],"请选择统计文件")}
+const folderChangedForWorkspaceSelectors=folderChanged;folderChanged=function(files,folderLabel){const result=folderChangedForWorkspaceSelectors(files,folderLabel);refreshWorkspaceSelectors(false);return result}
+const loadSummaryForWorkspaceSelectors=loadSummary;loadSummary=async function(file){const meta=summaryFileMeta(file);state.programId=workspaceProgramId(meta.programTag);return await loadSummaryForWorkspaceSelectors(file)}
+setupLayout();
+refreshWorkspaceSelectors(false);
+bootstrapPreset();
+</script>'''
+)
+
 
 def run_dashboard_server() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
