@@ -268,6 +268,19 @@ def _parse_price(content: bytes) -> dict:
     valid = dates.notna()
     clean = df.loc[valid].copy()
     clean_dates = dates.loc[valid]
+    open_series = pd.to_numeric(clean[open_col], errors="coerce")
+    high_series = pd.to_numeric(clean[high_col], errors="coerce")
+    low_series = pd.to_numeric(clean[low_col], errors="coerce")
+    close_series = pd.to_numeric(clean[close_col], errors="coerce")
+    base_price = None
+    if open_series.notna().any():
+        base_price = float(open_series.loc[open_series.notna()].iloc[0])
+    if base_price not in (None, 0):
+        scale = 100.0 / float(base_price)
+        open_series = open_series * scale
+        high_series = high_series * scale
+        low_series = low_series * scale
+        close_series = close_series * scale
     capital_x = []
     capital_y = []
     if capital_col:
@@ -277,10 +290,11 @@ def _parse_price(content: bytes) -> dict:
         capital_y = capital_series.loc[capital_valid].astype(float).tolist()
     return {
         "x": clean_dates.dt.strftime("%Y-%m-%d %H:%M:%S").tolist(),
-        "open": pd.to_numeric(clean[open_col], errors="coerce").tolist(),
-        "high": pd.to_numeric(clean[high_col], errors="coerce").tolist(),
-        "low": pd.to_numeric(clean[low_col], errors="coerce").tolist(),
-        "close": pd.to_numeric(clean[close_col], errors="coerce").tolist(),
+        "open": open_series.tolist(),
+        "high": high_series.tolist(),
+        "low": low_series.tolist(),
+        "close": close_series.tolist(),
+        "price_base": base_price,
         "capital_x": capital_x,
         "capital_y": capital_y,
     }
@@ -1241,6 +1255,11 @@ folderChanged=function(files,folderLabel){const nextLabel=folderLabel||((files&&
 loadSummary=async function(file){setStatus("正在读取 outcome_stats");const programId=state.programId||detectProgramIdByFiles(state.files,state.folderLabel)||"classic";const queryProgram="program_id="+encodeURIComponent(programId);state.summary=file.relative_path?await fetchJson("/api/preset-summary?path="+encodeURIComponent(pathOf(file)||file.name)+"&"+queryProgram):await upload("/api/summary?"+queryProgram,file);state.programId=state.summary?.program_id||programId;configInput($("inputBar"),state.summary.controls.open_bar);configInput($("inputThreshold"),state.summary.controls.open_threshold);configInput($("inputCont"),state.summary.controls.open_continous_threshold);const wdInput=$("inputWd");if(wdInput){configInput(wdInput,state.summary.controls.withdrawal_limit)}overview();const record=recordByKey(state.summary.default_key);if(record){await setRecord(record,false)}else{syncAvailableParams()}setStatus("批次已载入");return state.summary}
 bootstrapPreset();
 </script>'''
+)
+
+PAGE = PAGE.replace(
+    'function priceChart(price,trans){if(!price||!price.x.length){$("priceChart").style.display="none";$("priceEmpty").style.display="grid";$("priceEmpty").innerHTML="当前批次缺少可用的 perf.xlsx。";return}$("priceEmpty").style.display="none";$("priceChart").style.display="block";const candleX=price.x.map((_,index)=>index);const priceIndexMap=buildIndexMap(price.x);const shapes=gapShapes(price.x);const perfCapitalPoints=axisPoints(price.capital_x||[],price.capital_y||[],priceIndexMap);const traces=[{type:"candlestick",x:candleX,open:price.open,high:price.high,low:price.low,close:price.close,text:price.x,name:"price",increasing:{line:{color:CANDLE_UP_EDGE,width:0.8},fillcolor:CANDLE_UP_FILL},decreasing:{line:{color:CANDLE_DOWN_EDGE,width:0.8},fillcolor:CANDLE_DOWN_FILL},hovertemplate:"%{text}<br>open=%{open}<br>high=%{high}<br>low=%{low}<br>close=%{close}<extra></extra>"}];const capitalPoints=perfCapitalPoints.x.length?perfCapitalPoints:(trans?axisPoints(trans.capital_x,trans.capital_y,priceIndexMap):{x:[],y:[],text:[]});if(state.showCapitalOverlay&&capitalPoints.x.length)traces.unshift({type:"scatter",mode:"lines",x:capitalPoints.x,y:capitalPoints.y,text:capitalPoints.text,line:{color:ACCENT_BLUE,width:1.2},name:"capital",yaxis:"y2",hovertemplate:"%{text}<br>capital=%{y}<extra></extra>"});if(trans){const tradeLink=axisPoints(trans.trade_link_x,trans.trade_link_y,priceIndexMap,true);const buyPoints=axisPoints(trans.buy_points.x,trans.buy_points.y,priceIndexMap);const sellWdPoints=axisPoints(trans.sell_wd_points.x,trans.sell_wd_points.y,priceIndexMap);const sellSpeedPoints=axisPoints(trans.sell_speed_points.x,trans.sell_speed_points.y,priceIndexMap);if(tradeLink.x.length)traces.push({type:"scatter",mode:"lines",x:tradeLink.x,y:tradeLink.y,line:{color:ACCENT_BLUE,width:2},hoverinfo:"skip",name:"trade_link"});if(buyPoints.x.length)traces.push({type:"scatter",mode:"markers",x:buyPoints.x,y:buyPoints.y,text:buyPoints.text,marker:{color:"red",size:4},name:"buy",hovertemplate:"buy<br>%{text}<br>price=%{y}<extra></extra>"});if(sellWdPoints.x.length)traces.push({type:"scatter",mode:"markers",x:sellWdPoints.x,y:sellWdPoints.y,text:sellWdPoints.text,marker:{color:SELL_WD_COLOR,size:4},name:"sell_wd",hovertemplate:"sell_wd<br>%{text}<br>price=%{y}<extra></extra>"});if(sellSpeedPoints.x.length)traces.push({type:"scatter",mode:"markers",x:sellSpeedPoints.x,y:sellSpeedPoints.y,text:sellSpeedPoints.text,marker:{color:SELL_SPEED_COLOR,size:4},name:"sell_speed",hovertemplate:"sell_speed<br>%{text}<br>price=%{y}<extra></extra>"})}Plotly.newPlot($("priceChart"),traces,{margin:{l:48,r:52,t:12,b:36},paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"#fff",xaxis:numericAxis(price.x),yaxis:{title:"price",gridcolor:"#e8eef8",zeroline:false},yaxis2:{title:"capital",overlaying:"y",side:"right",showgrid:false,zeroline:false,visible:!!state.showCapitalOverlay},legend:{orientation:"h",yanchor:"bottom",y:1.02,xanchor:"left",x:0},shapes:shapes},{responsive:true,displayModeBar:false})}',
+    'function priceChart(price,trans){if(!price||!price.x.length){$("priceChart").style.display="none";$("priceEmpty").style.display="grid";$("priceEmpty").innerHTML="当前批次缺少可用的 perf.xlsx。";return}$("priceEmpty").style.display="none";$("priceChart").style.display="block";const candleX=price.x.map((_,index)=>index);const priceIndexMap=buildIndexMap(price.x);const shapes=gapShapes(price.x);const perfCapitalPoints=axisPoints(price.capital_x||[],price.capital_y||[],priceIndexMap);const basePrice=Number(price.price_base);const scaleValue=value=>{if(value===null||value===undefined||value===\"\")return value;const num=Number(value);if(!Number.isFinite(num)||!Number.isFinite(basePrice)||basePrice===0)return num;return num/basePrice*100};const scaleAxisPoints=points=>({x:[...(points?.x||[])],y:(points?.y||[]).map(scaleValue),text:[...(points?.text||[])]});const traces=[{type:\"candlestick\",x:candleX,open:price.open,high:price.high,low:price.low,close:price.close,text:price.x,name:\"price\",increasing:{line:{color:CANDLE_UP_EDGE,width:0.8},fillcolor:CANDLE_UP_FILL},decreasing:{line:{color:CANDLE_DOWN_EDGE,width:0.8},fillcolor:CANDLE_DOWN_FILL},hovertemplate:\"%{text}<br>open=%{open:.4f}<br>high=%{high:.4f}<br>low=%{low:.4f}<br>close=%{close:.4f}<extra></extra>\"}];const capitalPoints=perfCapitalPoints.x.length?perfCapitalPoints:(trans?axisPoints(trans.capital_x,trans.capital_y,priceIndexMap):{x:[],y:[],text:[]});if(state.showCapitalOverlay&&capitalPoints.x.length)traces.unshift({type:\"scatter\",mode:\"lines\",x:capitalPoints.x,y:capitalPoints.y,text:capitalPoints.text,line:{color:ACCENT_BLUE,width:1.2},name:\"capital\",hovertemplate:\"%{text}<br>capital=%{y:.4f}<extra></extra>\"});if(trans){const tradeLink=scaleAxisPoints(axisPoints(trans.trade_link_x,trans.trade_link_y,priceIndexMap,true));const buyPoints=scaleAxisPoints(axisPoints(trans.buy_points.x,trans.buy_points.y,priceIndexMap));const sellWdPoints=scaleAxisPoints(axisPoints(trans.sell_wd_points.x,trans.sell_wd_points.y,priceIndexMap));const sellSpeedPoints=scaleAxisPoints(axisPoints(trans.sell_speed_points.x,trans.sell_speed_points.y,priceIndexMap));if(tradeLink.x.length)traces.push({type:\"scatter\",mode:\"lines\",x:tradeLink.x,y:tradeLink.y,line:{color:ACCENT_BLUE,width:2},hoverinfo:\"skip\",name:\"trade_link\"});if(buyPoints.x.length)traces.push({type:\"scatter\",mode:\"markers\",x:buyPoints.x,y:buyPoints.y,text:buyPoints.text,marker:{color:\"red\",size:4},name:\"buy\",hovertemplate:\"buy<br>%{text}<br>base100=%{y:.4f}<extra></extra>\"});if(sellWdPoints.x.length)traces.push({type:\"scatter\",mode:\"markers\",x:sellWdPoints.x,y:sellWdPoints.y,text:sellWdPoints.text,marker:{color:SELL_WD_COLOR,size:4},name:\"sell_wd\",hovertemplate:\"sell_wd<br>%{text}<br>base100=%{y:.4f}<extra></extra>\"});if(sellSpeedPoints.x.length)traces.push({type:\"scatter\",mode:\"markers\",x:sellSpeedPoints.x,y:sellSpeedPoints.y,text:sellSpeedPoints.text,marker:{color:SELL_SPEED_COLOR,size:4},name:\"sell_speed\",hovertemplate:\"sell_speed<br>%{text}<br>base100=%{y:.4f}<extra></extra>\"})}Plotly.newPlot($(\"priceChart\"),traces,{margin:{l:48,r:18,t:12,b:36},paper_bgcolor:\"rgba(0,0,0,0)\",plot_bgcolor:\"#fff\",xaxis:numericAxis(price.x),yaxis:{title:\"price (base=100)\",gridcolor:\"#e8eef8\",zeroline:false},legend:{orientation:\"h\",yanchor:\"bottom\",y:1.02,xanchor:\"left\",x:0},shapes:shapes},{responsive:true,displayModeBar:false})}'
 )
 
 def run_dashboard_server() -> None:
