@@ -12,12 +12,18 @@ import pandas as pd
 
 
 RESULT_DIR = Path(
-    r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long_momentum outcome"
+    r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long shock multi outcome"
 )
 RESULT_DIR_FALLBACKS = [
     RESULT_DIR,
     Path(
+        r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long shock outcome"
+    ),
+    Path(
         r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long outcome"
+    ),
+    Path(
+        r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long_momentum outcome"
     ),
 ]
 RUN_NAME_FILTER = "period_5min 20250601-20250615"
@@ -53,20 +59,25 @@ SUMMARY_COLUMNS = [
 
 PARAM_PREFIX_TO_COLUMN = {
     "om": "open_bar",
+    "cb": "close_bar",
     "cm": "close_bar",
     "o": "open_threshold",
+    "sha": "open_threshold",
     "opm": "open_threshold",
     "oc": "open_continous_threshold",
+    "csm": "open_continous_threshold",
     "ocpm": "open_continous_threshold",
     "ow": "open_withdrawal_threshold",
     "owm": "open_withdrawal_threshold",
     "c": "close_threshold",
     "cpm": "close_threshold",
     "cw": "close_withdrawal_threshold",
+    "cwd": "close_withdrawal_threshold",
     "cwm": "close_withdrawal_threshold",
 }
 
 SUMMARY_PROGRAM_TAGS = (
+    "long_momentum_ARCH_shock_multi",
     "long_momentum_ratio",
     "long_momentum_ATR",
     "long_momentum_ARCH",

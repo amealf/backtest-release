@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pandas.tseries.frequencies import to_offset
 
 try:
     import plotly.graph_objects as go
@@ -41,10 +42,15 @@ warmup_start_date = ""
 export_start_date = ""
 export_end_date = ""
 
-resample_rules = ["day", "5min", "15min", "30min"]
+resample_rules = [f"{minutes}min" for minutes in range(3, 61)]
 
 garch_window_bars = 10000
-garch_window_bars_by_period = {"day": 500}
+garch_window_bars_by_period = {
+    "1h": 6000,
+    "2h": 3000,
+    "4h": 1500,
+    "day": 500,
+}
 refit_every_bars = 100
 garch_p = 1
 garch_q = 1
@@ -54,6 +60,7 @@ validation_quantiles = 10
 
 
 MODEL_SPEC = "garch11_t"
+FORECAST_ALIGNMENT_VERSION = "trade_bar_v2"
 GAP_MULTIPLIER = 1.5
 OVERVIEW_MAX_POINTS = 3000
 trade_calendar_path = Path(r"D:\Code\data\trade_day\cme_comex_trade_calendar_2020_2026.xlsx")
@@ -63,8 +70,11 @@ CANDLE_UP_EDGE = "rgba(185, 185, 185, 0.9)"
 CANDLE_DOWN_EDGE = "rgba(85, 85, 85, 0.9)"
 CANDLE_UP_FILL = "rgba(245, 245, 245, 0.9)"
 CANDLE_DOWN_FILL = "rgba(120, 120, 120, 0.9)"
-shock_score_green_threshold = 3.0
+shock_score_green_threshold = 2.0
+shock_score_light_blue_threshold = 3.0
 shock_score_blue_threshold = 4.0
+show_long_shock_markers = True
+show_short_shock_markers = False
 DIRECT_PERIOD_FILE_SPECS = {
     "1min": {"suffix": "1_min", "bar_seconds": 60, "period_label": "1min"},
     "5min": {"suffix": "5_mins", "bar_seconds": 300, "period_label": "5min"},
@@ -462,6 +472,9 @@ def normalize_rule_token(rule: str) -> str:
         "5m": "5min",
         "5min": "5min",
         "5mins": "5min",
+        "10m": "10min",
+        "10min": "10min",
+        "10mins": "10min",
         "15m": "15min",
         "15min": "15min",
         "15mins": "15min",
@@ -470,6 +483,10 @@ def normalize_rule_token(rule: str) -> str:
         "30mins": "30min",
         "1h": "1h",
         "1hour": "1h",
+        "2h": "2h",
+        "2hour": "2h",
+        "4h": "4h",
+        "4hour": "4h",
         "30s": "30s",
     }
     return alias_map.get(compact, text)
@@ -481,9 +498,12 @@ def normalize_resample_rule_for_pandas(rule: str) -> str:
         "day": "1D",
         "1min": "1min",
         "5min": "5min",
+        "10min": "10min",
         "15min": "15min",
         "30min": "30min",
         "1h": "1H",
+        "2h": "2H",
+        "4h": "4H",
         "30s": "30s",
     }
     return pandas_map.get(token, str(rule or "").strip())
@@ -580,7 +600,7 @@ def should_drop_incomplete_initial_resampled_bar(
 
 
 def build_output_dir(file_name: str) -> Path:
-    out_dir = Path("./result") / f"{file_name} long outcome" / "garch forecast"
+    out_dir = Path("./result") / "garch forecast"
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
@@ -655,8 +675,12 @@ def build_run_config(period_label: str) -> dict:
         "return_scale": normalize_config_text(return_scale),
         "validation_quantiles": str(int(validation_quantiles)),
         "shock_score_green_threshold": normalize_config_text(shock_score_green_threshold),
+        "shock_score_light_blue_threshold": normalize_config_text(shock_score_light_blue_threshold),
         "shock_score_blue_threshold": normalize_config_text(shock_score_blue_threshold),
+        "show_long_shock_markers": normalize_config_text(show_long_shock_markers),
+        "show_short_shock_markers": normalize_config_text(show_short_shock_markers),
         "model_spec": MODEL_SPEC,
+        "forecast_alignment_version": FORECAST_ALIGNMENT_VERSION,
     }
 
 
@@ -873,6 +897,34 @@ def load_legacy_raw_data() -> pd.DataFrame:
     return raw_df
 
 
+def resolve_rule_bar_seconds(period_rule: str) -> int | None:
+    token = normalize_rule_token(period_rule)
+    spec = DIRECT_PERIOD_FILE_SPECS.get(token)
+    if spec is not None:
+        return int(spec["bar_seconds"])
+
+    pandas_rule = normalize_resample_rule_for_pandas(period_rule)
+    if not pandas_rule:
+        return None
+
+    try:
+        base_ts = pd.Timestamp("2020-01-01 00:00:00")
+        next_ts = base_ts + to_offset(pandas_rule)
+        total_seconds = int((next_ts - base_ts).total_seconds())
+        return total_seconds if total_seconds > 0 else None
+    except Exception:
+        return None
+
+
+def parse_minute_rule_value(period_rule: str) -> int | None:
+    token = normalize_rule_token(period_rule)
+    if token.endswith("min") and token[:-3].isdigit():
+        value = int(token[:-3])
+        if value > 0:
+            return value
+    return None
+
+
 def try_load_direct_period_data(
     period_rule: str,
 ) -> tuple[pd.DataFrame, int, str, Path] | None:
@@ -946,6 +998,28 @@ def try_load_direct_period_data(
     return normalized, int(spec["bar_seconds"]), str(spec["period_label"]), csv_path
 
 
+def try_load_best_direct_resample_base(
+    period_rule: str,
+) -> tuple[pd.DataFrame, int, str, Path] | None:
+    target_bar_seconds = resolve_rule_bar_seconds(period_rule)
+    if target_bar_seconds is None:
+        return None
+
+    candidates: list[tuple[int, str]] = []
+    for token, spec in DIRECT_PERIOD_FILE_SPECS.items():
+        csv_path = Path(data_folder_path) / f"{data_file_name}_{spec['suffix']}.csv"
+        bar_seconds = int(spec["bar_seconds"])
+        if csv_path.exists() and bar_seconds <= target_bar_seconds:
+            candidates.append((bar_seconds, token))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    for _, token in candidates:
+        loaded = try_load_direct_period_data(token)
+        if loaded is not None:
+            return loaded
+    return None
+
+
 def finalize_period_bars(
     preview_df: pd.DataFrame,
     bar_seconds: int,
@@ -958,13 +1032,28 @@ def finalize_period_bars(
     preview_df["prev_close"] = pd.to_numeric(preview_df["close"], errors="coerce").shift(1)
     preview_df["log_return"] = np.log(preview_df["close"] / preview_df["prev_close"])
 
+    gap_threshold_seconds = float(bar_seconds) * float(GAP_MULTIPLIER)
     gap_seconds = preview_df["Date"].diff().dt.total_seconds()
-    preview_df.loc[gap_seconds > (bar_seconds * GAP_MULTIPLIER), "log_return"] = np.nan
+    preview_df["gap_from_prev_seconds"] = gap_seconds
+    preview_df["is_gap_from_prev"] = gap_seconds.gt(gap_threshold_seconds).fillna(False).astype(int)
+    preview_df["is_first_bar_after_gap"] = preview_df["is_gap_from_prev"].astype(int)
+    preview_df["is_last_bar_before_gap"] = (
+        preview_df["is_gap_from_prev"].shift(-1).fillna(False).astype(int)
+    )
+    preview_df.loc[gap_seconds > gap_threshold_seconds, "log_return"] = np.nan
 
-    next_gap_seconds = preview_df["Date"].shift(-1).sub(preview_df["Date"]).dt.total_seconds()
-    next_gap_ok = next_gap_seconds.le(bar_seconds * GAP_MULTIPLIER)
-    preview_df["actual_abs_next_log_return"] = preview_df["log_return"].shift(-1).abs()
-    preview_df.loc[~next_gap_ok.fillna(False), "actual_abs_next_log_return"] = np.nan
+    actual_abs_next_active = np.full(len(preview_df), np.nan, dtype=float)
+    valid_positions = np.flatnonzero(preview_df["log_return"].notna().to_numpy())
+    if len(valid_positions) >= 2:
+        valid_abs_returns = (
+            preview_df.loc[valid_positions, "log_return"]
+            .astype(float)
+            .abs()
+            .to_numpy()
+        )
+        actual_abs_next_active[valid_positions[:-1]] = valid_abs_returns[1:]
+    preview_df["actual_abs_next_active_log_return"] = actual_abs_next_active
+    preview_df["actual_abs_next_log_return"] = actual_abs_next_active
     return preview_df, int(bar_seconds), str(period_label)
 
 
@@ -972,6 +1061,35 @@ def load_period_bars(
     period_rule: str,
     legacy_raw_df: pd.DataFrame | None,
 ) -> tuple[pd.DataFrame, int, str, str, pd.DataFrame | None]:
+    minute_value = parse_minute_rule_value(period_rule)
+    if minute_value is not None and 3 <= minute_value <= 60:
+        minute_base = try_load_direct_period_data("1min")
+        if minute_base is None:
+            raise FileNotFoundError(
+                "Minute GARCH fit requires direct 1min source file: "
+                + str(Path(data_folder_path) / f"{data_file_name}_1_min.csv")
+            )
+        base_df, _, _, csv_path = minute_base
+        bars_df, bar_seconds = resample_ohlc_df(base_df, period_rule)
+        if (
+            len(bars_df) > 0
+            and should_drop_incomplete_initial_resampled_bar(base_df, period_rule)
+        ):
+            bars_df = bars_df.iloc[1:].reset_index(drop=True)
+        period_label = format_period_label(period_rule, bar_seconds)
+        bars_df, bar_seconds, period_label = finalize_period_bars(
+            bars_df,
+            bar_seconds=bar_seconds,
+            period_label=period_label,
+        )
+        return (
+            bars_df,
+            bar_seconds,
+            period_label,
+            f"{csv_path.name}->{period_label}",
+            legacy_raw_df,
+        )
+
     direct_loaded = try_load_direct_period_data(period_rule)
     if direct_loaded is not None:
         direct_df, bar_seconds, period_label, csv_path = direct_loaded
@@ -982,7 +1100,38 @@ def load_period_bars(
         )
         return bars_df, bar_seconds, period_label, csv_path.name, legacy_raw_df
 
+    direct_resample_base = try_load_best_direct_resample_base(period_rule)
+    if direct_resample_base is not None:
+        base_df, _, _, csv_path = direct_resample_base
+        bars_df, bar_seconds = resample_ohlc_df(base_df, period_rule)
+        if (
+            len(bars_df) > 0
+            and should_drop_incomplete_initial_resampled_bar(base_df, period_rule)
+        ):
+            bars_df = bars_df.iloc[1:].reset_index(drop=True)
+        period_label = format_period_label(period_rule, bar_seconds)
+        bars_df, bar_seconds, period_label = finalize_period_bars(
+            bars_df,
+            bar_seconds=bar_seconds,
+            period_label=period_label,
+        )
+        return (
+            bars_df,
+            bar_seconds,
+            period_label,
+            f"{csv_path.name}->{period_label}",
+            legacy_raw_df,
+        )
+
     if legacy_raw_df is None:
+        legacy_csv_path = Path(data_folder_path) / f"{data_file_name}.csv"
+        if not legacy_csv_path.exists():
+            raise FileNotFoundError(
+                "No direct period file and no legacy source file found for period "
+                + str(period_rule)
+                + " | missing legacy file: "
+                + str(legacy_csv_path)
+            )
         legacy_raw_df = load_legacy_raw_data()
     bars_df, bar_seconds, period_label = prepare_period_bars(
         legacy_raw_df,
@@ -1075,7 +1224,7 @@ def build_forecast_df(
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     work = bars_df.copy().reset_index(drop=True)
     row_count = len(work)
-    effective_window_bars = int(resolve_garch_window_bars(period_label))
+    configured_window_bars = int(resolve_garch_window_bars(period_label))
 
     garch_sigma_return = np.full(row_count, np.nan, dtype=float)
     garch_sigma_return_pct = np.full(row_count, np.nan, dtype=float)
@@ -1120,6 +1269,18 @@ def build_forecast_df(
         return pd.DataFrame(), pd.DataFrame(), skip_meta
 
     valid_positions = np.flatnonzero(work["log_return"].notna().to_numpy())
+    if len(valid_positions) <= int(refit_every_bars):
+        raise RuntimeError(
+            f"Not enough valid returns for period {period_label}. "
+            f"valid_positions={len(valid_positions)}, refit_every_bars={int(refit_every_bars)}"
+        )
+    if configured_window_bars > int(len(valid_positions) * 0.8):
+        effective_window_bars = max(
+            int(refit_every_bars) + 1,
+            int(len(valid_positions) * 0.8),
+        )
+    else:
+        effective_window_bars = configured_window_bars
     active_params: dict | None = None
     sigma2_current = np.nan
     refit_rows: list[dict] = []
@@ -1219,6 +1380,18 @@ def build_forecast_df(
     work["garch_sigma_return"] = garch_sigma_return
     work["garch_sigma_return_pct"] = garch_sigma_return_pct
     work["garch_sigma_price"] = garch_sigma_price
+    work["garch_sigma_return_next_active"] = garch_sigma_return
+    work["garch_sigma_price_next_active"] = garch_sigma_price
+    work["garch_sigma_return_trade_bar"] = (
+        pd.Series(garch_sigma_return, index=work.index, dtype="float64")
+        .ffill()
+        .shift(1)
+    )
+    work["garch_sigma_price_trade_bar"] = (
+        pd.Series(garch_sigma_price, index=work.index, dtype="float64")
+        .ffill()
+        .shift(1)
+    )
     work["refit_executed"] = refit_executed
     work["converged"] = converged_flag
     work["model_spec"] = model_spec_values
@@ -1526,6 +1699,7 @@ def build_overview_interactive_html(
             mode="lines",
             name="Predicted Vol",
             line=dict(color="rgba(31, 119, 180, 0.50)", width=1.4),
+            connectgaps=True,
             customdata=plot_df["Date"].dt.strftime("%Y-%m-%d %H:%M:%S"),
             hovertemplate=(
                 "Date=%{customdata}<br>"
@@ -1542,6 +1716,7 @@ def build_overview_interactive_html(
             mode="lines",
             name="Realized Vol",
             line=dict(color="#ff7f0e", width=1.2),
+            connectgaps=True,
             customdata=plot_df["Date"].dt.strftime("%Y-%m-%d %H:%M:%S"),
             hovertemplate=(
                 "Date=%{customdata}<br>"
@@ -1661,9 +1836,11 @@ def build_vol_surprise_interactive_html(
         raise RuntimeError(f"No shock score rows available for period {period_label}.")
 
     threshold_green = float(shock_score_green_threshold)
+    threshold_light_blue = float(shock_score_light_blue_threshold)
     threshold_blue = float(shock_score_blue_threshold)
-    if threshold_blue < threshold_green:
-        threshold_green, threshold_blue = threshold_blue, threshold_green
+    if not (threshold_green < threshold_light_blue < threshold_blue):
+        thresholds_sorted = sorted([threshold_green, threshold_light_blue, threshold_blue])
+        threshold_green, threshold_light_blue, threshold_blue = thresholds_sorted
 
     bar_seconds = detect_bar_seconds_from_df(full_frame)
     plot_df = frame.reset_index(drop=True).copy()
@@ -1698,17 +1875,49 @@ def build_vol_surprise_interactive_html(
 
     marker_green_df = plot_df[
         (plot_df["event_shock_score"] > threshold_green)
-        & (plot_df["event_shock_score"] <= threshold_blue)
+        & (plot_df["event_shock_score"] <= threshold_light_blue)
     ].copy()
     marker_green_df["marker_y"] = (
         pd.to_numeric(marker_green_df["high"], errors="coerce")
         + pd.to_numeric(marker_green_df["low"], errors="coerce")
     ) / 2.0
-    marker_blue_df = plot_df[plot_df["event_shock_score"] > threshold_blue].copy()
+    marker_blue_df = plot_df[
+        (plot_df["event_shock_score"] > threshold_light_blue)
+        & (plot_df["event_shock_score"] <= threshold_blue)
+    ].copy()
     marker_blue_df["marker_y"] = (
         pd.to_numeric(marker_blue_df["high"], errors="coerce")
         + pd.to_numeric(marker_blue_df["low"], errors="coerce")
     ) / 2.0
+    marker_blue_strong_df = plot_df[plot_df["event_shock_score"] > threshold_blue].copy()
+    marker_blue_strong_df["marker_y"] = (
+        pd.to_numeric(marker_blue_strong_df["high"], errors="coerce")
+        + pd.to_numeric(marker_blue_strong_df["low"], errors="coerce")
+    ) / 2.0
+    marker_green_up_df = marker_green_df[
+        pd.to_numeric(marker_green_df["close"], errors="coerce")
+        >= pd.to_numeric(marker_green_df["open"], errors="coerce")
+    ].copy()
+    marker_green_down_df = marker_green_df[
+        pd.to_numeric(marker_green_df["close"], errors="coerce")
+        < pd.to_numeric(marker_green_df["open"], errors="coerce")
+    ].copy()
+    marker_blue_up_df = marker_blue_df[
+        pd.to_numeric(marker_blue_df["close"], errors="coerce")
+        >= pd.to_numeric(marker_blue_df["open"], errors="coerce")
+    ].copy()
+    marker_blue_down_df = marker_blue_df[
+        pd.to_numeric(marker_blue_df["close"], errors="coerce")
+        < pd.to_numeric(marker_blue_df["open"], errors="coerce")
+    ].copy()
+    marker_blue_strong_up_df = marker_blue_strong_df[
+        pd.to_numeric(marker_blue_strong_df["close"], errors="coerce")
+        >= pd.to_numeric(marker_blue_strong_df["open"], errors="coerce")
+    ].copy()
+    marker_blue_strong_down_df = marker_blue_strong_df[
+        pd.to_numeric(marker_blue_strong_df["close"], errors="coerce")
+        < pd.to_numeric(marker_blue_strong_df["open"], errors="coerce")
+    ].copy()
 
     fig = make_subplots(
         rows=2,
@@ -1727,49 +1936,109 @@ def build_vol_surprise_interactive_html(
         row=1,
         col=1,
     )
-    fig.add_trace(
-        go.Scatter(
-            x=marker_green_df.index.to_numpy(dtype=float),
-            y=marker_green_df["marker_y"],
-            mode="markers",
-            name=f"shock > {threshold_green:.2f}x",
-            marker=dict(color="rgba(60, 180, 75, 0.95)", size=3.4),
-            hoverinfo="skip",
-            customdata=np.column_stack(
-                [
-                    marker_green_df["event_shock_score"].to_numpy(),
-                    np.full(len(marker_green_df), threshold_green),
-                ]
-            ) if len(marker_green_df) else None,
-        ),
-        row=1,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=marker_blue_df.index.to_numpy(dtype=float),
-            y=marker_blue_df["marker_y"],
-            mode="markers",
-            name=f"shock > {threshold_blue:.2f}x",
-            marker=dict(color="rgba(47, 107, 255, 0.95)", size=3.4),
-            hoverinfo="skip",
-            customdata=np.column_stack(
-                [
-                    marker_blue_df["event_shock_score"].to_numpy(),
-                    np.full(len(marker_blue_df), threshold_blue),
-                ]
-            ) if len(marker_blue_df) else None,
-        ),
-        row=1,
-        col=1,
-    )
+    if show_long_shock_markers:
+        fig.add_trace(
+            go.Scatter(
+                x=marker_green_up_df.index.to_numpy(dtype=float),
+                y=marker_green_up_df["marker_y"],
+                mode="markers",
+                name=f"up | {threshold_green:.2f}x < shock <= {threshold_light_blue:.2f}x",
+                marker=dict(color="rgba(60, 180, 75, 0.95)", size=3.4),
+                hoverinfo="skip",
+                customdata=np.column_stack(
+                    [
+                        marker_green_up_df["event_shock_score"].to_numpy(),
+                        np.full(len(marker_green_up_df), threshold_green),
+                    ]
+                ) if len(marker_green_up_df) else None,
+            ),
+            row=1,
+            col=1,
+        )
+    if show_long_shock_markers:
+        fig.add_trace(
+            go.Scatter(
+                x=marker_blue_up_df.index.to_numpy(dtype=float),
+                y=marker_blue_up_df["marker_y"],
+                mode="markers",
+                name=f"up | {threshold_light_blue:.2f}x < shock <= {threshold_blue:.2f}x",
+                marker=dict(color="rgba(102, 204, 255, 0.95)", size=3.4),
+                hoverinfo="skip",
+                customdata=np.column_stack(
+                    [
+                        marker_blue_up_df["event_shock_score"].to_numpy(),
+                        np.full(len(marker_blue_up_df), threshold_light_blue),
+                    ]
+                ) if len(marker_blue_up_df) else None,
+            ),
+            row=1,
+            col=1,
+        )
+    if show_short_shock_markers:
+        fig.add_trace(
+            go.Scatter(
+                x=marker_green_down_df.index.to_numpy(dtype=float),
+                y=marker_green_down_df["marker_y"],
+                mode="markers",
+                name=f"down | {threshold_green:.2f}x < shock <= {threshold_light_blue:.2f}x",
+                marker=dict(color="rgba(235, 195, 60, 0.95)", size=3.4),
+                hoverinfo="skip",
+                customdata=np.column_stack(
+                    [
+                        marker_green_down_df["event_shock_score"].to_numpy(),
+                        np.full(len(marker_green_down_df), threshold_green),
+                    ]
+                ) if len(marker_green_down_df) else None,
+            ),
+            row=1,
+            col=1,
+        )
+    if show_long_shock_markers:
+        fig.add_trace(
+            go.Scatter(
+                x=marker_blue_strong_up_df.index.to_numpy(dtype=float),
+                y=marker_blue_strong_up_df["marker_y"],
+                mode="markers",
+                name=f"up | shock > {threshold_blue:.2f}x",
+                marker=dict(color="rgba(47, 107, 255, 0.95)", size=3.4),
+                hoverinfo="skip",
+                customdata=np.column_stack(
+                    [
+                        marker_blue_strong_up_df["event_shock_score"].to_numpy(),
+                        np.full(len(marker_blue_strong_up_df), threshold_blue),
+                    ]
+                ) if len(marker_blue_strong_up_df) else None,
+            ),
+            row=1,
+            col=1,
+        )
+    if show_short_shock_markers:
+        fig.add_trace(
+            go.Scatter(
+                x=marker_blue_strong_down_df.index.to_numpy(dtype=float),
+                y=marker_blue_strong_down_df["marker_y"],
+                mode="markers",
+                name=f"down | shock > {threshold_blue:.2f}x",
+                marker=dict(color="rgba(220, 60, 60, 0.95)", size=3.4),
+                hoverinfo="skip",
+                customdata=np.column_stack(
+                    [
+                        marker_blue_strong_down_df["event_shock_score"].to_numpy(),
+                        np.full(len(marker_blue_strong_down_df), threshold_blue),
+                    ]
+                ) if len(marker_blue_strong_down_df) else None,
+            ),
+            row=1,
+            col=1,
+        )
     fig.add_trace(
         go.Scatter(
             x=plot_x,
             y=plot_df["event_shock_score"],
             mode="lines",
             name="Shock Score",
-            line=dict(color="rgba(70, 70, 70, 0.30)", width=1.3),
+            line=dict(color="rgba(70, 70, 70, 0.40)", width=1.3),
+            connectgaps=True,
             customdata=plot_df["Date"].dt.strftime("%Y-%m-%d %H:%M:%S"),
             hovertemplate=(
                 "Date=%{customdata}<br>"
@@ -1783,23 +2052,10 @@ def build_vol_surprise_interactive_html(
         go.Scatter(
             x=plot_x,
             y=plot_df["event_shock_score"].where(plot_df["event_shock_score"] > 1.0, np.nan),
-            mode="lines",
-            name="Shock Score >= 1",
-            showlegend=False,
-            line=dict(color="rgba(70, 70, 70, 0.85)", width=1.3),
-            hoverinfo="skip",
-        ),
-        row=2,
-        col=1,
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=plot_x,
-            y=plot_df["event_shock_score"].where(plot_df["event_shock_score"] > 1.0, np.nan),
             mode="markers",
             name="Shock Score > 1",
             showlegend=False,
-            marker=dict(color="rgba(20, 20, 20, 0.62)", size=3),
+            marker=dict(color="rgba(20, 20, 20, 0.40)", size=3),
             hoverinfo="skip",
         ),
         row=2,
@@ -1809,6 +2065,12 @@ def build_vol_surprise_interactive_html(
     fig.add_hline(
         y=threshold_green,
         line=dict(color="rgba(60, 180, 75, 0.85)", width=1.2, dash="dot"),
+        row=2,
+        col=1,
+    )
+    fig.add_hline(
+        y=threshold_light_blue,
+        line=dict(color="rgba(102, 204, 255, 0.85)", width=1.2, dash="dot"),
         row=2,
         col=1,
     )
@@ -1843,7 +2105,7 @@ def build_vol_surprise_interactive_html(
         template="plotly_white",
         title=(
             f"Shock Score Overview | {period_label} | "
-            f"green>{threshold_green:.2f}x | blue>{threshold_blue:.2f}x"
+            f"green>{threshold_green:.2f}x | light_blue>{threshold_light_blue:.2f}x | blue>{threshold_blue:.2f}x"
         ),
         hovermode="x unified",
         hoverlabel=dict(

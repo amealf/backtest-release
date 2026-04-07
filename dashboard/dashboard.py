@@ -27,23 +27,33 @@ AUTO_OPEN_BROWSER = True
 # 手动指定结果大文件夹。
 # 例: PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long_momentum outcome"
 # 留空时，页面继续使用“选择结果文件夹”按钮。
-PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long outcome"
+PRESET_RESULT_DIR = r"D:\Code\backtest-release\Backtest v2 ratio\result\xagusd_30s_all long shock multi outcome"
 
 PROGRAM_ID_CLASSIC = "classic"
 PROGRAM_ID_CLASSIC_ATR = "classic_atr"
 PROGRAM_ID_RATIO = "ratio"
+PROGRAM_ID_GARCH = "garch"
 PROGRAM_TAG_CLASSIC = "long_momentum"
+PROGRAM_TAG_GARCH = "long_momentum_GARCH"
+PROGRAM_TAG_ARCH_SHOCK_MULTI = "long_momentum_ARCH_shock_multi"
+PROGRAM_TAG_ARCH_SHOCK = "long_momentum_ARCH_shock"
 PROGRAM_TAG_ARCH = "long_momentum_ARCH"
 PROGRAM_TAG_CLASSIC_ATR = "long_momentum_ATR"
 PROGRAM_TAG_RATIO = "long_momentum_ratio"
 SUMMARY_PROGRAM_TAGS = (
+    PROGRAM_TAG_GARCH,
+    PROGRAM_TAG_ARCH_SHOCK_MULTI,
+    PROGRAM_TAG_ARCH_SHOCK,
     PROGRAM_TAG_RATIO,
     PROGRAM_TAG_CLASSIC_ATR,
     PROGRAM_TAG_ARCH,
     PROGRAM_TAG_CLASSIC,
 )
 RESULT_DIR_SUFFIXES = (
+    " long shock multi outcome",
     " long outcome",
+    " long shock outcome",
+    " long_momentum_GARCH outcome",
     " long_momentum outcome",
     " long_momentum_ARCH outcome",
     " long_momentum_ATR outcome",
@@ -109,6 +119,18 @@ def _batch_label(file_name: str) -> str:
 
 def _detect_program_id(text: str | None) -> str | None:
     lowered = str(text or "").strip().lower()
+    if PROGRAM_TAG_GARCH.lower() in lowered:
+        return PROGRAM_ID_GARCH
+    if "long_momentum_garch outcome" in lowered:
+        return PROGRAM_ID_GARCH
+    if PROGRAM_TAG_ARCH_SHOCK_MULTI.lower() in lowered:
+        return PROGRAM_ID_CLASSIC
+    if "long_momentum_arch shock multi" in lowered:
+        return PROGRAM_ID_CLASSIC
+    if PROGRAM_TAG_ARCH_SHOCK.lower() in lowered:
+        return PROGRAM_ID_CLASSIC
+    if "long_momentum_arch shock" in lowered:
+        return PROGRAM_ID_CLASSIC
     if PROGRAM_TAG_RATIO.lower() in lowered:
         return PROGRAM_ID_RATIO
     if PROGRAM_TAG_CLASSIC_ATR.lower() in lowered:
@@ -127,6 +149,8 @@ def _detect_program_id(text: str | None) -> str | None:
 
 
 def _effective_program_id(program_id: str | None) -> str:
+    if program_id == PROGRAM_ID_GARCH:
+        return PROGRAM_ID_GARCH
     if program_id == PROGRAM_ID_RATIO:
         return PROGRAM_ID_RATIO
     if program_id == PROGRAM_ID_CLASSIC_ATR:
@@ -173,11 +197,11 @@ def _parse_param_tag(param_tag: str) -> dict:
         "close_withdrawal_threshold": None,
     }
     specs = [
-        ("open_continous_threshold", ("ocpm", "oc")),
-        ("open_threshold", ("opm", "o")),
+        ("open_bar", ("cb", "om")),
+        ("open_continous_threshold", ("csm", "ocpm", "oc")),
+        ("open_threshold", ("sha", "opm", "o")),
         ("open_withdrawal_threshold", ("owm", "ow")),
-        ("close_withdrawal_threshold", ("cwm", "cw")),
-        ("open_bar", ("om",)),
+        ("close_withdrawal_threshold", ("cwd", "cwm", "cw")),
     ]
     for token in str(param_tag).strip().split():
         lowered = token.lower()
@@ -1317,20 +1341,20 @@ PAGE = PAGE.replace(
 
 PAGE = PAGE.replace(
     'bootstrapPreset();\n</script>',
-    '''const WORKSPACE_PROGRAMS=[{tag:"long_momentum",id:"classic",label:"long_momentum.py"},{tag:"long_momentum_ARCH",id:"classic",label:"long_momentum_ARCH.py"},{tag:"long_momentum_ATR",id:"classic_atr",label:"long_momentum_ATR.py"},{tag:"long_momentum_ratio",id:"ratio",label:"long_momentum_ratio.py"}];
+    '''const WORKSPACE_PROGRAMS=[{tag:"long_momentum_GARCH",id:"garch",label:"long_momentum_GARCH.py"},{tag:"long_momentum",id:"classic",label:"long_momentum.py"},{tag:"long_momentum_ARCH_shock_multi",id:"classic",label:"long_momentum_ARCH_shock_multi.py"},{tag:"long_momentum_ARCH_shock",id:"classic",label:"long_momentum_ARCH_shock.py"},{tag:"long_momentum_ARCH",id:"classic",label:"long_momentum_ARCH.py"},{tag:"long_momentum_ATR",id:"classic_atr",label:"long_momentum_ATR.py"},{tag:"long_momentum_ratio",id:"ratio",label:"long_momentum_ratio.py"}];
 function workspaceProgramLabel(tag){const hit=WORKSPACE_PROGRAMS.find(item=>item.tag===tag);return hit?hit.label:tag||"-"}
 function workspaceProgramId(tag){const hit=WORKSPACE_PROGRAMS.find(item=>item.tag===tag);return hit?hit.id:"classic"}
-function detectSummaryProgramTag(text){const lowered=String(text||"").trim().toLowerCase();if(lowered.includes("long_momentum_ratio"))return "long_momentum_ratio";if(lowered.includes("long_momentum_atr"))return "long_momentum_ATR";if(lowered.includes("long_momentum_arch"))return "long_momentum_ARCH";if(lowered.includes("long_momentum"))return "long_momentum";return ""}
+function detectSummaryProgramTag(text){const lowered=String(text||"").trim().toLowerCase();if(lowered.includes("long_momentum_garch"))return "long_momentum_GARCH";if(lowered.includes("long_momentum_arch_shock_multi")||lowered.includes("long_momentum_arch shock multi"))return "long_momentum_ARCH_shock_multi";if(lowered.includes("long_momentum_arch_shock")||lowered.includes("long_momentum_arch shock"))return "long_momentum_ARCH_shock";if(lowered.includes("long_momentum_ratio"))return "long_momentum_ratio";if(lowered.includes("long_momentum_atr"))return "long_momentum_ATR";if(lowered.includes("long_momentum_arch"))return "long_momentum_ARCH";if(lowered.includes("long_momentum"))return "long_momentum";return ""}
 function summaryStem(file){return String(file?.name||"").replace(/\\.xlsx$/i,"").trim()}
 function stripOutcomeStatsSuffix(text){return String(text||"").replace(/\\s+outcome_stats$/i,"").trim()}
-function stripProgramPrefix(text,programTag){const value=String(text||"").trim();if(!programTag)return value;const prefix=programTag.toLowerCase()+" ";if(value.toLowerCase().startsWith(prefix)){return value.slice(programTag.length).trim()}return value}
+function stripProgramPrefix(text,programTag){const value=String(text||"").trim();if(!programTag)return value;const candidates=[programTag,String(programTag||"").replace(/_/g," "),String(programTag||"").replace(/ /g,"_")].filter(Boolean);for(const candidate of candidates){const prefix=candidate.toLowerCase()+" ";if(value.toLowerCase().startsWith(prefix)){return value.slice(candidate.length).trim()}}return value}
 function extractPeriodKey(text){const match=String(text||"").match(/\\bperiod_[^ ]+/i);return match?match[0]:""}
 function summaryFileMeta(file){const stem=stripOutcomeStatsSuffix(summaryStem(file));const programTag=detectSummaryProgramTag(file?.name)||detectSummaryProgramTag(pathOf(file))||detectSummaryProgramTag(state.folderLabel)||WORKSPACE_PROGRAMS[0].tag;const withoutProgram=stripProgramPrefix(stem,programTag);const periodKey=extractPeriodKey(withoutProgram);let fileLabel=withoutProgram;if(periodKey&&fileLabel.toLowerCase().startsWith(periodKey.toLowerCase()+" ")){fileLabel=fileLabel.slice(periodKey.length).trim()}if(!fileLabel){fileLabel=withoutProgram||stem}return{file:file,programTag:programTag,periodKey:periodKey||"未标记周期",fileLabel:fileLabel,sortName:withoutProgram||stem}}
 function uniqueKeepOrder(items){const out=[];const seen=new Set();for(const item of items){const key=String(item||"");if(seen.has(key))continue;seen.add(key);out.push(item)}return out}
 function setSimpleSelectOptions(node,options,placeholder){if(!node)return;node.innerHTML="";const first=document.createElement("option");first.value="";first.textContent=placeholder;node.appendChild(first);for(const item of options){const opt=document.createElement("option");opt.value=item.value;opt.textContent=item.label;node.appendChild(opt)}node.disabled=!options.length}
 function ensureWorkspaceFieldHost(hostId,labelText){let host=$(hostId);if(!host){host=document.createElement("div");host.id=hostId;host.className="workspace-filter";host.innerHTML='<div class="label">'+labelText+"</div>"}return host}
 function ensureWorkspaceSelectors(){const workspaceControls=$("workspaceControls");if(!workspaceControls)return;let batchSelect=$("batchSelect");if(!batchSelect){batchSelect=document.createElement("select");batchSelect.id="batchSelect";batchSelect.className="sel";batchSelect.disabled=true;batchSelect.innerHTML='<option value="">请选择统计文件</option>'}const programHost=ensureWorkspaceFieldHost("programSelectHost","回撤程序");let programSelect=$("programSelect");if(!programSelect){programSelect=document.createElement("select");programSelect.id="programSelect";programSelect.className="sel";programHost.appendChild(programSelect)}const periodHost=ensureWorkspaceFieldHost("periodSelectHost","数据周期");let periodSelect=$("periodSelect");if(!periodSelect){periodSelect=document.createElement("select");periodSelect.id="periodSelect";periodSelect.className="sel";periodHost.appendChild(periodSelect)}const batchHost=ensureWorkspaceFieldHost("batchSelectHost","统计文件");if(batchSelect.parentElement!==batchHost){batchHost.appendChild(batchSelect)}const pickBtn=$("pickBtn");if(batchHost.parentElement!==workspaceControls){if(pickBtn&&pickBtn.parentElement===workspaceControls){workspaceControls.insertBefore(batchHost,pickBtn)}else{workspaceControls.appendChild(batchHost)}}if(programHost.parentElement!==workspaceControls){workspaceControls.insertBefore(programHost,batchHost)}if(periodHost.parentElement!==workspaceControls){workspaceControls.insertBefore(periodHost,batchHost)}if(!programSelect.dataset.bound){programSelect.dataset.bound="1";programSelect.addEventListener("change",()=>refreshWorkspaceSelectors(true))}if(!periodSelect.dataset.bound){periodSelect.dataset.bound="1";periodSelect.addEventListener("change",()=>refreshWorkspaceSelectors(true))}if(!batchSelect.dataset.bound){batchSelect.dataset.bound="1";batchSelect.addEventListener("change",async()=>{const file=state.summaryFiles.find(item=>(pathOf(item)||item.name)===batchSelect.value);if(!file)return;try{await loadSummary(file)}catch(error){$("overviewChart").style.display="none";$("overviewEmpty").style.display="grid";$("overviewEmpty").innerHTML="汇总文件读取失败：<br>"+esc(error.message);setStatus("批次读取失败")}})}}
-function refreshWorkspaceSelectors(autoLoad){ensureWorkspaceSelectors();const programSelect=$("programSelect");const periodSelect=$("periodSelect");const batchSelect=$("batchSelect");if(!programSelect||!periodSelect||!batchSelect)return;const metas=[...(state.summaryFiles||[])].map(summaryFileMeta).sort((left,right)=>fileMtime(right.file)-fileMtime(left.file));const previousProgram=programSelect.value;const previousPeriod=periodSelect.value;const previousBatch=batchSelect.value;const programTags=uniqueKeepOrder(metas.map(meta=>meta.programTag));const programOptions=programTags.map(tag=>({value:tag,label:workspaceProgramLabel(tag)}));setSimpleSelectOptions(programSelect,programOptions,"请选择回撤程序");const selectedProgram=programTags.includes(previousProgram)?previousProgram:(programTags[0]||"");programSelect.value=selectedProgram;const programMetas=selectedProgram?metas.filter(meta=>meta.programTag===selectedProgram):metas;const periodKeys=uniqueKeepOrder(programMetas.map(meta=>meta.periodKey));const periodOptions=periodKeys.map(periodKey=>({value:periodKey,label:periodKey}));setSimpleSelectOptions(periodSelect,periodOptions,"请选择数据周期");const selectedPeriod=periodKeys.includes(previousPeriod)?previousPeriod:(periodKeys[0]||"");periodSelect.value=selectedPeriod;const batchMetas=programMetas.filter(meta=>!selectedPeriod||meta.periodKey===selectedPeriod);setSimpleSelectOptions(batchSelect,batchMetas.map(meta=>({value:pathOf(meta.file)||meta.file.name,label:meta.fileLabel})), "请选择统计文件");const batchValues=batchMetas.map(meta=>pathOf(meta.file)||meta.file.name);const nextBatch=batchValues.includes(previousBatch)?previousBatch:(batchValues[0]||"");batchSelect.value=nextBatch;if(nextBatch){state.programId=workspaceProgramId(selectedProgram);if(autoLoad){batchSelect.dispatchEvent(new Event("change"))}}}
+function refreshWorkspaceSelectors(autoLoad){ensureWorkspaceSelectors();const programSelect=$("programSelect");const periodSelect=$("periodSelect");const batchSelect=$("batchSelect");if(!programSelect||!periodSelect||!batchSelect)return;const metas=[...(state.summaryFiles||[])].map(summaryFileMeta).sort((left,right)=>fileMtime(right.file)-fileMtime(left.file));const previousProgram=programSelect.value;const previousPeriod=periodSelect.value;const previousBatch=batchSelect.value;const programTags=uniqueKeepOrder(metas.map(meta=>meta.programTag));const programOptions=programTags.map(tag=>({value:tag,label:workspaceProgramLabel(tag)}));setSimpleSelectOptions(programSelect,programOptions,"请选择回撤程序");const selectedProgram=programTags.includes(previousProgram)?previousProgram:(programTags[0]||"");programSelect.value=selectedProgram;const programMetas=selectedProgram?metas.filter(meta=>meta.programTag===selectedProgram):metas;const periodKeys=uniqueKeepOrder(programMetas.map(meta=>meta.periodKey));const periodOptions=periodKeys.map(periodKey=>({value:periodKey,label:periodKey}));setSimpleSelectOptions(periodSelect,periodOptions,"请选择数据周期");const selectedPeriod=periodKeys.includes(previousPeriod)?previousPeriod:(periodKeys[0]||"");periodSelect.value=selectedPeriod;const batchMetas=programMetas.filter(meta=>!selectedPeriod||meta.periodKey===selectedPeriod);setSimpleSelectOptions(batchSelect,batchMetas.map(meta=>({value:pathOf(meta.file)||meta.file.name,label:meta.fileLabel})), "请选择统计文件");const batchValues=batchMetas.map(meta=>pathOf(meta.file)||meta.file.name);const nextBatch=batchValues.includes(previousBatch)?previousBatch:(batchValues[0]||"");batchSelect.value=nextBatch;if(nextBatch){state.programId=workspaceProgramId(selectedProgram);const shouldAutoLoad=!!nextBatch&&(autoLoad||!state.summary||previousBatch!==nextBatch||previousProgram!==selectedProgram||previousPeriod!==selectedPeriod);if(shouldAutoLoad){batchSelect.dispatchEvent(new Event("change"))}}}
 const setupLayoutForWorkspaceSelectors=setupLayout;setupLayout=function(){setupLayoutForWorkspaceSelectors();ensureWorkspaceSelectors();refreshWorkspaceSelectors(false)}
 const resetUiForWorkspaceSelectors=resetUi;resetUi=function(){resetUiForWorkspaceSelectors();ensureWorkspaceSelectors();setSimpleSelectOptions($("programSelect"),[],"请选择回撤程序");setSimpleSelectOptions($("periodSelect"),[],"请选择数据周期");setSimpleSelectOptions($("batchSelect"),[],"请选择统计文件")}
 const folderChangedForWorkspaceSelectors=folderChanged;folderChanged=function(files,folderLabel){const result=folderChangedForWorkspaceSelectors(files,folderLabel);refreshWorkspaceSelectors(false);return result}
@@ -1431,6 +1455,39 @@ function syncAvailableParamsSelectableFinal(){if(!state.summary?.records?.length
 syncAvailableParams=syncAvailableParamsSelectableFinal;
 selKey=function(){syncAvailableParamsSelectableFinal();return detailParamDefs().map(def=>keyOf($(def.id)?.value)).join("|")}
 const loadSummarySelectableFinal=loadSummary;loadSummary=async function(file){const result=await loadSummarySelectableFinal(file);syncAvailableParamsSelectableFinal();return result}
+bootstrapPreset();
+</script>'''
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function currentProgramTag(){return String(state.programTag||"").trim()}
+function isShockProgramTag(tag){return String(tag||"").trim().toLowerCase()==="long_momentum_arch_shock"}
+function isGarchProgramTag(tag){return String(tag||"").trim().toLowerCase()==="long_momentum_garch"}
+function currentParamLabelMap(){if(isShockProgramTag(currentProgramTag())){return{open_bar:"平仓窗口",open_threshold:"shock 开仓倍数",open_continous_threshold:"速度平仓倍数",withdrawal_limit:"回撤平仓倍数"}}if(isGarchProgramTag(currentProgramTag())){return{open_bar:"时间窗口（分钟）",open_threshold:"速度限制倍数",open_continous_threshold:"开仓门槛倍数",withdrawal_limit:"回撤限制倍数"}}return{open_bar:"时间窗口",open_threshold:"速度限制",open_continous_threshold:"开仓门槛",withdrawal_limit:"回撤限制"}}
+function syncProgramSpecificLabels(){const labels=currentParamLabelMap();const barLabel=$("inputBar")?.parentElement?.querySelector(".label");const thresholdLabel=$("inputThreshold")?.parentElement?.querySelector(".label");const contLabel=$("inputCont")?.parentElement?.querySelector(".label");const wdLabel=$("inputWd")?.parentElement?.querySelector(".label");if(barLabel){barLabel.textContent=labels.open_bar}if(thresholdLabel){thresholdLabel.textContent=labels.open_threshold}if(contLabel){contLabel.textContent=labels.open_continous_threshold}if(wdLabel){wdLabel.textContent=labels.withdrawal_limit}}
+const refreshWorkspaceSelectorsProgramTag=refreshWorkspaceSelectors;refreshWorkspaceSelectors=function(autoLoad){const result=refreshWorkspaceSelectorsProgramTag(autoLoad);const programSelect=$("programSelect");state.programTag=programSelect?.value||state.programTag||"";syncProgramSpecificLabels();return result}
+const loadSummaryProgramTag=loadSummary;loadSummary=async function(file){if(typeof summaryFileMeta==="function"){const meta=summaryFileMeta(file);state.programTag=meta?.programTag||state.programTag||""}const result=await loadSummaryProgramTag(file);syncProgramSpecificLabels();return result}
+const resetUiProgramTag=resetUi;resetUi=function(){resetUiProgramTag();state.programTag="";syncProgramSpecificLabels()}
+const folderChangedProgramTag=folderChanged;folderChanged=function(files,folderLabel){const result=folderChangedProgramTag(files,folderLabel);const programSelect=$("programSelect");state.programTag=programSelect?.value||state.programTag||"";syncProgramSpecificLabels();return result}
+setupLayout();
+syncProgramSpecificLabels();
+bootstrapPreset();
+</script>'''
+)
+
+PAGE = PAGE.replace(
+    'bootstrapPreset();\n</script>',
+    '''function currentProgramTagFinal(){return String(state.programTag||"").trim().toLowerCase()}
+function isShockProgramFinal(){const tag=currentProgramTagFinal();return tag==="long_momentum_arch_shock"||tag==="long_momentum_arch_shock_multi"}
+function isGarchProgramFinal(){return currentProgramTagFinal()==="long_momentum_garch"}
+function currentProgramLabelMapFinal(){if(isShockProgramFinal()){return{open_bar:"平仓窗口",open_threshold:"shock 开仓倍数",open_continous_threshold:"速度平仓倍数",withdrawal_limit:"回撤平仓倍数"}}if(isGarchProgramFinal()){return{open_bar:"时间窗口（分钟）",open_threshold:"速度限制倍数",open_continous_threshold:"开仓门槛倍数",withdrawal_limit:"回撤限制倍数"}}return{open_bar:"时间窗口",open_threshold:"速度限制",open_continous_threshold:"开仓门槛",withdrawal_limit:"回撤限制"}}
+function labelTextFinal(field){const labels=currentProgramLabelMapFinal();return labels[field]||field}
+const overviewProgramSpecificFinal=overview;overview=function(){if(!state.summary||!state.summary.records.length){return overviewProgramSpecificFinal()}const sortMode=$("overviewSortMode")?.value||"current";const numOrInf=value=>{const n=Number(value);return Number.isFinite(n)?n:Infinity};const numOrNegInf=value=>{const n=Number(value);return Number.isFinite(n)?n:-Infinity};const baseRows=[...state.summary.records].sort((a,b)=>numOrInf(a.open_bar)-numOrInf(b.open_bar)||numOrInf(a.open_threshold)-numOrInf(b.open_threshold)||numOrInf(a.open_continous_threshold)-numOrInf(b.open_continous_threshold)||String(a.param_tag||"").localeCompare(String(b.param_tag||""))).map((row,index)=>({...row,__currentOrder:index+1}));const rows=sortMode==="capital"?[...baseRows].sort((a,b)=>numOrNegInf(b.capital)-numOrNegInf(a.capital)||a.__currentOrder-b.__currentOrder):baseRows;const groupTicks=[];const separators=[];if(sortMode==="current"){let groupStart=0;for(let i=1;i<=rows.length;i+=1){const sameGroup=i<rows.length&&keyOf(rows[i]?.open_bar)===keyOf(rows[groupStart]?.open_bar);if(sameGroup)continue;const left=groupStart+1;const right=i;groupTicks.push({value:(left+right)/2,label:formatParamDisplay(rows[groupStart]?.open_bar)});if(i<rows.length){separators.push({type:"line",xref:"x",yref:"paper",x0:i+0.5,x1:i+0.5,y0:0,y1:1,line:{color:"rgba(120,120,120,0.1)",width:1}})}groupStart=i}}$("overviewEmpty").style.display="none";$("overviewChart").style.display="block";Plotly.newPlot($("overviewChart"),[{x:rows.map((_,i)=>i+1),y:rows.map(r=>r.capital),mode:"markers",marker:{size:6,color:"#2f6bff"},customdata:rows.map(r=>r.selection_key),text:rows.map((r,index)=>["param_tag: "+esc(r.param_tag),"当前序号: "+(r.__currentOrder??"-"),"收益排序: "+(sortMode==="capital"?index+1:"-"),labelTextFinal("open_bar")+": "+formatParamDisplay(r.open_bar),labelTextFinal("open_threshold")+": "+formatParamDisplay(r.open_threshold),labelTextFinal("open_continous_threshold")+": "+formatParamDisplay(r.open_continous_threshold),"capital: "+(r.capital??"-"),"trade_num: "+(r.trade_num??"-")].join("<br>")),hovertemplate:"%{text}<extra></extra>",name:"capital"}],{margin:{l:44,r:18,t:16,b:40},paper_bgcolor:"rgba(0,0,0,0)",plot_bgcolor:"#fff",xaxis:sortMode==="capital"?{title:"收益排名",showgrid:false,zeroline:false}:{title:labelTextFinal("open_bar"),showgrid:false,zeroline:false,tickmode:"array",tickvals:groupTicks.map(item=>item.value),ticktext:groupTicks.map(item=>item.label)},yaxis:{title:"capital",showgrid:false,zeroline:false},shapes:separators,showlegend:false},{responsive:true,displayModeBar:false});if($("overviewChart").removeAllListeners){$("overviewChart").removeAllListeners("plotly_click")}$("overviewChart").on("plotly_click",evt=>{const key=evt?.points?.[0]?.customdata;const record=recordByKey(key);if(record)setRecord(record,true)})}
+renderOverview3d=function(){const chart=$("overview3dChart");const empty=$("overview3dEmpty");if(!chart||!empty){return}if(!state.summary||!state.summary.records.length){setOverview3dEmpty("请选择一个回测批次。");return}const rows=state.summary.records.filter(row=>row.capital!==null&&row.capital!==undefined&&row.open_bar!==null&&row.open_bar!==undefined&&row.open_threshold!==null&&row.open_threshold!==undefined);if(!rows.length){setOverview3dEmpty("当前批次缺少可用于三维图的参数数据。");return}empty.style.display="none";chart.style.display="block";const text=rows.map(row=>["param_tag: "+esc(row.param_tag),labelTextFinal("open_bar")+": "+formatParamDisplay(row.open_bar),labelTextFinal("open_threshold")+": "+formatParamDisplay(row.open_threshold),labelTextFinal("open_continous_threshold")+": "+formatParamDisplay(row.open_continous_threshold),"capital: "+formatMetric3(row.capital),"trade_num: "+(row.trade_num??"-")].join("<br>"));Plotly.newPlot(chart,[{type:"scatter3d",mode:"markers",x:rows.map(row=>row.open_threshold),y:rows.map(row=>row.capital),z:rows.map(row=>row.open_bar),customdata:rows.map(row=>row.selection_key),text:text,hovertemplate:"%{text}<extra></extra>",marker:{size:5,color:rows.map(row=>row.capital),colorscale:"Viridis",opacity:0.95,colorbar:{title:"capital"}}}],{margin:{l:0,r:0,t:10,b:0},paper_bgcolor:"rgba(0,0,0,0)",scene:{xaxis:{title:labelTextFinal("open_threshold"),gridcolor:"#e8eef8",zerolinecolor:"#e8eef8",backgroundcolor:"#fff"},yaxis:{title:"capital",gridcolor:"#e8eef8",zerolinecolor:"#e8eef8",backgroundcolor:"#fff"},zaxis:{title:labelTextFinal("open_bar"),gridcolor:"#e8eef8",zerolinecolor:"#e8eef8",backgroundcolor:"#fff"}},showlegend:false},{responsive:true,displayModeBar:false});if(chart.removeAllListeners){chart.removeAllListeners("plotly_click")}chart.on("plotly_click",evt=>{const key=evt?.points?.[0]?.customdata;const record=recordByKey(key);if(record){setRecord(record,true)}})}
+const syncProgramSpecificLabelsFinal=syncProgramSpecificLabels;syncProgramSpecificLabels=function(){syncProgramSpecificLabelsFinal();if($("overviewChart")?.style.display==="block"){overview()}if($("overview3dChart")?.style.display==="block"){renderOverview3d()}}
+setupLayout();
+syncProgramSpecificLabels();
 bootstrapPreset();
 </script>'''
 )
