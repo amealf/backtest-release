@@ -1334,6 +1334,7 @@ class MomentumStrategy(BaseStrategy):
         self.pending_trigger_price = np.nan
         self.pending_entry_bar_index = None
         self.pending_entry_bar_date = ''
+        self.open_withdraw_reset_same_bar_count = 0
 
     def get_extra_columns(self) -> list:
         return [
@@ -3147,6 +3148,9 @@ def run_shock_backtest():
                     outcome_stats.at[param_tag, 'range_end'] = str(end_label)
                     outcome_stats.at[param_tag, 'speed_close_count'] = speed_close_count
                     outcome_stats.at[param_tag, 'withdrawal_close_count'] = withdrawal_close_count
+                    outcome_stats.at[param_tag, 'open_withdraw_reset_same_bar_count'] = int(
+                        getattr(strategy, 'open_withdraw_reset_same_bar_count', 0)
+                    )
 
                     existing_param_tags.add(param_tag)
                     if run_mode_value == 'grid':

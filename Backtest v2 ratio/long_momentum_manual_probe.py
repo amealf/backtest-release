@@ -51,44 +51,35 @@ resample_rule = ''
 # 运行模式：
 # 'manual' = 使用当前参数直接回测，并弹出 K 线买卖点图
 # 'grid' = 执行网格搜索，并输出参数结果图
-run_mode = 'grid'
-# run_mode = 'manual'
-
-# 回撤平仓模式：
-# 'fixed_high_pct'：持仓最高点 * close_withdrawal_threshold
-# 'legacy_low_to_high_2over3'：2/3 * (从 low_index 低点到持仓最高点的涨幅)
-close_withdrawal_mode = 'legacy_low_to_high_2over3'
+## run single parameter probe
+# run_mode = 'grid'
+run_mode = 'manual'
 
 # 策略参数（直接使用 bar 数，单位是当前实际回测周期）
 open_bar = 80
-open_threshold = 0.002
-# 开仓前回撤限制。
-# 设为 0 时，规则改成：确认低点以后，后续任何一根 bar 只要碰到这个低点，就判定失败。
-open_withdrawal_threshold = 0.0
+open_threshold = 0.001
+open_withdrawal_threshold = open_threshold  # 暂时不需要
 close_bar = open_bar
 close_threshold = open_threshold
-open_continous_threshold = 0.002
-# 回撤平仓阈值按持仓最高点的固定比例计算。
-# 参数 0.001 表示：持仓最高点 * 0.001。
-close_withdrawal_threshold = 0.002
+open_continous_threshold = 0.006
+# 当前先不过分依赖回撤离场，close_withdrawal_threshold 只保留一个最低底线。
+# 实际持仓回撤阈值使用：
+# max(close_withdrawal_threshold, 从 low_index 到当前最高点最大涨幅的 2/3)
+close_withdrawal_threshold = open_withdrawal_threshold
 
 # Grid search
 # for_num_1: 搜索 open_bar 的次数
 # open_bar_runtime = open_bar + i * step1
-for_num_1 = 7
-step1 = 10
+for_num_1 = 20
+step1 = 5
 # for_num_2: 搜索 open_threshold 的次数
 # open_threshold_runtime = open_threshold + i * step2
-for_num_2 = 4
-step2 = 0.002
+for_num_2 = 8
+step2 = 0.001
 # for_num_3: 搜索 open_continous_threshold 的次数
 # open_continous_threshold_runtime = open_continous_threshold + i * step3
 for_num_3 = 10
 step3 = 0.001
-# for_num_4: 搜索 close_withdrawal_threshold 的次数
-# close_withdrawal_threshold_runtime = close_withdrawal_threshold + i * step4
-for_num_4 = 5
-step4 = 0.002
 open_threshold_stop_flat_rounds = 5
 
 # 双策略参数（保留）
@@ -118,35 +109,6 @@ grid_outcome_stats_flush_every = 10
 # 并发 grid 可通过环境变量覆盖这几个值
 grid_shard_tag = os.environ.get('LM_GRID_SHARD_TAG', '').strip()
 grid_open_bar_values_env = os.environ.get('LM_GRID_OPEN_BAR_VALUES', '').strip()
-run_mode = os.environ.get('LM_RUN_MODE', run_mode).strip()
-close_withdrawal_mode = os.environ.get(
-    'LM_CLOSE_WITHDRAWAL_MODE',
-    close_withdrawal_mode,
-).strip().lower()
-if close_withdrawal_mode not in ('fixed_high_pct', 'legacy_low_to_high_2over3'):
-    raise ValueError(
-        "close_withdrawal_mode must be 'fixed_high_pct' or "
-        "'legacy_low_to_high_2over3'."
-    )
-if os.environ.get('LM_MANUAL_OPEN_BAR', '').strip():
-    open_bar = int(os.environ['LM_MANUAL_OPEN_BAR'])
-if os.environ.get('LM_MANUAL_OPEN_THRESHOLD', '').strip():
-    open_threshold = float(os.environ['LM_MANUAL_OPEN_THRESHOLD'])
-if os.environ.get('LM_MANUAL_OPEN_CONT_THRESHOLD', '').strip():
-    open_continous_threshold = float(os.environ['LM_MANUAL_OPEN_CONT_THRESHOLD'])
-if os.environ.get('LM_MANUAL_OPEN_WD_THRESHOLD', '').strip():
-    open_withdrawal_threshold = float(os.environ['LM_MANUAL_OPEN_WD_THRESHOLD'])
-if os.environ.get('LM_MANUAL_CLOSE_WD_THRESHOLD', '').strip():
-    close_withdrawal_threshold = float(os.environ['LM_MANUAL_CLOSE_WD_THRESHOLD'])
-if run_mode == 'grid' and not os.environ.get('LM_MANUAL_OPEN_WD_THRESHOLD', '').strip():
-    open_withdrawal_threshold = open_threshold
-close_bar = open_bar
-close_threshold = open_threshold
-outcome_dir_name = (
-    f'{data_file_name} long_momentum outcome_fix_wd'
-    if close_withdrawal_mode == 'legacy_low_to_high_2over3'
-    else f'{data_file_name} long_momentum outcome'
-)
 
 
 def detect_bar_seconds_from_df(df: pd.DataFrame) -> int:
@@ -729,9 +691,7 @@ def build_planned_param_tags_long(
         open_cont_start: float,
         for_num_3_runtime: int,
         step3_value: float,
-        close_wd_start: float,
-        for_num_4_runtime: int,
-        step4_value: float) -> set[str]:
+        close_withdrawal_threshold_value: float) -> set[str]:
     planned_tags = set()
     for open_bar_value in open_bar_values:
         close_bar_value = int(open_bar_value)
@@ -747,22 +707,17 @@ def build_planned_param_tags_long(
                     open_cont_start + (open_cont_iter * step3_value),
                     10,
                 )
-                for close_wd_iter in range(int(for_num_4_runtime)):
-                    close_withdrawal_threshold_value = round(
-                        close_wd_start + (close_wd_iter * step4_value),
-                        10,
-                    )
-                    if open_continous_threshold_value < close_withdrawal_threshold_value:
-                        continue
-                    planned_tags.add(build_long_param_tag(
-                        open_bar_value,
-                        open_threshold_value,
-                        open_continous_threshold_value,
-                        open_withdrawal_threshold_value,
-                        close_bar_value,
-                        close_threshold_value,
-                        close_withdrawal_threshold_value,
-                    ))
+                if open_continous_threshold_value < close_withdrawal_threshold_value:
+                    continue
+                planned_tags.add(build_long_param_tag(
+                    open_bar_value,
+                    open_threshold_value,
+                    open_continous_threshold_value,
+                    open_withdrawal_threshold_value,
+                    close_bar_value,
+                    close_threshold_value,
+                    close_withdrawal_threshold_value,
+                ))
     return planned_tags
 
 
@@ -1189,7 +1144,7 @@ def export_interactive_html_long(
         )
     )
 
-    html_dir = f'./result/{outcome_dir_name}/html'
+    html_dir = './result/%s long_momentum outcome/html' % file_name
     os.makedirs(html_dir, exist_ok=True)
     html_path = os.path.join(html_dir, save_name + ' Long interactive.html')
     html_text = fig_html.to_html(
@@ -1331,10 +1286,7 @@ class MomentumStrategy(BaseStrategy):
             cond1 = (inc_percent >= open_threshold)
             signal.at[index, 'inc_signal'] = 1 if cond1 else 0
 
-            if open_withdrawal_threshold == 0:
-                cond2 = True
-            else:
-                cond2 = wd_percent < open_withdrawal_threshold
+            cond2 = wd_percent < open_withdrawal_threshold
             signal.at[index, 'wd_signal'] = 1 if cond2 else 0
 
             if signal.at[index, 'wd_signal']:
@@ -1377,12 +1329,7 @@ class MomentumStrategy(BaseStrategy):
             withdrawal_percent = withdrawal / with_high if with_high != 0 else 0
             total_increase, inc_base = get_increase_with_base(cond3_analysis_slice)
 
-            if open_withdrawal_threshold == 0:
-                low_price = float(quote.iloc[self.low_index]['low'])
-                current_low = float(quote.iloc[ii]['low'])
-                cond3 = (ii == self.low_index) or (current_low > low_price)
-            else:
-                cond3 = withdrawal_percent < open_withdrawal_threshold
+            cond3 = withdrawal_percent < open_withdrawal_threshold
             signal.at[index, 'wd_signal'] = 1 if cond3 else 0
 
             if signal.at[index, 'wd_signal']:
@@ -1537,21 +1484,20 @@ class MomentumStrategy(BaseStrategy):
 
         # 回撤条件
         holding_high = float(holding_slice['high'].max())
-        dynamic_close_withdrawal_threshold = np.nan
-        if close_withdrawal_mode == 'legacy_low_to_high_2over3':
-            low_price = float(quote.iloc[self.low_index]['low'])
-            max_increase_abs = max(holding_high - low_price, 0.0)
-            dynamic_withdrawal_abs = max_increase_abs * (2.0 / 3.0)
-            dynamic_close_withdrawal_threshold = (
-                dynamic_withdrawal_abs / holding_high if holding_high != 0 else 0.0
-            )
+        low_price = float(quote.iloc[self.low_index]['low'])
+        max_increase_abs = max(holding_high - low_price, 0.0)
+        dynamic_withdrawal_abs = max_increase_abs * (2.0 / 3.0)
+        dynamic_close_withdrawal_threshold = (
+            dynamic_withdrawal_abs / holding_high if holding_high != 0 else 0
+        )
+        if dynamic_close_withdrawal_threshold > close_withdrawal_threshold_floor:
             close_withdrawal_threshold = dynamic_close_withdrawal_threshold
         else:
             close_withdrawal_threshold = close_withdrawal_threshold_floor
         signal.at[index, 'close_wd_floor_per'] = round(
             close_withdrawal_threshold_floor * 100, 4)
         signal.at[index, 'close_wd_dyn_per'] = round(
-            close_withdrawal_threshold * 100, 4)
+            dynamic_close_withdrawal_threshold * 100, 4)
         signal.at[index, 'close_wd_th_per'] = round(
             close_withdrawal_threshold * 100, 4)
         signal.at[index, 'close_wd_th_abs'] = round(
@@ -1775,9 +1721,9 @@ if __name__ == '__main__':
 
     # 创建输出文件夹
     os.makedirs('./result', exist_ok=True)
-    os.makedirs(f'./result/{outcome_dir_name}/image', exist_ok=True)
-    os.makedirs(f'./result/{outcome_dir_name}/perf', exist_ok=True)
-    os.makedirs(f'./result/{outcome_dir_name}/trans', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long_momentum outcome/image', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long_momentum outcome/perf', exist_ok=True)
+    os.makedirs(f'./result/{file_name} long_momentum outcome/trans', exist_ok=True)
 
     outcome_stats = pd.DataFrame()
 
@@ -1791,10 +1737,10 @@ if __name__ == '__main__':
         + f'{make_safe_range_token(range_end_label)}'
     )
     dashboard_outcome_stats_path = (
-        f'./result/{outcome_dir_name}/outcome stats/'
+        './result/%s long_momentum outcome/outcome stats/' % file_name
         + 'long_momentum ' + run_name + ' outcome_stats.xlsx'
     )
-    summary_dir = './result/stats %s/' % outcome_dir_name
+    summary_dir = './result/stats %s long_momentum outcome/' % file_name
     os.makedirs(summary_dir, exist_ok=True)
 
     progress_token = make_safe_range_token(
@@ -1807,9 +1753,6 @@ if __name__ == '__main__':
         + '_s2' + str(step2)
         + '_f3' + str(for_num_3)
         + '_s3' + str(step3)
-        + '_cw' + str(close_withdrawal_threshold)
-        + '_f4' + str(for_num_4)
-        + '_s4' + str(step4)
         + ('_' + grid_shard_tag if grid_shard_tag else '')
     )
     progress_json_path = (
@@ -1825,7 +1768,6 @@ if __name__ == '__main__':
         'range_end_label': str(range_end_label),
         'resample_rule': str(resample_rule),
         'period_label': str(period_label),
-        'close_withdrawal_mode': str(close_withdrawal_mode),
         'open_bar_start': int(open_bar_cfg),
         'for_num_1': int(for_num_1),
         'step1': int(step1),
@@ -1835,16 +1777,12 @@ if __name__ == '__main__':
         'step2': float(step2),
         'for_num_3': int(for_num_3),
         'step3': float(step3),
-        'close_withdrawal_threshold_start': float(close_withdrawal_threshold),
-        'for_num_4': int(for_num_4),
-        'step4': float(step4),
         'open_threshold_stop_flat_rounds': int(open_threshold_stop_flat_rounds),
     }
     resume_progress = None
     resume_open_bar_index = 0
     resume_threshold_iter = 0
     resume_open_cont_iter = 0
-    resume_close_wd_iter = 0
     resume_outer_state = {
         'last_open_threshold_trade_count': None,
         'unchanged_open_threshold_steps': 0,
@@ -1875,7 +1813,6 @@ if __name__ == '__main__':
         open_bar_values = [int(open_bar_cfg)]
         for_num_2_runtime = 1
         for_num_3_runtime = 1
-        for_num_4_runtime = 1
     else:
         if step1 == 0:
             raise ValueError('step1 cannot be 0.')
@@ -1889,10 +1826,6 @@ if __name__ == '__main__':
             raise ValueError('for_num_2 must be positive.')
         if int(for_num_3) <= 0:
             raise ValueError('for_num_3 must be positive.')
-        if step4 <= 0:
-            raise ValueError('step4 must be positive.')
-        if int(for_num_4) <= 0:
-            raise ValueError('for_num_4 must be positive.')
         if open_threshold_stop_flat_rounds <= 0:
             raise ValueError('open_threshold_stop_flat_rounds must be positive.')
         open_bar_values = [
@@ -1904,7 +1837,6 @@ if __name__ == '__main__':
             raise ValueError('open_bar search range is invalid.')
         for_num_2_runtime = int(for_num_2)
         for_num_3_runtime = int(for_num_3)
-        for_num_4_runtime = int(for_num_4)
         resume_progress = load_progress_json(progress_json_path)
         if (
             resume_progress is not None
@@ -1922,7 +1854,6 @@ if __name__ == '__main__':
             resume_open_bar_index = int(next_cursor.get('open_bar_index', 0))
             resume_threshold_iter = int(next_cursor.get('threshold_iter', 0))
             resume_open_cont_iter = int(next_cursor.get('open_cont_iter', 0))
-            resume_close_wd_iter = int(next_cursor.get('close_wd_iter', 0))
             resume_outer_state = resume_progress.get(
                 'outer_state', resume_outer_state)
             resume_inner_state = resume_progress.get(
@@ -1935,8 +1866,7 @@ if __name__ == '__main__':
                 '[Grid] next cursor: '
                 + f'open_bar_index={resume_open_bar_index}, '
                 + f'threshold_iter={resume_threshold_iter}, '
-                + f'open_cont_iter={resume_open_cont_iter}, '
-                + f'close_wd_iter={resume_close_wd_iter}'
+                + f'open_cont_iter={resume_open_cont_iter}'
             )
             existing_param_tags = set(outcome_stats.index.astype(str).tolist())
         else:
@@ -1968,12 +1898,6 @@ if __name__ == '__main__':
             + ' count=' + str(for_num_3_runtime)
         )
         print(
-            '[Grid] close_withdrawal_threshold start='
-            + str(close_withdrawal_threshold)
-            + ' step=' + str(step4)
-            + ' count=' + str(for_num_4_runtime)
-        )
-        print(
             '[Grid] stop threshold loops after '
             + str(open_threshold_stop_flat_rounds)
             + ' unchanged trade-count steps'
@@ -1996,7 +1920,6 @@ if __name__ == '__main__':
         total_search_space = 0
         progress_marks = {}
         printed_progress_marks = set()
-        enable_flat_stop = False
     else:
         outcome_stats = merge_outcome_stats(
             load_existing_outcome_stats(dashboard_outcome_stats_path),
@@ -2017,14 +1940,11 @@ if __name__ == '__main__':
             int(for_num_3_runtime),
             float(step3),
             float(close_withdrawal_threshold),
-            int(for_num_4_runtime),
-            float(step4),
         )
         completed_param_tags = planned_param_tags.intersection(existing_param_tags)
         total_search_space = len(planned_param_tags)
         progress_marks = build_progress_marks(total_search_space)
         printed_progress_marks = set()
-        enable_flat_stop = int(for_num_4_runtime) == 1
         print_search_progress(
             len(completed_param_tags),
             total_search_space,
@@ -2114,450 +2034,392 @@ if __name__ == '__main__':
                     open_continous_threshold_runtime = float(
                         open_continous_threshold
                     )
-                if (
-                    run_mode == 'grid'
-                    and open_bar_index == resume_open_bar_index
-                    and threshold_iter == resume_threshold_iter
-                    and open_cont_iter == resume_open_cont_iter
-                ):
-                    close_wd_start_iter = resume_close_wd_iter
-                else:
-                    close_wd_start_iter = 0
+
+                open_bar_value = open_bar_runtime
+                open_threshold_value = open_threshold_runtime
                 if run_mode == 'grid':
-                    close_wd_iterations = range(
-                        int(close_wd_start_iter),
-                        int(for_num_4_runtime)
-                    )
+                    open_withdrawal_threshold_value = open_threshold_runtime
+                    close_threshold_value = open_threshold_runtime
                 else:
-                    close_wd_iterations = [0]
+                    open_withdrawal_threshold_value = open_withdrawal_threshold
+                    close_threshold_value = close_threshold
+                close_bar_value = close_bar_runtime
+                open_continous_threshold_value = open_continous_threshold_runtime
+                close_withdrawal_threshold_value = close_withdrawal_threshold
+                open_bar2_runtime = open_bar2_cfg
+                open_threshold2_runtime = open_threshold2
+                open_continous_threshold2_runtime = open_continous_threshold2
+                close_withdrawal_threshold2_runtime = close_withdrawal_threshold2
+                commision_percent_cfg = commision_percent
+                capital_cfg = capital
 
-                for close_wd_iter in close_wd_iterations:
-                    if run_mode == 'grid':
-                        close_withdrawal_threshold_runtime = round(
-                            close_withdrawal_threshold + (close_wd_iter * step4),
-                            10,
-                        )
-                        print(
-                            '[Grid]     close_withdrawal_threshold='
-                            + str(close_withdrawal_threshold_runtime)
-                        )
-                    else:
-                        close_withdrawal_threshold_runtime = float(
-                            close_withdrawal_threshold
-                        )
+                if open_threshold_value < open_withdrawal_threshold_value:
+                    print('open_threshold不可小于open_withdrawal_threshold')
+                    continue
+                if open_continous_threshold_value < open_threshold_value:
+                    print('open_continous_threshold不可小于open_threshold')
+                    continue
+                if open_continous_threshold_value < close_withdrawal_threshold_value:
+                    print('open_continous_threshold不可小于close_withdrawal_threshold')
+                    continue
 
-                    open_bar_value = open_bar_runtime
-                    open_threshold_value = open_threshold_runtime
-                    if run_mode == 'grid':
-                        open_withdrawal_threshold_value = open_threshold_runtime
-                        close_threshold_value = open_threshold_runtime
-                    else:
-                        open_withdrawal_threshold_value = open_withdrawal_threshold
-                        close_threshold_value = close_threshold
-                    close_bar_value = close_bar_runtime
-                    open_continous_threshold_value = open_continous_threshold_runtime
-                    close_withdrawal_threshold_value = close_withdrawal_threshold_runtime
-                    open_bar2_runtime = open_bar2_cfg
-                    open_threshold2_runtime = open_threshold2
-                    open_continous_threshold2_runtime = open_continous_threshold2
-                    close_withdrawal_threshold2_runtime = close_withdrawal_threshold2
-                    commision_percent_cfg = commision_percent
-                    capital_cfg = capital
+                param_tag = build_long_param_tag(
+                    open_bar_value,
+                    open_threshold_value,
+                    open_continous_threshold_value,
+                    open_withdrawal_threshold_value,
+                    close_bar_value,
+                    close_threshold_value,
+                    close_withdrawal_threshold_value,
+                )
+                if run_mode == 'grid' and param_tag in existing_param_tags:
+                    print('[Grid] skip existing param: ' + param_tag)
+                    continue
 
-                    if open_threshold_value < open_withdrawal_threshold_value:
-                        print('open_threshold不可小于open_withdrawal_threshold')
-                        continue
-                    if open_continous_threshold_value < open_threshold_value:
-                        print('open_continous_threshold不可小于open_threshold')
-                        continue
-                    if open_continous_threshold_value < close_withdrawal_threshold_value:
-                        print('open_continous_threshold不可小于close_withdrawal_threshold')
-                        continue
+                params = {
+                    'open_bar': open_bar_value,
+                    'open_threshold': open_threshold_value,
+                    'open_continous_threshold': open_continous_threshold_value,
+                    'open_withdrawal_threshold': open_withdrawal_threshold_value,
+                    'close_bar': close_bar_value,
+                    'close_threshold': close_threshold_value,
+                    'close_withdrawal_threshold': close_withdrawal_threshold_value,
+                    'open_continous_threshold2': open_continous_threshold2_runtime,
+                    'close_withdrawal_threshold2': close_withdrawal_threshold2_runtime,
+                    'round_precision': ROUND_PRECISION,
+                }
 
-                    param_tag = build_long_param_tag(
-                        open_bar_value,
-                        open_threshold_value,
-                        open_continous_threshold_value,
-                        open_withdrawal_threshold_value,
-                        close_bar_value,
-                        close_threshold_value,
-                        close_withdrawal_threshold_value,
-                    )
-                    if run_mode == 'grid' and param_tag in existing_param_tags:
-                        print('[Grid] skip existing param: ' + param_tag)
-                        continue
+                strategy = MomentumStrategy(params)
+                engine = BacktestEngine(
+                    underlying, strategy, capital_cfg,
+                    ROUND_PRECISION, commision_percent_cfg,
+                    show_progress=(run_mode != 'grid'))
+                (df_signal, signal, close_counts) = engine.run()
+                withdrawal_close_count = close_counts.get(1, 0)
+                speed_close_count = close_counts.get(2, 0)
+                total_trade_count = withdrawal_close_count + speed_close_count
 
-                    params = {
-                        'open_bar': open_bar_value,
-                        'open_threshold': open_threshold_value,
-                        'open_continous_threshold': open_continous_threshold_value,
-                        'open_withdrawal_threshold': open_withdrawal_threshold_value,
-                        'close_bar': close_bar_value,
-                        'close_threshold': close_threshold_value,
-                        'close_withdrawal_threshold': close_withdrawal_threshold_value,
-                        'close_withdrawal_mode': close_withdrawal_mode,
-                        'open_continous_threshold2': open_continous_threshold2_runtime,
-                        'close_withdrawal_threshold2': close_withdrawal_threshold2_runtime,
-                        'round_precision': ROUND_PRECISION,
-                    }
+                performance, transactions_df = generate_performance(
+                    underlying, df_signal, capital_cfg, commision_percent_cfg)
 
-                    strategy = MomentumStrategy(params)
-                    engine = BacktestEngine(
-                        underlying, strategy, capital_cfg,
-                        ROUND_PRECISION, commision_percent_cfg,
-                        show_progress=(run_mode != 'grid'))
-                    (df_signal, signal, close_counts) = engine.run()
-                    withdrawal_close_count = close_counts.get(1, 0)
-                    speed_close_count = close_counts.get(2, 0)
-                    total_trade_count = withdrawal_close_count + speed_close_count
+                if len(transactions_df) > 1:
+                    Capital_outcome = round(
+                        transactions_df[
+                            transactions_df.Type != 'long'].Capital.iloc[-1], 2)
+                else:
+                    Capital_outcome = 100
+                perf_outcome = performance.reset_index(
+                    drop=True)[['date', 'capital']]
 
-                    performance, transactions_df = generate_performance(
-                        underlying, df_signal, capital_cfg, commision_percent_cfg)
+                count_tag = (
+                    str(round(withdrawal_close_count, 4))
+                    + '+' + str(round(speed_close_count, 4))
+                )
+                result_tag = param_tag + ' ' + count_tag
 
-                    if len(transactions_df) > 1:
-                        Capital_outcome = round(
-                            transactions_df[
-                                transactions_df.Type != 'long'].Capital.iloc[-1], 2)
-                    else:
-                        Capital_outcome = 100
-                    perf_outcome = performance.reset_index(
-                        drop=True)[['date', 'capital']]
+                print(str(range_start_label) + '-' + str(range_end_label))
+                print('total close count = ' + str(total_trade_count))
+                print('withdrawal close count = '
+                      + str(round(withdrawal_close_count, 4)))
+                print('speed close count = '
+                      + str(round(speed_close_count, 4)))
+                print(result_tag)
+                print('profit: ' + str(round(performance.capital.iloc[-1], 2)))
 
-                    count_tag = (
-                        str(round(withdrawal_close_count, 4))
-                        + '+' + str(round(speed_close_count, 4))
-                    )
-                    result_tag = param_tag + ' ' + count_tag
+                save_name = run_name + ' ' + result_tag
+                fig1_title = str(Capital_outcome) + ' ' + save_name
+                if save_static_plot:
+                    plot_ext = 'pdf' if save_plot_as_pdf else 'png'
+                    fig1_path = ('./result/%s long_momentum outcome/' % file_name
+                                 + ' ' + str(Capital_outcome)
+                                 + save_name + f' Long.{plot_ext}')
+                    close_fig = (run_mode != 'manual') or (len(transactions_df) == 0)
+                    plot_backtest_chart(
+                        underlying, transactions_df, perf_outcome,
+                        title=fig1_title,
+                        save_path=fig1_path,
+                        close_fig=close_fig)
 
-                    print(str(range_start_label) + '-' + str(range_end_label))
-                    print('total close count = ' + str(total_trade_count))
-                    print('withdrawal close count = '
-                          + str(round(withdrawal_close_count, 4)))
-                    print('speed close count = '
-                          + str(round(speed_close_count, 4)))
-                    print(result_tag)
-                    print('profit: ' + str(round(performance.capital.iloc[-1], 2)))
-
-                    save_name = run_name + ' ' + result_tag
-                    fig1_title = str(Capital_outcome) + ' ' + save_name
-                    if save_static_plot:
-                        plot_ext = 'pdf' if save_plot_as_pdf else 'png'
-                        fig1_path = (f'./result/{outcome_dir_name}/'
-                                     + ' ' + str(Capital_outcome)
-                                     + save_name + f' Long.{plot_ext}')
-                        close_fig = (run_mode != 'manual') or (len(transactions_df) == 0)
-                        plot_backtest_chart(
-                            underlying, transactions_df, perf_outcome,
-                            title=fig1_title,
-                            save_path=fig1_path,
-                            close_fig=close_fig)
-
-                    detail_df = pd.concat([signal, df5], axis=1, join='inner')
-                    detail_df = pd.concat(
-                        [detail_df, perf_outcome.capital], axis=1, join='inner')
+                detail_df = pd.concat([signal, df5], axis=1, join='inner')
+                detail_df = pd.concat(
+                    [detail_df, perf_outcome.capital], axis=1, join='inner')
+                detail_df.drop(
+                    ['holding_signal', 'inc_signal', 'wd_signal',
+                     'holding_wd_signal', 'total_inc_signal',
+                     'speed_close_signal', 'have_holding'],
+                    axis=1, inplace=True)
+                detail_df.drop(
+                    ['var0', 'low_index', 'high_index'],
+                    axis=1, inplace=True)
+                if len(detail_df) == 0:
                     detail_df.drop(
-                        ['holding_signal', 'inc_signal', 'wd_signal',
-                         'holding_wd_signal', 'total_inc_signal',
-                         'speed_close_signal', 'have_holding'],
+                        ['holding_wd', 'holding_inc', 'execution'],
                         axis=1, inplace=True)
-                    detail_df.drop(
-                        ['var0', 'low_index', 'high_index'],
-                        axis=1, inplace=True)
-                    if len(detail_df) == 0:
-                        detail_df.drop(
-                            ['holding_wd', 'holding_inc', 'execution'],
-                            axis=1, inplace=True)
 
-                    if export_interactive_html_enabled:
-                        html_title = str(round(Capital_outcome, 2)) + ' ' + save_name
-                        export_interactive_html_long(
-                            file_name=file_name,
-                            save_name=save_name,
-                            title=html_title,
-                            underlying1=html_underlying,
-                            detail_df=detail_df,
-                            transactions_df=transactions_df,
-                            factor=html_factor
-                        )
+                if export_interactive_html_enabled:
+                    html_title = str(round(Capital_outcome, 2)) + ' ' + save_name
+                    export_interactive_html_long(
+                        file_name=file_name,
+                        save_name=save_name,
+                        title=html_title,
+                        underlying1=html_underlying,
+                        detail_df=detail_df,
+                        transactions_df=transactions_df,
+                        factor=html_factor
+                    )
 
-                    perf_name = (
-                        param_tag + ' ' + count_tag
+                perf_name = (
+                    param_tag + ' ' + count_tag
+                    + ' Long ' + run_name
+                    + ' ' + str(Capital_outcome)
+                    + ' perf.xlsx'
+                )
+                writer1 = pd.ExcelWriter(
+                    './result/%s long_momentum outcome/perf/' % file_name + perf_name,
+                    engine='xlsxwriter')
+                detail_df.to_excel(writer1, sheet_name='stats')
+                workbook = writer1.book
+                worksheet = writer1.sheets['stats']
+                worksheet.set_default_row(15)
+                fmt = workbook.add_format()
+                fmt.set_font_name('Microsoft YaHei UI Light')
+                fmt.set_align('justify')
+                fmt.set_align('center')
+                fmt.set_align('vjustify')
+                fmt.set_align('vcenter')
+                fmt.set_font_size(12)
+                fmt1 = workbook.add_format({'num_format': '0'})
+                fmt1.set_font_name('Microsoft YaHei UI Light')
+                fmt1.set_align('justify')
+                fmt1.set_align('center')
+                fmt1.set_align('vjustify')
+                fmt1.set_align('vcenter')
+                worksheet.set_column('A:A', 7, fmt1)
+                worksheet.set_column('B:B', 18.5, fmt1)
+                worksheet.set_column('C:C', 12, fmt)
+                worksheet.set_column('D:D', 10, fmt)
+                worksheet.set_column('E:E', 9, fmt)
+                worksheet.set_column('F:F', 12, fmt)
+                worksheet.set_column('G:G', 11, fmt)
+                worksheet.set_column('H:H', 11, fmt)
+                worksheet.set_column('I:I', 11, fmt)
+                worksheet.set_column('J:J', 13, fmt)
+                worksheet.set_column('K:K', 9, fmt1)
+                worksheet.set_column('L:L', 8, fmt1)
+                worksheet.set_column('M:O', 8, fmt)
+                worksheet.set_column('P:P', 7.8, fmt1)
+                worksheet.set_column('Q:R', 10, fmt)
+                worksheet.set_column('S:S', 11.8, fmt)
+                worksheet.set_column('T:Y', 10.4, fmt)
+                worksheet.set_column('Z:Z', 22, fmt)
+                worksheet.freeze_panes(1, 2)
+                writer1.close()
+
+                if len(transactions_df) != 0:
+                    writer2 = pd.ExcelWriter(
+                        './result/%s long_momentum outcome/trans/' % file_name
+                        + param_tag + ' ' + count_tag
                         + ' Long ' + run_name
                         + ' ' + str(Capital_outcome)
-                        + ' perf.xlsx'
-                    )
-                    writer1 = pd.ExcelWriter(
-                        f'./result/{outcome_dir_name}/perf/' + perf_name,
-                        engine='xlsxwriter')
-                    detail_df.to_excel(writer1, sheet_name='stats')
-                    workbook = writer1.book
-                    worksheet = writer1.sheets['stats']
-                    worksheet.set_default_row(15)
-                    fmt = workbook.add_format()
-                    fmt.set_font_name('Microsoft YaHei UI Light')
-                    fmt.set_align('justify')
-                    fmt.set_align('center')
-                    fmt.set_align('vjustify')
-                    fmt.set_align('vcenter')
-                    fmt.set_font_size(12)
-                    fmt1 = workbook.add_format({'num_format': '0'})
-                    fmt1.set_font_name('Microsoft YaHei UI Light')
-                    fmt1.set_align('justify')
-                    fmt1.set_align('center')
-                    fmt1.set_align('vjustify')
-                    fmt1.set_align('vcenter')
-                    worksheet.set_column('A:A', 7, fmt1)
-                    worksheet.set_column('B:B', 18.5, fmt1)
-                    worksheet.set_column('C:C', 12, fmt)
-                    worksheet.set_column('D:D', 10, fmt)
-                    worksheet.set_column('E:E', 9, fmt)
-                    worksheet.set_column('F:F', 12, fmt)
-                    worksheet.set_column('G:G', 11, fmt)
-                    worksheet.set_column('H:H', 11, fmt)
-                    worksheet.set_column('I:I', 11, fmt)
-                    worksheet.set_column('J:J', 13, fmt)
-                    worksheet.set_column('K:K', 9, fmt1)
-                    worksheet.set_column('L:L', 8, fmt1)
-                    worksheet.set_column('M:O', 8, fmt)
-                    worksheet.set_column('P:P', 7.8, fmt1)
-                    worksheet.set_column('Q:R', 10, fmt)
-                    worksheet.set_column('S:S', 11.8, fmt)
-                    worksheet.set_column('T:Y', 10.4, fmt)
-                    worksheet.set_column('Z:Z', 22, fmt)
-                    worksheet.freeze_panes(1, 2)
-                    writer1.close()
+                        + ' trans.xlsx', engine='xlsxwriter')
+                    transactions_df.reset_index(
+                        drop=False).to_excel(writer2, sheet_name='stats')
+                    workbook2 = writer2.book
+                    worksheet2 = writer2.sheets['stats']
+                    worksheet2.set_default_row(21)
+                    fmt3 = workbook2.add_format()
+                    fmt3.set_num_format('0')
+                    fmt3.set_font_name('Microsoft YaHei UI Light')
+                    fmt3.set_align('justify')
+                    fmt3.set_align('center')
+                    fmt3.set_align('vjustify')
+                    fmt3.set_align('vcenter')
+                    worksheet2.set_column('B:B', 17, fmt3)
+                    fmt2 = workbook2.add_format()
+                    fmt2.set_font_name('Microsoft YaHei UI Light')
+                    fmt2.set_align('justify')
+                    fmt2.set_align('center')
+                    fmt2.set_align('vjustify')
+                    fmt2.set_align('vcenter')
+                    fmt2.set_font_size(12)
+                    worksheet2.set_column('A:A', 11, fmt2)
+                    worksheet2.set_column('C:D', 11, fmt2)
+                    worksheet2.set_column('E:E', 14, fmt2)
+                    worksheet2.set_column('F:G', 13, fmt2)
+                    writer2.close()
 
-                    if len(transactions_df) != 0:
-                        writer2 = pd.ExcelWriter(
-                            f'./result/{outcome_dir_name}/trans/'
-                            + param_tag + ' ' + count_tag
-                            + ' Long ' + run_name
-                            + ' ' + str(Capital_outcome)
-                            + ' trans.xlsx', engine='xlsxwriter')
-                        transactions_df.reset_index(
-                            drop=False).to_excel(writer2, sheet_name='stats')
-                        workbook2 = writer2.book
-                        worksheet2 = writer2.sheets['stats']
-                        worksheet2.set_default_row(21)
-                        fmt3 = workbook2.add_format()
-                        fmt3.set_num_format('0')
-                        fmt3.set_font_name('Microsoft YaHei UI Light')
-                        fmt3.set_align('justify')
-                        fmt3.set_align('center')
-                        fmt3.set_align('vjustify')
-                        fmt3.set_align('vcenter')
-                        worksheet2.set_column('B:B', 17, fmt3)
-                        fmt2 = workbook2.add_format()
-                        fmt2.set_font_name('Microsoft YaHei UI Light')
-                        fmt2.set_align('justify')
-                        fmt2.set_align('center')
-                        fmt2.set_align('vjustify')
-                        fmt2.set_align('vcenter')
-                        fmt2.set_font_size(12)
-                        worksheet2.set_column('A:A', 11, fmt2)
-                        worksheet2.set_column('C:D', 11, fmt2)
-                        worksheet2.set_column('E:E', 14, fmt2)
-                        worksheet2.set_column('F:G', 13, fmt2)
-                        writer2.close()
-
-                    outcome_index = param_tag
-                    summary_metrics = build_summary_metrics(
-                        perf_outcome,
-                        transactions_df,
-                        initial_capital=capital_cfg,
+                outcome_index = param_tag
+                summary_metrics = build_summary_metrics(
+                    perf_outcome,
+                    transactions_df,
+                    initial_capital=capital_cfg,
+                )
+                summary_row = {
+                    'open_bar': open_bar_value,
+                    'close_bar': close_bar_value,
+                    'open_threshold': open_threshold_value,
+                    'open_continous_threshold': open_continous_threshold_value,
+                    'open_withdrawal_threshold': open_withdrawal_threshold_value,
+                    'close_threshold': close_threshold_value,
+                    'close_withdrawal_threshold': close_withdrawal_threshold_value,
+                    'withdrawal_close_count': withdrawal_close_count,
+                    'speed_close_count': speed_close_count,
+                    'open_withdraw_reset_same_bar_count': int(
+                        getattr(strategy, 'open_withdraw_reset_same_bar_count', 0)
+                    ),
+                }
+                for metric_name, metric_value in summary_metrics.items():
+                    summary_row[metric_name] = metric_value
+                summary_row['capital'] = summary_metrics['final_capital']
+                summary_row['trade_num'] = summary_metrics['trade_num']
+                summary_row['outcome_high'] = summary_metrics['outcome_high']
+                summary_row['biggest_wd'] = summary_metrics['biggest_wd_abs']
+                for metric_name, metric_value in summary_row.items():
+                    outcome_stats.at[outcome_index, metric_name] = metric_value
+                existing_param_tags.add(str(outcome_index))
+                if run_mode == 'grid':
+                    completed_param_tags.add(str(outcome_index))
+                    print_search_progress(
+                        len(completed_param_tags),
+                        total_search_space,
+                        progress_marks,
+                        printed_progress_marks,
                     )
-                    summary_row = {
-                        'open_bar': open_bar_value,
-                        'close_bar': close_bar_value,
-                        'open_threshold': open_threshold_value,
-                        'open_continous_threshold': open_continous_threshold_value,
-                        'open_withdrawal_threshold': open_withdrawal_threshold_value,
-                        'close_threshold': close_threshold_value,
-                        'close_withdrawal_threshold': close_withdrawal_threshold_value,
-                        'close_withdrawal_mode': close_withdrawal_mode,
-                        'withdrawal_close_count': withdrawal_close_count,
-                        'speed_close_count': speed_close_count,
-                        'open_withdraw_reset_same_bar_count': int(
-                            getattr(strategy, 'open_withdraw_reset_same_bar_count', 0)
-                        ),
+                if run_mode == 'grid':
+                    append_progress_summary(
+                        progress_summary_path,
+                        outcome_index,
+                        summary_row,
+                    )
+                    if (
+                        executed_run_count == 0
+                        or (executed_run_count + 1) % int(grid_outcome_stats_flush_every) == 0
+                    ):
+                        flush_dashboard_outcome_stats(
+                            dashboard_outcome_stats_path,
+                            outcome_stats,
+                        )
+                executed_run_count += 1
+
+                if run_mode == 'grid':
+                    if outer_reference_trade_count is None:
+                        outer_reference_trade_count = total_trade_count
+                    if (
+                        last_open_cont_trade_count is None
+                        or total_trade_count != last_open_cont_trade_count
+                    ):
+                        unchanged_open_cont_steps = 0
+                    else:
+                        unchanged_open_cont_steps += 1
+                    last_open_cont_trade_count = total_trade_count
+
+                    inner_stop_now = (
+                        unchanged_open_cont_steps
+                        >= open_threshold_stop_flat_rounds
+                    )
+                    inner_exhausted_now = (
+                        open_cont_iter + 1 >= int(for_num_3_runtime)
+                    )
+
+                    next_cursor = None
+                    next_outer_state = {
+                        'last_open_threshold_trade_count': last_open_threshold_trade_count,
+                        'unchanged_open_threshold_steps': unchanged_open_threshold_steps,
                     }
-                    for metric_name, metric_value in summary_metrics.items():
-                        summary_row[metric_name] = metric_value
-                    summary_row['capital'] = summary_metrics['final_capital']
-                    summary_row['trade_num'] = summary_metrics['trade_num']
-                    summary_row['outcome_high'] = summary_metrics['outcome_high']
-                    summary_row['biggest_wd'] = summary_metrics['biggest_wd_abs']
-                    for metric_name, metric_value in summary_row.items():
-                        outcome_stats.at[outcome_index, metric_name] = metric_value
-                    existing_param_tags.add(str(outcome_index))
-                    if run_mode == 'grid':
-                        completed_param_tags.add(str(outcome_index))
-                        print_search_progress(
-                            len(completed_param_tags),
-                            total_search_space,
-                            progress_marks,
-                            printed_progress_marks,
-                        )
-                    if run_mode == 'grid':
-                        append_progress_summary(
-                            progress_summary_path,
-                            outcome_index,
-                            summary_row,
-                        )
-                        if (
-                            executed_run_count == 0
-                            or (executed_run_count + 1) % int(grid_outcome_stats_flush_every) == 0
-                        ):
-                            flush_dashboard_outcome_stats(
-                                dashboard_outcome_stats_path,
-                                outcome_stats,
-                            )
-                    executed_run_count += 1
+                    next_inner_state = {
+                        'last_open_cont_trade_count': last_open_cont_trade_count,
+                        'unchanged_open_cont_steps': unchanged_open_cont_steps,
+                        'outer_reference_trade_count': outer_reference_trade_count,
+                    }
 
-                    if run_mode == 'grid':
+                    if not inner_stop_now and not inner_exhausted_now:
+                        next_cursor = {
+                            'open_bar_index': open_bar_index,
+                            'threshold_iter': threshold_iter,
+                            'open_cont_iter': open_cont_iter + 1,
+                        }
+                    else:
                         if outer_reference_trade_count is None:
-                            outer_reference_trade_count = total_trade_count
-                        if (
-                            last_open_cont_trade_count is None
-                            or total_trade_count != last_open_cont_trade_count
+                            next_open_threshold_trade_count = last_open_threshold_trade_count
+                            next_unchanged_open_threshold_steps = unchanged_open_threshold_steps
+                        elif (
+                            last_open_threshold_trade_count is None
+                            or outer_reference_trade_count
+                            != last_open_threshold_trade_count
                         ):
-                            unchanged_open_cont_steps = 0
+                            next_open_threshold_trade_count = outer_reference_trade_count
+                            next_unchanged_open_threshold_steps = 0
                         else:
-                            unchanged_open_cont_steps += 1
-                        last_open_cont_trade_count = total_trade_count
+                            next_open_threshold_trade_count = outer_reference_trade_count
+                            next_unchanged_open_threshold_steps = (
+                                unchanged_open_threshold_steps + 1
+                            )
 
-                        inner_stop_now = (
-                            enable_flat_stop
-                            and unchanged_open_cont_steps
+                        outer_stop_now = (
+                            next_unchanged_open_threshold_steps
                             >= open_threshold_stop_flat_rounds
                         )
-                        inner_exhausted_now = (
-                            close_wd_iter + 1 >= int(for_num_4_runtime)
+                        threshold_exhausted_now = (
+                            threshold_iter + 1
+                            >= int(for_num_2_runtime)
                         )
 
-                        next_cursor = None
-                        next_outer_state = {
-                            'last_open_threshold_trade_count': last_open_threshold_trade_count,
-                            'unchanged_open_threshold_steps': unchanged_open_threshold_steps,
-                        }
-                        next_inner_state = {
-                            'last_open_cont_trade_count': last_open_cont_trade_count,
-                            'unchanged_open_cont_steps': unchanged_open_cont_steps,
-                            'outer_reference_trade_count': outer_reference_trade_count,
-                        }
-
-                        if not inner_stop_now and not inner_exhausted_now:
+                        if (
+                            not outer_stop_now
+                            and not threshold_exhausted_now
+                        ):
                             next_cursor = {
                                 'open_bar_index': open_bar_index,
-                                'threshold_iter': threshold_iter,
-                                'open_cont_iter': open_cont_iter,
-                                'close_wd_iter': close_wd_iter + 1,
+                                'threshold_iter': threshold_iter + 1,
+                                'open_cont_iter': 0,
+                            }
+                            next_outer_state = {
+                                'last_open_threshold_trade_count': next_open_threshold_trade_count,
+                                'unchanged_open_threshold_steps': next_unchanged_open_threshold_steps,
+                            }
+                            next_inner_state = {
+                                'last_open_cont_trade_count': None,
+                                'unchanged_open_cont_steps': 0,
+                                'outer_reference_trade_count': None,
                             }
                         else:
-                            open_cont_exhausted_now = (
-                                open_cont_iter + 1 >= int(for_num_3_runtime)
-                            )
-                            if not open_cont_exhausted_now:
-                                next_cursor = {
-                                    'open_bar_index': open_bar_index,
-                                    'threshold_iter': threshold_iter,
-                                    'open_cont_iter': open_cont_iter + 1,
-                                    'close_wd_iter': 0,
-                                }
-                                next_inner_state = {
-                                    'last_open_cont_trade_count': last_open_cont_trade_count,
-                                    'unchanged_open_cont_steps': unchanged_open_cont_steps,
-                                    'outer_reference_trade_count': outer_reference_trade_count,
-                                }
-                            else:
-                                if outer_reference_trade_count is None:
-                                    next_open_threshold_trade_count = last_open_threshold_trade_count
-                                    next_unchanged_open_threshold_steps = unchanged_open_threshold_steps
-                                elif (
-                                    last_open_threshold_trade_count is None
-                                    or outer_reference_trade_count
-                                    != last_open_threshold_trade_count
-                                ):
-                                    next_open_threshold_trade_count = outer_reference_trade_count
-                                    next_unchanged_open_threshold_steps = 0
-                                else:
-                                    next_open_threshold_trade_count = outer_reference_trade_count
-                                    next_unchanged_open_threshold_steps = (
-                                        unchanged_open_threshold_steps + 1
-                                    )
-
-                                outer_stop_now = (
-                                    enable_flat_stop
-                                    and next_unchanged_open_threshold_steps
-                                    >= open_threshold_stop_flat_rounds
-                                )
-                                threshold_exhausted_now = (
-                                    threshold_iter + 1
-                                    >= int(for_num_2_runtime)
-                                )
-
-                                if (
-                                    not outer_stop_now
-                                    and not threshold_exhausted_now
-                                ):
-                                    next_cursor = {
-                                        'open_bar_index': open_bar_index,
-                                        'threshold_iter': threshold_iter + 1,
-                                        'open_cont_iter': 0,
-                                        'close_wd_iter': 0,
-                                    }
-                                    next_outer_state = {
-                                        'last_open_threshold_trade_count': next_open_threshold_trade_count,
-                                        'unchanged_open_threshold_steps': next_unchanged_open_threshold_steps,
-                                    }
-                                    next_inner_state = {
-                                        'last_open_cont_trade_count': None,
-                                        'unchanged_open_cont_steps': 0,
-                                        'outer_reference_trade_count': None,
-                                    }
-                                else:
-                                    next_cursor = {
-                                        'open_bar_index': open_bar_index + 1,
-                                        'threshold_iter': 0,
-                                        'open_cont_iter': 0,
-                                        'close_wd_iter': 0,
-                                    }
-                                    next_outer_state = {
-                                        'last_open_threshold_trade_count': None,
-                                        'unchanged_open_threshold_steps': 0,
-                                    }
-                                    next_inner_state = {
-                                        'last_open_cont_trade_count': None,
-                                        'unchanged_open_cont_steps': 0,
-                                        'outer_reference_trade_count': None,
-                                    }
-
-                        save_progress_json(
-                            progress_json_path,
-                            {
-                                'status': 'running',
-                                'signature': progress_signature,
-                                'executed_run_count': executed_run_count,
-                                'next_cursor': next_cursor,
-                                'outer_state': next_outer_state,
-                                'inner_state': next_inner_state,
-                                'last_completed': {
-                                    'param_tag': outcome_index,
-                                    'open_bar': open_bar_value,
-                                    'open_threshold': open_threshold_value,
-                                    'open_continous_threshold': open_continous_threshold_value,
-                                    'close_withdrawal_threshold': close_withdrawal_threshold_value,
-                                    'total_trade_count': total_trade_count,
-                                    'capital': summary_metrics['final_capital'],
-                                },
-                                'progress_summary_path': progress_summary_path,
+                            next_cursor = {
+                                'open_bar_index': open_bar_index + 1,
+                                'threshold_iter': 0,
+                                'open_cont_iter': 0,
                             }
-                        )
+                            next_outer_state = {
+                                'last_open_threshold_trade_count': None,
+                                'unchanged_open_threshold_steps': 0,
+                            }
+                            next_inner_state = {
+                                'last_open_cont_trade_count': None,
+                                'unchanged_open_cont_steps': 0,
+                                'outer_reference_trade_count': None,
+                            }
 
-                    if (
-                        enable_flat_stop
-                        and unchanged_open_cont_steps >= open_threshold_stop_flat_rounds
-                    ):
+                    save_progress_json(
+                        progress_json_path,
+                        {
+                            'status': 'running',
+                            'signature': progress_signature,
+                            'executed_run_count': executed_run_count,
+                            'next_cursor': next_cursor,
+                            'outer_state': next_outer_state,
+                            'inner_state': next_inner_state,
+                            'last_completed': {
+                                'param_tag': outcome_index,
+                                'open_bar': open_bar_value,
+                                'open_threshold': open_threshold_value,
+                                'open_continous_threshold': open_continous_threshold_value,
+                                'total_trade_count': total_trade_count,
+                                'capital': summary_metrics['final_capital'],
+                            },
+                            'progress_summary_path': progress_summary_path,
+                        }
+                    )
+
+                    if unchanged_open_cont_steps >= open_threshold_stop_flat_rounds:
                         for remain_open_cont_iter in range(
                                 open_cont_iter + 1,
                                 int(for_num_3_runtime)):
@@ -2610,10 +2472,7 @@ if __name__ == '__main__':
                     unchanged_open_threshold_steps += 1
                 last_open_threshold_trade_count = outer_reference_trade_count
 
-                if (
-                    enable_flat_stop
-                    and unchanged_open_threshold_steps >= open_threshold_stop_flat_rounds
-                ):
+                if unchanged_open_threshold_steps >= open_threshold_stop_flat_rounds:
                     for remain_threshold_iter in range(
                             threshold_iter + 1,
                             int(for_num_2_runtime)):
@@ -2670,7 +2529,6 @@ if __name__ == '__main__':
                     'open_bar_index': len(open_bar_values),
                     'threshold_iter': 0,
                     'open_cont_iter': 0,
-                    'close_wd_iter': 0,
                 },
                 'outer_state': {
                     'last_open_threshold_trade_count': None,
@@ -2714,9 +2572,9 @@ if __name__ == '__main__':
         plt.xticks(rotation=70)
         fig_stat_1.legend()
         plt.title('stats ' + run_name)
-        os.makedirs('./result/stats %s/' % outcome_dir_name, exist_ok=True)
+        os.makedirs('./result/stats %s long_momentum outcome/' % file_name, exist_ok=True)
         stats_image_path = (
-            './result/stats %s/' % outcome_dir_name
+            './result/stats %s long_momentum outcome/' % file_name
             + ' ' + run_name + ' '
             + str(executed_run_count) + ' '
             + f'all outcome.{result_image_ext}'
@@ -2731,7 +2589,7 @@ if __name__ == '__main__':
         open_excel = False
         if open_excel:
             os.startfile(
-                disk_path + f'{outcome_dir_name}\\perf\\' + perf_name)
+                disk_path + '%s long_momentum outcome/perf/' % file_name + perf_name)
 
     # ====== 交互式图 (fig2) ======
     if run_mode == 'manual' and executed_run_count == 1:
@@ -2993,7 +2851,7 @@ if __name__ == '__main__':
                 buy_y = None
         ax2.xaxis.set_major_locator(plt.MaxNLocator(12))
         manual_image_path = (
-            f'./result/{outcome_dir_name}/image/'
+            './result/%s long_momentum outcome/image/' % file_name
             + str(round(Capital_outcome, 2))
             + ' ' + save_name
             + f' Long result.{result_image_ext}'
@@ -3003,7 +2861,7 @@ if __name__ == '__main__':
             manual_image_path,
             result_image_dpi,
         )
-        plt.show()
+        plt.close(fig2)
 
     flush_dashboard_outcome_stats(
         dashboard_outcome_stats_path,

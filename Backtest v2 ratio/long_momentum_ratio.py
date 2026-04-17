@@ -2001,6 +2001,7 @@ class MomentumStrategy(BaseStrategy):
         self.frozen_open_wd_threshold = np.nan
         self.holding_increase_percent = np.nan
         self.HIGH_MATCH_EPS = 1e-10
+        self.open_withdraw_reset_same_bar_count = 0
 
     def get_extra_columns(self) -> list:
         return [
@@ -2292,6 +2293,7 @@ class MomentumStrategy(BaseStrategy):
                     self.var0 = 1
             else:
                 if inc_percent > open_continous_threshold:
+                    self.open_withdraw_reset_same_bar_count += 1
                     print(str(index) + '满足开仓和满足回撤reset同时发生')
                 self.new_opening = True
                 self.new_opening_count = 1
@@ -3148,6 +3150,9 @@ if __name__ == '__main__':
                 'close_withdrawal_threshold': close_withdrawal_threshold,
                 'withdrawal_close_count': withdrawal_close_count,
                 'speed_close_count': speed_close_count,
+                'open_withdraw_reset_same_bar_count': int(
+                    getattr(strategy, 'open_withdraw_reset_same_bar_count', 0)
+                ),
             }
             for metric_name, metric_value in summary_metrics.items():
                 summary_row[metric_name] = metric_value

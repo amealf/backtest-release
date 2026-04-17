@@ -1475,6 +1475,7 @@ class MomentumStrategy(BaseStrategy):
         self.pending_trigger_price = np.nan
         self.pending_entry_bar_index = None
         self.pending_entry_bar_date = ''
+        self.open_withdraw_reset_same_bar_count = 0
         raw_multi_config = dict(self.params.get('multi_config') or {})
         self.multi_config = normalize_multi_shock_config(
             raw_multi_config,
@@ -3566,6 +3567,9 @@ def run_shock_backtest():
                     outcome_stats.at[param_tag, 'range_end'] = str(end_label)
                     outcome_stats.at[param_tag, 'speed_close_count'] = speed_close_count
                     outcome_stats.at[param_tag, 'withdrawal_close_count'] = withdrawal_close_count
+                    outcome_stats.at[param_tag, 'open_withdraw_reset_same_bar_count'] = int(
+                        getattr(strategy, 'open_withdraw_reset_same_bar_count', 0)
+                    )
                     outcome_stats.at[param_tag, 'multi_config_key'] = multi_config['config_key']
                     outcome_stats.at[param_tag, 'multi_signal_mode'] = multi_config['signal_mode']
                     outcome_stats.at[param_tag, 'multi_periods'] = ', '.join(multi_config['periods'])

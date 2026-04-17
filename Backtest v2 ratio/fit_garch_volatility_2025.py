@@ -42,7 +42,7 @@ warmup_start_date = ""
 export_start_date = ""
 export_end_date = ""
 
-resample_rules = [f"{minutes}min" for minutes in range(3, 61)]
+resample_rules = ["1min"]
 
 garch_window_bars = 10000
 garch_window_bars_by_period = {
@@ -654,7 +654,36 @@ def resolve_garch_window_bars(period_label: str) -> int:
     return int(garch_window_bars_by_period.get(token, garch_window_bars))
 
 
-def build_run_config(period_label: str) -> dict:
+def build_source_fingerprint(source_path: Path | None) -> dict:
+    if source_path is None:
+        return {
+            "source_file_path": "",
+            "source_file_size": "",
+            "source_file_mtime": "",
+        }
+
+    try:
+        resolved = source_path.resolve()
+    except Exception:
+        resolved = source_path
+
+    if not resolved.exists():
+        return {
+            "source_file_path": str(resolved),
+            "source_file_size": "",
+            "source_file_mtime": "",
+        }
+
+    stat = resolved.stat()
+    return {
+        "source_file_path": str(resolved),
+        "source_file_size": str(int(stat.st_size)),
+        "source_file_mtime": str(int(stat.st_mtime)),
+    }
+
+
+def build_run_config(period_label: str, source_path: Path | None = None) -> dict:
+    source_fingerprint = build_source_fingerprint(source_path)
     return {
         "data_folder_path": normalize_config_text(data_folder_path),
         "data_file_name": normalize_config_text(data_file_name),
@@ -681,6 +710,9 @@ def build_run_config(period_label: str) -> dict:
         "show_short_shock_markers": normalize_config_text(show_short_shock_markers),
         "model_spec": MODEL_SPEC,
         "forecast_alignment_version": FORECAST_ALIGNMENT_VERSION,
+        "source_file_path": normalize_config_text(source_fingerprint["source_file_path"]),
+        "source_file_size": normalize_config_text(source_fingerprint["source_file_size"]),
+        "source_file_mtime": normalize_config_text(source_fingerprint["source_file_mtime"]),
     }
 
 
@@ -805,8 +837,9 @@ def cleanup_all_stale_html_artifacts(out_dir: Path) -> None:
 def read_existing_period_outputs(
     out_dir: Path,
     period_label: str,
+    source_path: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
-    expected_config = build_run_config(period_label)
+    expected_config = build_run_config(period_label, source_path=source_path)
     forecast_frames = []
     refit_frames = []
     source_names = []
@@ -1060,7 +1093,7 @@ def finalize_period_bars(
 def load_period_bars(
     period_rule: str,
     legacy_raw_df: pd.DataFrame | None,
-) -> tuple[pd.DataFrame, int, str, str, pd.DataFrame | None]:
+) -> tuple[pd.DataFrame, int, str, str, Path | None, pd.DataFrame | None]:
     minute_value = parse_minute_rule_value(period_rule)
     if minute_value is not None and 3 <= minute_value <= 60:
         minute_base = try_load_direct_period_data("1min")
@@ -1087,6 +1120,7 @@ def load_period_bars(
             bar_seconds,
             period_label,
             f"{csv_path.name}->{period_label}",
+            csv_path,
             legacy_raw_df,
         )
 
@@ -1098,7 +1132,7 @@ def load_period_bars(
             bar_seconds=bar_seconds,
             period_label=period_label,
         )
-        return bars_df, bar_seconds, period_label, csv_path.name, legacy_raw_df
+        return bars_df, bar_seconds, period_label, csv_path.name, csv_path, legacy_raw_df
 
     direct_resample_base = try_load_best_direct_resample_base(period_rule)
     if direct_resample_base is not None:
@@ -1120,6 +1154,7 @@ def load_period_bars(
             bar_seconds,
             period_label,
             f"{csv_path.name}->{period_label}",
+            csv_path,
             legacy_raw_df,
         )
 
@@ -1137,7 +1172,8 @@ def load_period_bars(
         legacy_raw_df,
         period_rule,
     )
-    return bars_df, bar_seconds, period_label, "legacy_single_csv", legacy_raw_df
+    legacy_csv_path = Path(data_folder_path) / f"{data_file_name}.csv"
+    return bars_df, bar_seconds, period_label, "legacy_single_csv", legacy_csv_path, legacy_raw_df
 
 
 def prepare_period_bars(raw_df: pd.DataFrame, resample_rule: str) -> tuple[pd.DataFrame, int, str]:
@@ -1221,6 +1257,7 @@ def assign_quantile_bucket(series: pd.Series, quantiles: int) -> pd.Series:
 def build_forecast_df(
     bars_df: pd.DataFrame,
     period_label: str,
+    source_path: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     work = bars_df.copy().reset_index(drop=True)
     row_count = len(work)
@@ -1244,6 +1281,7 @@ def build_forecast_df(
     existing_forecast_df, existing_refit_log_df, existing_sources = read_existing_period_outputs(
         out_dir=out_dir,
         period_label=period_label,
+        source_path=source_path,
     )
     existing_export_dates = set()
     if not existing_forecast_df.empty:
@@ -2164,6 +2202,7 @@ def export_period_outputs(
     validation_decile: pd.DataFrame,
     period_label: str,
     out_dir: Path,
+    source_path: Path | None = None,
 ) -> tuple[Path, Path, Path, Path]:
     parquet_path = out_dir / build_period_parquet_name(period_label)
     excel_path = out_dir / build_period_summary_excel_name(period_label)
@@ -2187,7 +2226,10 @@ def export_period_outputs(
         validation_summary.to_excel(writer, sheet_name="validation_summary", index=False)
         validation_decile.to_excel(writer, sheet_name="validation_decile", index=False)
         pd.DataFrame(
-            [{"key": key, "value": value} for key, value in build_run_config(period_label).items()]
+            [
+                {"key": key, "value": value}
+                for key, value in build_run_config(period_label, source_path=source_path).items()
+            ]
         ).to_excel(writer, sheet_name="run_config", index=False)
 
     return parquet_path, excel_path, overview_html_path, vol_surprise_html_path
@@ -2198,7 +2240,7 @@ def run_period(
     out_dir: Path,
     legacy_raw_df: pd.DataFrame | None,
 ) -> pd.DataFrame | None:
-    bars_df, bar_seconds, period_label, source_name, legacy_raw_df = load_period_bars(
+    bars_df, bar_seconds, period_label, source_name, source_path, legacy_raw_df = load_period_bars(
         period_rule=resample_rule,
         legacy_raw_df=legacy_raw_df,
     )
@@ -2211,7 +2253,11 @@ def run_period(
         f"window={resolve_garch_window_bars(period_label)}"
     )
 
-    forecast_df, refit_log_df, run_meta = build_forecast_df(bars_df, period_label)
+    forecast_df, refit_log_df, run_meta = build_forecast_df(
+        bars_df,
+        period_label,
+        source_path=source_path,
+    )
     existing_forecast_df = run_meta["existing_forecast_df"]
     existing_refit_log_df = run_meta["existing_refit_log_df"]
 
@@ -2248,6 +2294,7 @@ def run_period(
         validation_decile=validation_decile,
         period_label=period_label,
         out_dir=out_dir,
+        source_path=source_path,
     )
 
     summary_row = validation_summary.iloc[0]
