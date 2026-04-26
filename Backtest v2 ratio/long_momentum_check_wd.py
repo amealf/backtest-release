@@ -57,7 +57,9 @@ run_mode = 'grid'
 # 回撤平仓模式：
 # 'fixed_high_pct'：持仓最高点 * close_withdrawal_threshold
 # 'legacy_low_to_high_2over3'：2/3 * (从 low_index 低点到持仓最高点的涨幅)
-close_withdrawal_mode = 'legacy_low_to_high_2over3'
+# 'entry_preopen_withdrawal'：开仓时冻结「从低点到当前已经发生过的回撤百分比」，
+#                           持仓回撤阈值 = entry_wd_per * close_withdrawal_threshold
+close_withdrawal_mode = 'entry_preopen_withdrawal'
 
 # 策略参数（直接使用 bar 数，单位是当前实际回测周期）
 open_bar = 30
@@ -68,15 +70,16 @@ open_withdrawal_threshold = 0.0
 close_bar = open_bar
 close_threshold = open_threshold
 open_continous_threshold = 0.004
-# 回撤平仓阈值按持仓最高点的固定比例计算。
-# 参数 0.001 表示：持仓最高点 * 0.001。
-close_withdrawal_threshold = 0.0
+# 回撤平仓参数：
+# fixed_high_pct 模式下，参数 0.001 表示：持仓最高点 * 0.001
+# entry_preopen_withdrawal 模式下，参数表示 entry_wd_per 的倍率，例如 1.3
+close_withdrawal_threshold = 1.0
 
 # Grid search
 # for_num_1: 搜索 open_bar 的次数
 # open_bar_runtime = open_bar + i * step1
-for_num_1 = 7
-step1 = 5
+for_num_1 = 8
+step1 = 10
 # for_num_2: 搜索 open_threshold 的次数
 # open_threshold_runtime = open_threshold + i * step2
 for_num_2 = 3
@@ -123,10 +126,14 @@ close_withdrawal_mode = os.environ.get(
     'LM_CLOSE_WITHDRAWAL_MODE',
     close_withdrawal_mode,
 ).strip().lower()
-if close_withdrawal_mode not in ('fixed_high_pct', 'legacy_low_to_high_2over3'):
+if close_withdrawal_mode not in (
+    'fixed_high_pct',
+    'legacy_low_to_high_2over3',
+    'entry_preopen_withdrawal',
+):
     raise ValueError(
-        "close_withdrawal_mode must be 'fixed_high_pct' or "
-        "'legacy_low_to_high_2over3'."
+        "close_withdrawal_mode must be 'fixed_high_pct', "
+        "'legacy_low_to_high_2over3' or 'entry_preopen_withdrawal'."
     )
 if os.environ.get('LM_MANUAL_OPEN_BAR', '').strip():
     open_bar = int(os.environ['LM_MANUAL_OPEN_BAR'])
@@ -138,14 +145,13 @@ if os.environ.get('LM_MANUAL_OPEN_WD_THRESHOLD', '').strip():
     open_withdrawal_threshold = float(os.environ['LM_MANUAL_OPEN_WD_THRESHOLD'])
 if os.environ.get('LM_MANUAL_CLOSE_WD_THRESHOLD', '').strip():
     close_withdrawal_threshold = float(os.environ['LM_MANUAL_CLOSE_WD_THRESHOLD'])
-if run_mode == 'grid' and not os.environ.get('LM_MANUAL_OPEN_WD_THRESHOLD', '').strip():
-    open_withdrawal_threshold = open_threshold
 close_bar = open_bar
 close_threshold = open_threshold
+strategy_name = 'long_momentum_check_wd'
 outcome_dir_name = (
-    f'{data_file_name} long_momentum outcome_fix_wd'
+    f'{data_file_name} {strategy_name} outcome_fix_wd'
     if close_withdrawal_mode == 'legacy_low_to_high_2over3'
-    else f'{data_file_name} long_momentum outcome'
+    else f'{data_file_name} {strategy_name} outcome'
 )
 
 
@@ -439,6 +445,40 @@ def get_max_wd(df, assumebarwithdrawal=True):
     return max_wd
 
 
+def get_max_withdrawal_abs(df):
+    if df.empty:
+        print('received empty dataframe at get_increase function.')
+        return np.nan, np.nan
+    need_cols = ['open', 'high', 'low', 'close']
+    if any(c not in df.columns for c in need_cols):
+        return np.nan, np.nan
+    if df[need_cols].isna().any().any():
+        return np.nan, np.nan
+    initialized = False
+    with_high = 0.0
+    with_low = 0.0
+    max_wd_abs = 0.0
+    max_wd_high = 0.0
+    for _, row in df.iterrows():
+        if not initialized:
+            with_high = float(row['high'])
+            with_low = float(row['close'])
+            initialized = True
+        else:
+            if row['high'] > with_high:
+                with_high = float(row['high'])
+                with_low = float(row['close'])
+            elif row['low'] < with_low:
+                with_low = float(row['low'])
+            withdrawal_abs = with_high - with_low
+            if withdrawal_abs > max_wd_abs:
+                max_wd_abs = withdrawal_abs
+                max_wd_high = with_high
+    if max_wd_high == 0.0 and initialized:
+        max_wd_high = with_high
+    return max_wd_high, max_wd_abs
+
+
 def get_outcome_withdrawal(sers):
     initialized = False
     with_high = 0
@@ -729,6 +769,7 @@ def build_planned_param_tags_long(
         open_cont_start: float,
         for_num_3_runtime: int,
         step3_value: float,
+        open_withdrawal_threshold_value: float,
         close_wd_start: float,
         for_num_4_runtime: int,
         step4_value: float) -> set[str]:
@@ -740,7 +781,6 @@ def build_planned_param_tags_long(
                 open_threshold_start + (threshold_iter * step2_value),
                 10,
             )
-            open_withdrawal_threshold_value = open_threshold_value
             close_threshold_value = open_threshold_value
             for open_cont_iter in range(int(for_num_3_runtime)):
                 open_continous_threshold_value = round(
@@ -752,7 +792,10 @@ def build_planned_param_tags_long(
                         close_wd_start + (close_wd_iter * step4_value),
                         10,
                     )
-                    if open_continous_threshold_value < close_withdrawal_threshold_value:
+                    if (
+                        close_withdrawal_mode != 'entry_preopen_withdrawal'
+                        and open_continous_threshold_value < close_withdrawal_threshold_value
+                    ):
                         continue
                     planned_tags.add(build_long_param_tag(
                         open_bar_value,
@@ -1252,6 +1295,9 @@ class MomentumStrategy(BaseStrategy):
         self.holding_start_index = 0
         self.increase_start_index = 0
         self.holding_increase_percent = np.nan
+        self.entry_withdrawal_abs = np.nan
+        self.entry_withdrawal_per = np.nan
+        self.entry_withdrawal_high = np.nan
         self.HIGH_MATCH_EPS = 1e-10
         self.open_withdraw_reset_same_bar_count = 0
 
@@ -1263,6 +1309,7 @@ class MomentumStrategy(BaseStrategy):
             'total_inc', 't_inc_per', 'total_inc_signal',
             'max_inc', 'max_wd',
             'holding_wd', 'hld_wd_per', 'holding_wd_signal',
+            'entry_wd_abs', 'entry_wd_per', 'entry_wd_high',
             'close_wd_floor_per', 'close_wd_dyn_per',
             'close_wd_th_per', 'close_wd_th_abs',
             'holding_inc', 'speed_close_signal',
@@ -1442,6 +1489,29 @@ class MomentumStrategy(BaseStrategy):
 
             # 开仓信号
             if signal.at[index, 'total_inc_signal'] == 1:
+                entry_wd_high, entry_wd_abs = get_max_withdrawal_abs(
+                    cond3_analysis_slice
+                )
+                self.entry_withdrawal_abs = float(entry_wd_abs)
+                self.entry_withdrawal_high = float(entry_wd_high)
+                if entry_wd_high != 0:
+                    self.entry_withdrawal_per = (
+                        self.entry_withdrawal_abs / float(entry_wd_high)
+                    )
+                else:
+                    self.entry_withdrawal_per = 0.0
+                signal.at[index, 'entry_wd_abs'] = round(
+                    self.entry_withdrawal_abs,
+                    self.params['round_precision'],
+                )
+                signal.at[index, 'entry_wd_per'] = round(
+                    self.entry_withdrawal_per * 100,
+                    4,
+                )
+                signal.at[index, 'entry_wd_high'] = round(
+                    self.entry_withdrawal_high,
+                    self.params['round_precision'],
+                )
                 return OpenResult(
                     execution_price=round(
                         self.first_cond1_price * (1 + open_continous_threshold),
@@ -1462,6 +1532,23 @@ class MomentumStrategy(BaseStrategy):
         signal.at[index, 'low_index'] = result.low_index
         signal.at[index, 'low_date'] = str(
             signal.at[result.low_index, 'date']).removesuffix('.0')
+        signal.at[index, 'entry_wd_abs'] = round(
+            float(self.entry_withdrawal_abs)
+            if not pd.isna(self.entry_withdrawal_abs) else 0.0,
+            self.params['round_precision'],
+        )
+        signal.at[index, 'entry_wd_per'] = round(
+            (
+                float(self.entry_withdrawal_per)
+                if not pd.isna(self.entry_withdrawal_per) else 0.0
+            ) * 100,
+            4,
+        )
+        signal.at[index, 'entry_wd_high'] = round(
+            float(self.entry_withdrawal_high)
+            if not pd.isna(self.entry_withdrawal_high) else 0.0,
+            self.params['round_precision'],
+        )
         # 重置策略状态
         self.new_opening_count = ctx.integer_index - result.low_index
         self.var0 = 0
@@ -1538,7 +1625,15 @@ class MomentumStrategy(BaseStrategy):
         # 回撤条件
         holding_high = float(holding_slice['high'].max())
         dynamic_close_withdrawal_threshold = np.nan
-        if close_withdrawal_mode == 'legacy_low_to_high_2over3':
+        if close_withdrawal_mode == 'entry_preopen_withdrawal':
+            entry_withdrawal_per = float(self.entry_withdrawal_per)
+            if pd.isna(entry_withdrawal_per):
+                entry_withdrawal_per = 0.0
+            dynamic_close_withdrawal_threshold = (
+                entry_withdrawal_per * close_withdrawal_threshold_floor
+            )
+            close_withdrawal_threshold = dynamic_close_withdrawal_threshold
+        elif close_withdrawal_mode == 'legacy_low_to_high_2over3':
             low_price = float(quote.iloc[self.low_index]['low'])
             max_increase_abs = max(holding_high - low_price, 0.0)
             dynamic_withdrawal_abs = max_increase_abs * (2.0 / 3.0)
@@ -1582,8 +1677,10 @@ class MomentumStrategy(BaseStrategy):
 
         # 回撤平仓
         if signal.at[index, 'holding_wd_signal'] == 1:
-            exec_price = (holding_high
-                          * (1 - close_withdrawal_threshold))
+            exec_price = (
+                holding_high
+                * (1 - close_withdrawal_threshold)
+            )
             if exec_price > quote.loc[index, 'open']:
                 exec_price = quote.loc[index, 'open']
             return CloseResult(
@@ -1619,6 +1716,9 @@ class MomentumStrategy(BaseStrategy):
         # 重置策略状态
         self.new_opening = True
         self.new_opening_count = 0
+        self.entry_withdrawal_abs = np.nan
+        self.entry_withdrawal_per = np.nan
+        self.entry_withdrawal_high = np.nan
 
     def on_trade_stats(self, ctx: BarContext,
                         start_index: int, low_index: int):
@@ -1792,7 +1892,7 @@ if __name__ == '__main__':
     )
     dashboard_outcome_stats_path = (
         f'./result/{outcome_dir_name}/outcome stats/'
-        + 'long_momentum ' + run_name + ' outcome_stats.xlsx'
+        + strategy_name + ' ' + run_name + ' outcome_stats.xlsx'
     )
     summary_dir = './result/stats %s/' % outcome_dir_name
     os.makedirs(summary_dir, exist_ok=True)
@@ -2016,6 +2116,7 @@ if __name__ == '__main__':
             float(open_continous_threshold),
             int(for_num_3_runtime),
             float(step3),
+            float(open_withdrawal_threshold),
             float(close_withdrawal_threshold),
             int(for_num_4_runtime),
             float(step4),
@@ -2148,12 +2249,8 @@ if __name__ == '__main__':
 
                     open_bar_value = open_bar_runtime
                     open_threshold_value = open_threshold_runtime
-                    if run_mode == 'grid':
-                        open_withdrawal_threshold_value = open_threshold_runtime
-                        close_threshold_value = open_threshold_runtime
-                    else:
-                        open_withdrawal_threshold_value = open_withdrawal_threshold
-                        close_threshold_value = close_threshold
+                    open_withdrawal_threshold_value = open_withdrawal_threshold
+                    close_threshold_value = open_threshold_runtime if run_mode == 'grid' else close_threshold
                     close_bar_value = close_bar_runtime
                     open_continous_threshold_value = open_continous_threshold_runtime
                     close_withdrawal_threshold_value = close_withdrawal_threshold_runtime
@@ -2170,7 +2267,10 @@ if __name__ == '__main__':
                     if open_continous_threshold_value < open_threshold_value:
                         print('open_continous_threshold不可小于open_threshold')
                         continue
-                    if open_continous_threshold_value < close_withdrawal_threshold_value:
+                    if (
+                        close_withdrawal_mode != 'entry_preopen_withdrawal'
+                        and open_continous_threshold_value < close_withdrawal_threshold_value
+                    ):
                         print('open_continous_threshold不可小于close_withdrawal_threshold')
                         continue
 

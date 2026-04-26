@@ -40,6 +40,12 @@ start_time = time.time()
 # User Config
 # ============================================================
 
+# 核心趋势参数
+CONSTRAINT_W_BARS = 10
+# constraint_w_bars：趋势推进检查窗口
+# trend_atr_multiple：这段趋势的涨幅相当于启动前平均 ATR 波动的多少倍，
+# ATR 的窗口长度是 constraint_w_bars 的长度
+
 # 数据
 DATA_FOLDER_PATH = r"F:\Data\XAGUSD\\"
 DATA_FILE_NAME = "xagusd_30s_all"
@@ -56,7 +62,7 @@ ONLY_CLOSE = False
 # 例如 '1min' / '5min' / '15min' / '1H'
 RESAMPLE_RULE = '1H'
 TREND_W_MIN_BARS = 1
-TREND_W_MAX_BARS = 10
+TREND_W_MAX_BARS = CONSTRAINT_W_BARS
 DEBUG_TREND_SEARCH = False
 DEBUG_RECORD_FROM_INDEX = None
 # DEBUG_TREND_SEARCH = True
@@ -111,7 +117,7 @@ SAVE_STATIC_PLOT = False
 SAVE_PLOT_AS_PDF = False
 SHOW_MATPLOTLIB_PLOTS = False
 AUTO_OPEN_TREND_HTML = True
-AUTO_OPEN_DASHBOARD = True
+AUTO_OPEN_DASHBOARD = False
 DASHBOARD_URL = 'http://127.0.0.1:8765'
 BACKTEST_HTML_FOLDER = 'backtest html'
 TREND_ANALYSIS_HTML_FOLDER = 'trend analysis html'
@@ -195,6 +201,14 @@ def build_candlestick_hovertext(df: pd.DataFrame, factor: float):
 
 def get_html_output_dir(file_name: str, folder_name: str) -> str:
     return './result/%s long no wd outcome/%s' % (file_name, folder_name)
+
+
+def print_trend_parameter_notes(constraint_w_bars: int):
+    print(f'constraint_w_bars： 趋势推进检查窗口（当前值：{int(constraint_w_bars)}）')
+    print(
+        'trend_atr_multiple： 这段趋势的涨幅相当于启动前平均 ATR 波动的多少倍，'
+        'ATR 的窗口长度是 constraint_w_bars 的长度'
+    )
 
 
 def should_record_trend_debug(search_start: int, end_idx: int) -> bool:
@@ -3323,11 +3337,12 @@ def export_trend_analysis_html(
     atr_df = build_trend_atr_multiple_df(underlying1, trend_display_df)
     if len(atr_df) > 0:
         trend_display_df = trend_display_df.merge(
-            atr_df[['trade_id', 'trend_atr_multiple']],
+            atr_df[['trade_id', 'pre_atr_pct', 'trend_atr_multiple']],
             on='trade_id',
             how='left'
         )
     else:
+        trend_display_df['pre_atr_pct'] = np.nan
         trend_display_df['trend_atr_multiple'] = np.nan
 
     x_index = underlying1.index.to_numpy()
@@ -3408,6 +3423,12 @@ def export_trend_analysis_html(
         trend_line_y0 = None
         trend_line_y1 = None
         trend_seg = underlying1.iloc[low_index:high_index + 1]
+        segment_x = trend_seg.index.astype(int).tolist()
+        segment_cummax_y = (
+            np.maximum.accumulate(
+                trend_seg['high'].to_numpy(dtype=float)
+            ) / factor * 100.0
+        ).astype(float).tolist()
         if len(trend_seg) >= 2 and pd.notna(row['ols_slope']) and pd.notna(row['ols_intercept']):
             t = np.arange(len(trend_seg), dtype=float)
             fitted = row['ols_slope'] * t + row['ols_intercept']
@@ -3423,6 +3444,11 @@ def export_trend_analysis_html(
         segment_records.append({
             'trade_id': trade_id,
             'trend_atr_multiple': trend_atr_multiple,
+            'pre_atr_pct': (
+                float(row['pre_atr_pct'])
+                if 'pre_atr_pct' in row.index and pd.notna(row['pre_atr_pct'])
+                else None
+            ),
             'low_index': low_index,
             'low_y': float(low_price / factor * 100),
             'low_text': low_text,
@@ -3436,6 +3462,8 @@ def export_trend_analysis_html(
             'trend_line_y1': trend_line_y1,
             'end_link_y0': end_link_y0,
             'end_link_y1': end_link_y1,
+            'segment_x': segment_x,
+            'segment_cummax_y': segment_cummax_y,
         })
 
     debug_line_x = []
@@ -3806,7 +3834,7 @@ function normalizeThreshold(rawValue) {{
     return threshold;
 }}
 
-function buildSegmentTraces(filtered) {{
+function buildSegmentTraces(filtered, threshold) {{
     const traces = [{{
         type: 'candlestick',
         x: candleData.x,
@@ -3841,6 +3869,8 @@ function buildSegmentTraces(filtered) {{
     const trendLineY = [];
     const endLinkX = [];
     const endLinkY = [];
+    const thresholdHitX = [];
+    const thresholdHitY = [];
 
     filtered.forEach(row => {{
         lowX.push(row.low_index);
@@ -3860,6 +3890,32 @@ function buildSegmentTraces(filtered) {{
         if (row.end_link_y0 !== null && row.end_link_y1 !== null) {{
             endLinkX.push(row.high_index, row.end_index, null);
             endLinkY.push(row.end_link_y0, row.end_link_y1, null);
+        }}
+
+        const preAtrPct = Number(row.pre_atr_pct);
+        const segmentX = Array.isArray(row.segment_x) ? row.segment_x : [];
+        const segmentCummaxY = Array.isArray(row.segment_cummax_y)
+            ? row.segment_cummax_y
+            : [];
+        if (
+            Number.isFinite(preAtrPct)
+            && preAtrPct > 0
+            && segmentX.length === segmentCummaxY.length
+            && segmentX.length > 0
+        ) {{
+            const thresholdY = row.low_y * (1 + threshold * preAtrPct / 100.0);
+            const crossPos = segmentCummaxY.findIndex(
+                value => Number(value) >= thresholdY - 1e-12
+            );
+            if (crossPos >= 0) {{
+                const hitBarIndex = Number(segmentX[crossPos]);
+                thresholdHitX.push(
+                    hitBarIndex - 2.0,
+                    hitBarIndex + 2.0,
+                    null
+                );
+                thresholdHitY.push(thresholdY, thresholdY, null);
+            }}
         }}
     }});
 
@@ -3916,6 +3972,18 @@ function buildSegmentTraces(filtered) {{
             mode: 'lines',
             line: {{color: '{ACCENT_BLUE}', width: 2}},
             name: 'trend_line',
+            hoverinfo: 'skip'
+        }});
+    }}
+
+    if (thresholdHitX.length > 0) {{
+        traces.push({{
+            type: 'scatter',
+            x: thresholdHitX,
+            y: thresholdHitY,
+            mode: 'lines',
+            line: {{color: 'rgba(0,0,0,0.90)', width: 2.2}},
+            name: 'multiple_hit',
             hoverinfo: 'skip'
         }});
     }}
@@ -4018,7 +4086,7 @@ function renderTrendChart() {{
 
     Plotly.react(
         chartDiv,
-        buildSegmentTraces(filtered),
+        buildSegmentTraces(filtered, threshold),
         buildLayout(filtered.length),
         {{
             responsive: true,
@@ -5799,4 +5867,5 @@ if __name__ == '__main__':
                     webbrowser.open(os.path.abspath(trend_multiple_path))
 
     # plt.show()
+    print_trend_parameter_notes(TREND_W_MAX_BARS)
 

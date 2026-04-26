@@ -33,7 +33,9 @@ PROGRAM_ID_CLASSIC = "classic"
 PROGRAM_ID_CLASSIC_ATR = "classic_atr"
 PROGRAM_ID_RATIO = "ratio"
 PROGRAM_ID_GARCH = "garch"
+PROGRAM_ID_MULTI_PERIOD = "multi_period"
 PROGRAM_TAG_CLASSIC = "long_momentum"
+PROGRAM_TAG_MULTI_PERIOD = "long_multi_period"
 PROGRAM_TAG_GARCH = "long_momentum_GARCH"
 PROGRAM_TAG_ARCH_SHOCK_MULTI = "long_momentum_ARCH_shock_multi"
 PROGRAM_TAG_ARCH_SHOCK = "long_momentum_ARCH_shock"
@@ -41,6 +43,7 @@ PROGRAM_TAG_ARCH = "long_momentum_ARCH"
 PROGRAM_TAG_CLASSIC_ATR = "long_momentum_ATR"
 PROGRAM_TAG_RATIO = "long_momentum_ratio"
 SUMMARY_PROGRAM_TAGS = (
+    PROGRAM_TAG_MULTI_PERIOD,
     PROGRAM_TAG_GARCH,
     PROGRAM_TAG_ARCH_SHOCK_MULTI,
     PROGRAM_TAG_ARCH_SHOCK,
@@ -50,6 +53,7 @@ SUMMARY_PROGRAM_TAGS = (
     PROGRAM_TAG_CLASSIC,
 )
 RESULT_DIR_SUFFIXES = (
+    " multi_period outcome",
     " long shock multi outcome",
     " long outcome",
     " long shock outcome",
@@ -119,6 +123,10 @@ def _batch_label(file_name: str) -> str:
 
 def _detect_program_id(text: str | None) -> str | None:
     lowered = str(text or "").strip().lower()
+    if PROGRAM_TAG_MULTI_PERIOD.lower() in lowered:
+        return PROGRAM_ID_MULTI_PERIOD
+    if "multi_period outcome" in lowered:
+        return PROGRAM_ID_MULTI_PERIOD
     if PROGRAM_TAG_GARCH.lower() in lowered:
         return PROGRAM_ID_GARCH
     if "long_momentum_garch outcome" in lowered:
@@ -149,6 +157,8 @@ def _detect_program_id(text: str | None) -> str | None:
 
 
 def _effective_program_id(program_id: str | None) -> str:
+    if program_id == PROGRAM_ID_MULTI_PERIOD:
+        return PROGRAM_ID_MULTI_PERIOD
     if program_id == PROGRAM_ID_GARCH:
         return PROGRAM_ID_GARCH
     if program_id == PROGRAM_ID_RATIO:
@@ -190,6 +200,7 @@ def _step(values: list[float | int | None]):
 
 def _parse_param_tag(param_tag: str) -> dict:
     result = {
+        "period": None,
         "open_bar": None,
         "open_threshold": None,
         "open_continous_threshold": None,
@@ -205,6 +216,10 @@ def _parse_param_tag(param_tag: str) -> dict:
     ]
     for token in str(param_tag).strip().split():
         lowered = token.lower()
+        if lowered.startswith("p") and lowered[1:].isdigit():
+            result["period"] = _num(lowered[1:])
+            result["open_bar"] = result["period"]
+            continue
         for key, prefixes in specs:
             matched = False
             for prefix in prefixes:
@@ -240,6 +255,9 @@ def _parse_summary(content: bytes, file_name: str, program_id: str | None = None
     high_col = _pick_col(df, ["outcome_high"])
     wd_close_col = _pick_col(df, ["withdrawal_close_count"])
     speed_close_col = _pick_col(df, ["speed_close_count"])
+    period_col = _pick_col(df, ["period", "period_n"])
+    daily_atr_col = _pick_col(df, ["daily_atr_multiplier"])
+    recent_mean_col = _pick_col(df, ["recent_mean_multiplier"])
     ob_col = _pick_col(df, ["open_bar"])
     ot_col = _pick_col(df, ["open_threshold"])
     oc_col = _pick_col(df, ["open_continous_threshold"])
@@ -256,15 +274,21 @@ def _parse_summary(content: bytes, file_name: str, program_id: str | None = None
         if not param_tag:
             continue
         parsed = _parse_param_tag(param_tag)
+        period = _num(row[period_col]) if period_col else parsed["period"]
         open_bar = _num(row[ob_col]) if ob_col else parsed["open_bar"]
-        open_threshold = _num(row[ot_col]) if ot_col else parsed["open_threshold"]
-        open_cont = _num(row[oc_col]) if oc_col else parsed["open_continous_threshold"]
+        if open_bar is None and period is not None:
+            open_bar = period
+        open_threshold = _num(row[daily_atr_col]) if daily_atr_col else (
+            _num(row[ot_col]) if ot_col else parsed["open_threshold"])
+        open_cont = _num(row[recent_mean_col]) if recent_mean_col else (
+            _num(row[oc_col]) if oc_col else parsed["open_continous_threshold"])
         open_withdrawal = _num(row[ow_col]) if ow_col else parsed["open_withdrawal_threshold"]
         close_withdrawal = _num(row[cw_col]) if cw_col else parsed["close_withdrawal_threshold"]
         withdrawal_limit = close_withdrawal if fourth_field == "close_withdrawal_threshold" else open_withdrawal
         records.append({
             "order_index": idx,
             "param_tag": param_tag,
+            "period": period if period is not None else open_bar,
             "selection_key": "|".join([
                 _num_key(open_bar),
                 _num_key(open_threshold),
