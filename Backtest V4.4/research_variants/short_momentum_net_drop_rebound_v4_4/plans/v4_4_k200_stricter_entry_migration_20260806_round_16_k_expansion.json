@@ -1,0 +1,38 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution",
+  "campaign_id": "v4_4_positive_entry_signal_repair_20260805",
+  "stage_id": "continuation_round_16_migration_stricter_entry_k_expansion_all_window",
+  "stage_kind": "single_axis_threshold_multiplier_expansion_confirmation",
+  "predecessor_stage_ids": ["continuation_round_15_dual_purpose_broad_refinement_all_window"],
+  "selection_provenance": "The user authorized the next K200-to-SImain migration test and one unified compatible-result ranking. Hold E=320, BH=240, TRW=20, W=6, M=4.5, and S=332 fixed; continue the target-improving stricter-entry direction from K1.4 through K1.5, K1.6, and K1.75. This source-support batch is confirmation-only and changes no other parameter.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+  "instrument_profile": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\instrument_profiles\\k200m.future_v2.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {"workers": 4, "batch_size": 3, "minimum_free_memory_mb": 4096},
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_16_migration_stricter_entry_k_expansion_all_window",
+  "research_block": {
+    "experiment_mode": "continuation_search",
+    "question": "Does continuing K above 1.4 preserve the SImain return improvement while reducing entries further?",
+    "diagnostic_type": "weak-decline false entry",
+    "supporting_outcome": "SImain trade count falls and adjacent K values improve return quality without materially worse drawdown or concentration.",
+    "falsifying_outcome": "Target return peaks and falls, or drawdown and concentration worsen enough to offset fewer entries.",
+    "classification_values": ["improved", "mixed", "not_improved", "uncertain"],
+    "confirmation_only": true,
+    "parameter_acceptance": "none"
+  },
+  "grid_blocks": [],
+  "explicit_combos": [
+    {"candidate_id":"k_strict_1p5","objective":"migration_entry_quality","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":320,"bh":240,"trw":20,"k":1.5,"w":6,"m":4.5,"speed_window_bars":332},
+    {"candidate_id":"k_strict_1p6","objective":"migration_entry_quality","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":320,"bh":240,"trw":20,"k":1.6,"w":6,"m":4.5,"speed_window_bars":332},
+    {"candidate_id":"k_strict_1p75","objective":"migration_entry_quality","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":320,"bh":240,"trw":20,"k":1.75,"w":6,"m":4.5,"speed_window_bars":332}
+  ]
+}

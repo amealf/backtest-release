@@ -1,0 +1,43 @@
+{
+  "status": "frozen_before_compute",
+  "plan": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\generated_ai_cycle_20260806\\continuation_round_94_ai_adaptive_grid_all_window.json",
+  "plan_sha256": "9b27e43dd99696478dbdc98f68aacec24e10e438a3300b32e892328e6013f426",
+  "stage_id": "continuation_round_94_ai_adaptive_grid_all_window",
+  "phase": "adaptive-grid",
+  "output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_94_ai_adaptive_grid_all_window",
+  "completed_coordinate_count": 31832,
+  "pending_coordinate_count": 0,
+  "requested_coordinate_count": 35,
+  "internal_duplicate_count": 0,
+  "completed_overlap_count": 11,
+  "pending_overlap_count": 0,
+  "retained_new_coordinate_count": 24,
+  "block_counts": {
+    "adaptive_cycle_24_total_return_e": {
+      "requested": 7,
+      "retained": 6
+    },
+    "adaptive_cycle_24_scenario_1_total_bh": {
+      "requested": 7,
+      "retained": 6
+    },
+    "adaptive_cycle_24_average_ge20_trw": {
+      "requested": 7,
+      "retained": 5
+    },
+    "adaptive_cycle_24_non_gap_return_speed_window_bars": {
+      "requested": 7,
+      "retained": 6
+    },
+    "adaptive_cycle_24_low_drawdown_positive_w": {
+      "requested": 7,
+      "retained": 1
+    }
+  },
+  "resources": {
+    "workers": 4,
+    "batch_size": 8,
+    "minimum_free_memory_mb": 4096
+  },
+  "parameter_acceptance": "none"
+}

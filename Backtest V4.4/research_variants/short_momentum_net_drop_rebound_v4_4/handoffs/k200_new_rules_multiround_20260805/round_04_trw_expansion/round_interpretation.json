@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "immutable_closed_interpreted",
+  "source_round": "continuation_round_04_trw_expansion_all_window",
+  "question": "Does increasing TRW from 12 improve entry-baseline selectivity while every other parameter remains fixed?",
+  "anchor": {"e":480,"bh":171,"trw":12,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388,"trade_count":112,"cost_adjusted_total_return":0.82435152,"cost_adjusted_average_trade":0.00561833,"cost_adjusted_max_drawdown_abs":0.15176999},
+  "results": [
+    {"trw":13,"trade_count":108,"cost_adjusted_total_return":0.7192659182,"cost_adjusted_average_trade":0.0052727558,"cost_adjusted_max_drawdown_abs":0.1624632535,"gross_return_excluding_gap_spanning_trades":0.0100585718,"median_cost_adjusted_trade":-0.00212657,"top_two_contribution_fraction":0.412306},
+    {"trw":14,"trade_count":105,"cost_adjusted_total_return":0.6791868047,"cost_adjusted_average_trade":0.0051950295,"cost_adjusted_max_drawdown_abs":0.1731188792,"gross_return_excluding_gap_spanning_trades":0.0057696858,"median_cost_adjusted_trade":-0.00212117,"top_two_contribution_fraction":0.425287},
+    {"trw":15,"trade_count":103,"cost_adjusted_total_return":0.623311623,"cost_adjusted_average_trade":0.0049644127,"cost_adjusted_max_drawdown_abs":0.1805344517,"gross_return_excluding_gap_spanning_trades":-0.0109099557,"median_cost_adjusted_trade":-0.002311,"top_two_contribution_fraction":0.446726}
+  ],
+  "classification": "not_improved",
+  "decision": "Stop TRW expansion, return to the TRW=12 anchor, and change the tested parameter to K.",
+  "parameter_acceptance": "none"
+}

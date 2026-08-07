@@ -1,0 +1,88 @@
+{
+  "schema_version": 3,
+  "status": "current_for_combined_exit",
+  "scenario_schema_id": "v4_4_scenario_groups_single_select_combined_exit_v3_20260801",
+  "selection_mode": "single",
+  "neutral_selection_id": "all",
+  "qualification_rule": {
+    "entry_interval": "start_exclusive_end_inclusive",
+    "exit_interval": "start_exclusive_end_inclusive",
+    "required_entry_count": 1,
+    "required_exit_count": 0,
+    "must_hold_past_segment_end": true,
+    "required_eventual_exit_reasons": [
+      "rebound_threshold",
+      "downside_speed_below_threshold"
+    ]
+  },
+  "segments": [
+    {
+      "segment_id": "market_01",
+      "label_zh": "行情 1",
+      "label_en": "Market period 1",
+      "start_time": "2026-06-23 08:48:30",
+      "end_time": "2026-06-23 15:01:00",
+      "duration": "06:12:30",
+      "selected_high": 1502.30,
+      "selected_low": 1363.45,
+      "selected_drop_points": 138.85,
+      "selected_drop_rate": 0.09242,
+      "selected_rebound_points": 34.25,
+      "selected_rebound_duration": "01:16:15",
+      "maximum_no_new_low_bars": 305
+    },
+    {
+      "segment_id": "market_02",
+      "label_zh": "行情 2",
+      "label_en": "Market period 2",
+      "start_time": "2026-06-26 08:45:00",
+      "end_time": "2026-06-26 12:31:30",
+      "duration": "03:46:30",
+      "selected_high": 1456.15,
+      "selected_low": 1336.40,
+      "selected_drop_points": 119.75,
+      "selected_drop_rate": 0.08224,
+      "selected_rebound_points": 26.0,
+      "selected_rebound_duration": "00:40:00",
+      "maximum_no_new_low_bars": 160
+    },
+    {
+      "segment_id": "market_03",
+      "label_zh": "行情 3",
+      "label_en": "Market period 3",
+      "start_time": "2026-07-01 08:58:00",
+      "end_time": "2026-07-01 11:02:00",
+      "duration": "02:04:00",
+      "selected_high": 1400.50,
+      "selected_low": 1332.35,
+      "selected_drop_points": 68.15,
+      "selected_drop_rate": 0.04866,
+      "selected_rebound_points": 18.9,
+      "selected_rebound_duration": "00:42:30",
+      "maximum_no_new_low_bars": 170
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "scenario_1",
+      "label_zh": "情景一",
+      "label_en": "Scenario 1",
+      "aggregation": "all",
+      "segment_ids": ["market_01"]
+    },
+    {
+      "scenario_id": "scenario_2",
+      "label_zh": "情景二",
+      "label_en": "Scenario 2",
+      "aggregation": "all",
+      "segment_ids": ["market_02"]
+    },
+    {
+      "scenario_id": "scenario_3",
+      "label_zh": "情景三",
+      "label_en": "Scenario 3",
+      "aggregation": "all",
+      "segment_ids": ["market_01", "market_02", "market_03"]
+    }
+  ]
+}

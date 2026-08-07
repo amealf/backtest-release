@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "status": "immutable_closed_interpreted",
+  "source_round": "continuation_round_03_bh_expansion_all_window",
+  "question": "Does expanding BH from the current unrestricted anchor improve entry-baseline quality while every other parameter remains fixed?",
+  "anchor": {
+    "e": 480,
+    "bh": 171,
+    "trw": 12,
+    "k": 1.26,
+    "w": 6,
+    "m": 4.5,
+    "speed_window_bars": 388,
+    "trade_count": 112,
+    "cost_adjusted_total_return": 0.82435152,
+    "cost_adjusted_average_trade": 0.00561833,
+    "cost_adjusted_max_drawdown_abs": 0.15176999
+  },
+  "results": [
+    {"bh":205,"trade_count":114,"cost_adjusted_total_return":0.696174018,"cost_adjusted_average_trade":0.0048853858,"cost_adjusted_max_drawdown_abs":0.1709151048,"gross_return_excluding_gap_spanning_trades":0.0038840636,"median_cost_adjusted_trade":-0.00182953,"top_two_contribution_fraction":0.42154},
+    {"bh":257,"trade_count":118,"cost_adjusted_total_return":0.6222597922,"cost_adjusted_average_trade":0.0043418468,"cost_adjusted_max_drawdown_abs":0.1852950832,"gross_return_excluding_gap_spanning_trades":-0.0346443336,"median_cost_adjusted_trade":-0.00219046,"top_two_contribution_fraction":0.450479},
+    {"bh":480,"trade_count":106,"cost_adjusted_total_return":0.649895517,"cost_adjusted_average_trade":0.0049860283,"cost_adjusted_max_drawdown_abs":0.1621886465,"gross_return_excluding_gap_spanning_trades":0.0013639119,"median_cost_adjusted_trade":-0.00154669,"top_two_contribution_fraction":0.419012}
+  ],
+  "classification": "not_improved",
+  "decision": "Stop BH expansion, return to the BH=171 anchor, and change the tested parameter to TRW.",
+  "parameter_acceptance": "none"
+}

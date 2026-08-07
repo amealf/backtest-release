@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "datasets": {
+    "K200_v4_3_ec04981dcf7fa74a": {
+      "instrument": "K200",
+      "source_path": "runtime_inputs/market_data/k200_clean_15s_session_filled.csv",
+      "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+      "pipeline_version": "research_data_preparation_v4_3_policy_neutral_baseline_marker_20260802",
+      "prepared_identity": "v4_3_policy_neutral_baseline_marker_ec04981dcf7fa74a_7b7722fb792c_4d70961187e1",
+      "rule_contract_sha256": "7b7722fb792ce47be5238ff11dc0985fd4bb3a2e4565b6d05020cea20ae65025",
+      "implementation_sha256": "4d70961187e1e84eaa51e63bc152256ebd86562bfda45180f571374a92f0a805",
+      "status": "complete",
+      "manifest_path": "runtime_inputs/data_preparation/data_preparation_manifest.json",
+      "report_path": "runtime_inputs/data_preparation/low_activity_report/index.html",
+      "processed_at": "2026-08-01T19:47:27+00:00",
+      "extreme_cleaning_status": "passed"
+    },
+    "K200_v4_4_ec04981dcf7fa74a": {
+      "instrument": "K200",
+      "source_path": "runtime_inputs/market_data/k200_clean_15s_session_filled.csv",
+      "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+      "pipeline_version": "research_data_preparation_v4_4_confirmed_low_activity_gate_20260806",
+      "prepared_identity": "v4_4_confirmed_low_activity_gate_ec04981dcf7fa74a_76f2695bc1f4_9e27394dbe49",
+      "rule_contract_sha256": "76f2695bc1f479730bfd4e2c7323abdde086c18846a7b80860ddcb77bd3d55af",
+      "implementation_sha256": "9e27394dbe4989bfe50e2f7cca4723bd644ba208ed2169856ec99dd62f201910",
+      "status": "complete",
+      "manifest_path": "runtime_inputs/data_preparation/data_preparation_manifest.json",
+      "report_path": "runtime_inputs/data_preparation/low_activity_report/index.html",
+      "processed_at": "2026-08-06T13:29:29+00:00",
+      "extreme_cleaning_status": "legacy_preexisting_source"
+    },
+    "K200_v4_4_9760d367a109777c": {
+      "instrument": "K200",
+      "source_path": "runtime_inputs/market_data/k200_clean_15s_session_filled.csv",
+      "source_sha256": "9760d367a109777c4789ce45d982a6c0708bacddad8f549450ed94f81ad5c405",
+      "pipeline_version": "research_data_preparation_v4_4_confirmed_low_activity_gate_20260806",
+      "prepared_identity": "v4_4_confirmed_low_activity_gate_9760d367a109777c_76f2695bc1f4_9e27394dbe49",
+      "rule_contract_sha256": "76f2695bc1f479730bfd4e2c7323abdde086c18846a7b80860ddcb77bd3d55af",
+      "implementation_sha256": "9e27394dbe4989bfe50e2f7cca4723bd644ba208ed2169856ec99dd62f201910",
+      "status": "complete",
+      "manifest_path": "runtime_inputs/data_preparation/data_preparation_manifest.json",
+      "report_path": "runtime_inputs/data_preparation/low_activity_report/index.html",
+      "processed_at": "2026-08-06T21:53:22+00:00",
+      "extreme_cleaning_status": "passed"
+    }
+  },
+  "updated_at": "2026-08-06T21:53:22+00:00"
+}

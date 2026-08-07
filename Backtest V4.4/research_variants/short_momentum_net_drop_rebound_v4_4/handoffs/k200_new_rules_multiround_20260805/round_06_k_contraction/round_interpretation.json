@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "immutable_closed_interpreted",
+  "source_round": "continuation_round_06_k_contraction_all_window",
+  "question": "Does decreasing K below 1.26 improve the current unrestricted anchor after upward K expansion failed?",
+  "anchor": {"e":480,"bh":171,"trw":12,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388,"trade_count":112,"cost_adjusted_total_return":0.82435152,"cost_adjusted_average_trade":0.00561833,"cost_adjusted_max_drawdown_abs":0.15176999},
+  "results": [
+    {"k":1.15,"trade_count":123,"cost_adjusted_total_return":0.6201507908,"cost_adjusted_average_trade":0.0041709257,"cost_adjusted_max_drawdown_abs":0.1994810051,"gross_return_excluding_gap_spanning_trades":-0.0190473289,"median_cost_adjusted_trade":-0.0017348,"top_two_contribution_fraction":0.453214},
+    {"k":1.05,"trade_count":134,"cost_adjusted_total_return":0.5647563106,"cost_adjusted_average_trade":0.0035757971,"cost_adjusted_max_drawdown_abs":0.2044909414,"gross_return_excluding_gap_spanning_trades":-0.0458280363,"median_cost_adjusted_trade":-0.00226933,"top_two_contribution_fraction":0.481689},
+    {"k":0.95,"trade_count":149,"cost_adjusted_total_return":0.4519251284,"cost_adjusted_average_trade":0.002725455,"cost_adjusted_max_drawdown_abs":0.2078198328,"gross_return_excluding_gap_spanning_trades":-0.1248383635,"median_cost_adjusted_trade":-0.00368845,"top_two_contribution_fraction":0.559152}
+  ],
+  "classification": "not_improved",
+  "decision": "Stop K contraction. Both K directions are weaker than K=1.26 at the fixed anchor. Return to the anchor and test W expansion.",
+  "parameter_acceptance": "none"
+}

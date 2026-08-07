@@ -1,0 +1,522 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "manage-project-context",
+  "projectName": "Backtest V4.4 Research",
+  "managementDirectory": "project_management",
+  "projectRootRelative": "..",
+  "defaultLanguage": "zh",
+  "groups": {
+    "priority": {
+      "en": "Read first",
+      "zh": "优先阅读"
+    },
+    "planning": {
+      "en": "Goals and constraints",
+      "zh": "目标与约束"
+    },
+    "core": {
+      "en": "Strategy core",
+      "zh": "策略核心"
+    },
+    "instrument": {
+      "en": "Instrument profiles",
+      "zh": "品种配置"
+    },
+    "campaign": {
+      "en": "Campaign workflows",
+      "zh": "实验流程"
+    },
+    "state": {
+      "en": "Current state",
+      "zh": "当前状态"
+    },
+    "work": {
+      "en": "Active work",
+      "zh": "当前工作"
+    },
+    "domain": {
+      "en": "Domain rules",
+      "zh": "领域规则"
+    },
+    "reference": {
+      "en": "Project reference",
+      "zh": "项目参考"
+    },
+    "archive": {
+      "en": "History and archive",
+      "zh": "历史与存档"
+    }
+  },
+  "documents": [
+    {
+      "id": "agent-rules.en",
+      "pair": "agent-rules",
+      "group": "priority",
+      "path": "../AGENTS.md",
+      "lang": "en",
+      "title": "Agent Instructions",
+      "lead": "Concise mandatory rules and the task-based reading map for agents.",
+      "policy": "Update when mandatory operating rules or reading requirements change."
+    },
+    {
+      "id": "agent-rules.zh",
+      "pair": "agent-rules",
+      "group": "priority",
+      "path": "../AGENTS.zh.md",
+      "lang": "zh",
+      "title": "Agent 工作规则",
+      "lead": "Agent 必须遵守的简明规则与按任务读取地图。",
+      "policy": "强制工作规则或读取要求变化后更新。"
+    },
+    {
+      "id": "start.en",
+      "pair": "start",
+      "group": "priority",
+      "path": "00_START_HERE.en.md",
+      "lang": "en",
+      "title": "Start Here",
+      "lead": "Purpose, evidence priority, reading order, and maintenance triggers.",
+      "policy": "Update when the entry point, reading map, or maintenance protocol changes."
+    },
+    {
+      "id": "start.zh",
+      "pair": "start",
+      "group": "priority",
+      "path": "00_START_HERE.zh.md",
+      "lang": "zh",
+      "title": "从这里开始",
+      "lead": "用途、证据优先级、读取顺序与维护触发条件。",
+      "policy": "入口、读取地图或维护协议变化后更新。"
+    },
+    {
+      "id": "goal.en",
+      "pair": "goal",
+      "group": "planning",
+      "path": "01_goal/PROJECT_GOAL.en.md",
+      "lang": "en",
+      "title": "Project Goal",
+      "lead": "Durable objective, current milestone, success criteria, and non-goals.",
+      "policy": "Update only after the user changes the durable project objective."
+    },
+    {
+      "id": "strategy-contract.en",
+      "pair": "strategy-contract",
+      "group": "core",
+      "path": "00_core/STRATEGY_CONTRACT_V4_4.en.md",
+      "lang": "en",
+      "title": "Strategy Contract V4.4",
+      "lead": "Instrument-neutral entry, exit, state-machine, and timing semantics.",
+      "policy": "Update when accepted strategy semantics change."
+    },
+    {
+      "id": "strategy-contract.zh",
+      "pair": "strategy-contract",
+      "group": "core",
+      "path": "00_core/STRATEGY_CONTRACT_V4_4.zh.md",
+      "lang": "zh",
+      "title": "V4.4 策略协议",
+      "lead": "与品种无关的开仓、平仓、状态机和时序语义。",
+      "policy": "已接受的策略语义变化后更新。"
+    },
+    {
+      "id": "instrument-profile.en",
+      "pair": "instrument-profile",
+      "group": "instrument",
+      "path": "10_instruments/INSTRUMENT_PROFILE_CONTRACT.en.md",
+      "lang": "en",
+      "title": "Instrument Profile Contract",
+      "lead": "Data, cost, gap, low-activity, scenario, and ranking-lineage bindings.",
+      "policy": "Update when the instrument-profile interface changes."
+    },
+    {
+      "id": "instrument-profile.zh",
+      "pair": "instrument-profile",
+      "group": "instrument",
+      "path": "10_instruments/INSTRUMENT_PROFILE_CONTRACT.zh.md",
+      "lang": "zh",
+      "title": "品种配置协议",
+      "lead": "数据、成本、gap、低活跃、情景和排名谱系绑定。",
+      "policy": "品种配置接口变化后更新。"
+    },
+    {
+      "id": "campaign-workflow.en",
+      "pair": "campaign-workflow",
+      "group": "campaign",
+      "path": "20_campaigns/CAMPAIGN_WORKFLOW.en.md",
+      "lang": "en",
+      "title": "Campaign Workflow",
+      "lead": "Official transfer, local-refinement, and fresh-search modes plus prompt forms.",
+      "policy": "Update when campaign modes, ranking lineages, or handoff rules change."
+    },
+    {
+      "id": "campaign-workflow.zh",
+      "pair": "campaign-workflow",
+      "group": "campaign",
+      "path": "20_campaigns/CAMPAIGN_WORKFLOW.zh.md",
+      "lang": "zh",
+      "title": "实验活动流程",
+      "lead": "正式迁移、局部细化、全新搜索模式与简短指令格式。",
+      "policy": "实验模式、排名谱系或交接规则变化后更新。"
+    },
+    {
+      "id": "goal.zh",
+      "pair": "goal",
+      "group": "planning",
+      "path": "01_goal/PROJECT_GOAL.zh.md",
+      "lang": "zh",
+      "title": "项目目标",
+      "lead": "长期目标、当前里程碑、成功标准与非目标。",
+      "policy": "只有用户改变长期项目目标时更新。"
+    },
+    {
+      "id": "constraints.en",
+      "pair": "constraints",
+      "group": "planning",
+      "path": "01_goal/PROJECT_CONSTRAINTS.en.md",
+      "lang": "en",
+      "title": "Project Constraints",
+      "lead": "Confirmed cross-project boundaries, quality rules, and open assumptions.",
+      "policy": "Update when the user accepts, changes, or retires a durable constraint."
+    },
+    {
+      "id": "constraints.zh",
+      "pair": "constraints",
+      "group": "planning",
+      "path": "01_goal/PROJECT_CONSTRAINTS.zh.md",
+      "lang": "zh",
+      "title": "项目约束",
+      "lead": "已确认的通用边界、质量规则与待确认假设。",
+      "policy": "用户确认、修改或退役长期约束时更新。"
+    },
+    {
+      "id": "source.en",
+      "pair": "source",
+      "group": "state",
+      "path": "02_current_state/SOURCE_OF_TRUTH.en.md",
+      "lang": "en",
+      "title": "Current Valid Files",
+      "lead": "Authoritative entry points, configurations, artifacts, and validity boundaries.",
+      "policy": "Update when an authoritative path, branch, configuration, or artifact changes."
+    },
+    {
+      "id": "source.zh",
+      "pair": "source",
+      "group": "state",
+      "path": "02_current_state/SOURCE_OF_TRUTH.zh.md",
+      "lang": "zh",
+      "title": "当前有效文件",
+      "lead": "权威入口、配置、产物与有效性边界。",
+      "policy": "权威路径、分支、配置或产物变化后更新。"
+    },
+    {
+      "id": "version.en",
+      "pair": "version",
+      "group": "state",
+      "path": "02_current_state/CURRENT_VERSION.en.md",
+      "lang": "en",
+      "title": "Current Version Notes",
+      "lead": "Current deliverables, behavior, structure, interfaces, dependencies, and known gaps.",
+      "policy": "Update after a deliverable, behavior, structure, interface, dependency, or procedure change."
+    },
+    {
+      "id": "version.zh",
+      "pair": "version",
+      "group": "state",
+      "path": "02_current_state/CURRENT_VERSION.zh.md",
+      "lang": "zh",
+      "title": "当前版本说明",
+      "lead": "当前交付物、行为、结构、接口、依赖与已知缺口。",
+      "policy": "交付物、行为、结构、接口、依赖或流程变化后更新。"
+    },
+    {
+      "id": "architecture.en",
+      "pair": "architecture",
+      "group": "state",
+      "path": "02_current_state/CODE_ARCHITECTURE.en.md",
+      "lang": "en",
+      "title": "Code Architecture",
+      "lead": "Current code flow, components, responsibilities, dependencies, and boundaries.",
+      "policy": "Update when code entry points, component responsibilities, call relationships, data flow, dependencies, or interface boundaries change."
+    },
+    {
+      "id": "architecture.zh",
+      "pair": "architecture",
+      "group": "state",
+      "path": "02_current_state/CODE_ARCHITECTURE.zh.md",
+      "lang": "zh",
+      "title": "代码架构",
+      "lead": "当前代码流程、组件、职责、依赖与边界。",
+      "policy": "代码入口、组件职责、调用关系、数据流、依赖或接口边界变化后更新。"
+    },
+    {
+      "id": "tasks.en",
+      "pair": "tasks",
+      "group": "work",
+      "path": "03_active_work/CURRENT_TASKS.en.md",
+      "lang": "en",
+      "title": "Current Tasks",
+      "lead": "Active work, ownership, status, acceptance, blockers, and handoff state.",
+      "policy": "Update when a task is declared, completed, blocked, resumed, or changes scope."
+    },
+    {
+      "id": "tasks.zh",
+      "pair": "tasks",
+      "group": "work",
+      "path": "03_active_work/CURRENT_TASKS.zh.md",
+      "lang": "zh",
+      "title": "当前任务清单",
+      "lead": "当前工作、负责人、状态、验收、阻塞与交接信息。",
+      "policy": "任务被声明、完成、阻塞、恢复或改变范围时更新。"
+    },
+    {
+      "id": "work-progress.en",
+      "pair": "work-progress",
+      "group": "work",
+      "path": "03_active_work/WORK_PROGRESS.en.md",
+      "lang": "en",
+      "title": "Work Progress",
+      "lead": "Completed or materially changed work, evidence, outcomes, limits, and handoff paths.",
+      "policy": "Append after completed or materially changed work; archive obsolete detailed bodies when the active method or major version changes."
+    },
+    {
+      "id": "work-progress.zh",
+      "pair": "work-progress",
+      "group": "work",
+      "path": "03_active_work/WORK_PROGRESS.zh.md",
+      "lang": "zh",
+      "title": "工作进展",
+      "lead": "已完成或发生重要变化的工作、证据、结果、限制与交接路径。",
+      "policy": "工作完成或发生重要变化后追加；当前方法或主版本变化时存档已经失效的详细正文。"
+    },
+    {
+      "id": "experiment-progress.en",
+      "pair": "experiment-progress",
+      "group": "work",
+      "path": "03_active_work/EXPERIMENT_PROGRESS.en.md",
+      "lang": "en",
+      "title": "Experiment Progress",
+      "lead": "Round-by-round experimental motives, scope, outcomes, evidence, and terminal decisions.",
+      "policy": "Update when an authorized experimental round closes or the experimental evidence boundary changes."
+    },
+    {
+      "id": "experiment-progress.zh",
+      "pair": "experiment-progress",
+      "group": "work",
+      "path": "03_active_work/EXPERIMENT_PROGRESS.zh.md",
+      "lang": "zh",
+      "title": "实验进展",
+      "lead": "逐轮记录实验动机、范围、结果、证据与终局决定。",
+      "policy": "已授权实验轮次闭合或实验有效边界变化后更新。"
+    },
+    {
+      "id": "backtest-management.en",
+      "pair": "backtest-management",
+      "group": "work",
+      "path": "03_active_work/BACKTEST_MANAGEMENT.en.md",
+      "lang": "en",
+      "title": "Backtest Management",
+      "lead": "Mandatory instrument, data-file, and evaluated-interval record for every backtest run.",
+      "policy": "Read and append before every backtest starts; keep the row if the run stops early.",
+      "lifecycle": "active",
+      "authority": "operational",
+      "readWhen": "Before every backtest run.",
+      "updateWhen": "Before every backtest run.",
+      "privateLookup": false
+    },
+    {
+      "id": "backtest-management.zh",
+      "pair": "backtest-management",
+      "group": "work",
+      "path": "03_active_work/BACKTEST_MANAGEMENT.zh.md",
+      "lang": "zh",
+      "title": "回测管理",
+      "lead": "每次回测必须记录品种、数据文件与实际回测区间。",
+      "policy": "每次启动回测前阅读并追加；回测中途停止时仍保留该行。",
+      "lifecycle": "active",
+      "authority": "operational",
+      "readWhen": "每次运行回测前。",
+      "updateWhen": "每次启动回测前。",
+      "privateLookup": false
+    },
+    {
+      "id": "decisions.en",
+      "pair": "decisions",
+      "group": "reference",
+      "path": "04_decisions/DECISIONS.en.md",
+      "lang": "en",
+      "title": "Decisions",
+      "lead": "Accepted, retired, and reversed durable choices with rationale.",
+      "policy": "Update when a durable choice is accepted, retired, or reversed."
+    },
+    {
+      "id": "decisions.zh",
+      "pair": "decisions",
+      "group": "reference",
+      "path": "04_decisions/DECISIONS.zh.md",
+      "lang": "zh",
+      "title": "历史决策",
+      "lead": "已确认、已退役与已反转的长期选择及理由。",
+      "policy": "长期选择被确认、退役或反转时更新。"
+    },
+    {
+      "id": "change-reasons.en",
+      "pair": "change-reasons",
+      "group": "reference",
+      "path": "04_decisions/CHANGE_REASONS.en.md",
+      "lang": "en",
+      "title": "Change Reasons",
+      "lead": "Focused rationale for behavior-changing repairs and other changes whose previous behavior and evidence impact must remain auditable.",
+      "policy": "Add an entry when a material behavior change needs a durable reason, prior behavior, updated behavior, and evidence-impact record."
+    },
+    {
+      "id": "change-reasons.zh",
+      "pair": "change-reasons",
+      "group": "reference",
+      "path": "04_decisions/CHANGE_REASONS.zh.md",
+      "lang": "zh",
+      "title": "变更理由",
+      "lead": "记录行为修复及其他重要变化的理由、原有表现、新表现与证据影响。",
+      "policy": "重要行为变化需要长期保留理由、原有表现、新表现与证据影响时新增记录。"
+    },
+    {
+      "id": "history.en",
+      "pair": "history",
+      "group": "archive",
+      "path": "06_history/PROJECT_HISTORY.en.md",
+      "lang": "en",
+      "title": "Project History",
+      "lead": "Events that changed the interpretation or direction of the project.",
+      "policy": "Update when an event changes how past or current work should be understood."
+    },
+    {
+      "id": "history.zh",
+      "pair": "history",
+      "group": "archive",
+      "path": "06_history/PROJECT_HISTORY.zh.md",
+      "lang": "zh",
+      "title": "项目历史",
+      "lead": "改变项目理解或方向的重要事件。",
+      "policy": "事件改变历史或当前工作的解释时更新。"
+    },
+    {
+      "id": "future.en",
+      "pair": "future",
+      "group": "reference",
+      "path": "07_future/NEXT_DIRECTIONS.en.md",
+      "lang": "en",
+      "title": "Future Research Directions",
+      "lead": "Testable research questions, strategy hypotheses, and validation paths that are not yet active commitments.",
+      "policy": "Update when a research question, hypothesis, or validation path appears, changes, becomes active, or is retired; do not place execution rules here."
+    },
+    {
+      "id": "future.zh",
+      "pair": "future",
+      "group": "reference",
+      "path": "07_future/NEXT_DIRECTIONS.zh.md",
+      "lang": "zh",
+      "title": "后续研究方向",
+      "lead": "尚未成为当前承诺的可检验研究问题、策略假设与验证路径。",
+      "policy": "研究问题、策略假设或验证路径出现、变化、转为当前工作或退役时更新；执行规则不放在这里。"
+    },
+    {
+      "id": "references.en",
+      "pair": "references",
+      "group": "reference",
+      "path": "08_references/README.en.md",
+      "lang": "en",
+      "title": "Reference Materials",
+      "lead": "Retained source material, provenance, relevance, and review status.",
+      "policy": "Update when a retained source or its provenance, relevance, or status changes."
+    },
+    {
+      "id": "references.zh",
+      "pair": "references",
+      "group": "reference",
+      "path": "08_references/README.zh.md",
+      "lang": "zh",
+      "title": "参考材料",
+      "lead": "保留材料的来源、用途、相关性与审阅状态。",
+      "policy": "保留材料或其来源、相关性、状态变化时更新。"
+    },
+    {
+      "id": "archive.en",
+      "pair": "archive",
+      "group": "archive",
+      "path": "99_archive/README.en.md",
+      "lang": "en",
+      "title": "Archive Guide",
+      "lead": "Retention, inactive-state labels, traceability, and restoration rules.",
+      "policy": "Update when archive structure, retention, or restoration guidance changes."
+    },
+    {
+      "id": "archive.zh",
+      "pair": "archive",
+      "group": "archive",
+      "path": "99_archive/README.zh.md",
+      "lang": "zh",
+      "title": "存档说明",
+      "lead": "保留、非活动状态、追溯与恢复规则。",
+      "policy": "存档结构、保留或恢复规则变化时更新。"
+    },
+    {
+      "id": "data.en",
+      "pair": "data",
+      "group": "domain",
+      "path": "05_domains/data/DATA_REQUIREMENTS.en.md",
+      "lang": "en",
+      "title": "Data Requirements",
+      "lead": "Data sources, contracts, quality, lineage, access, retention, and recovery rules.",
+      "policy": "Update when a durable source, schema, quality, lineage, access, retention, or recovery rule changes."
+    },
+    {
+      "id": "data.zh",
+      "pair": "data",
+      "group": "domain",
+      "path": "05_domains/data/DATA_REQUIREMENTS.zh.md",
+      "lang": "zh",
+      "title": "数据要求",
+      "lead": "数据来源、契约、质量、血缘、访问、保留与恢复规则。",
+      "policy": "长期来源、结构、质量、血缘、访问、保留或恢复规则变化后更新。"
+    },
+    {
+      "id": "research.en",
+      "pair": "research",
+      "group": "domain",
+      "path": "05_domains/research/RESEARCH_CONSTRAINTS.en.md",
+      "lang": "en",
+      "title": "Research Constraints",
+      "lead": "Research questions, methods, evidence boundaries, reproducibility, and interpretation rules.",
+      "policy": "Update when an accepted method, evidence boundary, reproducibility rule, or interpretation constraint changes."
+    },
+    {
+      "id": "research.zh",
+      "pair": "research",
+      "group": "domain",
+      "path": "05_domains/research/RESEARCH_CONSTRAINTS.zh.md",
+      "lang": "zh",
+      "title": "研究约束",
+      "lead": "研究问题、方法、证据边界、可复现与解释规则。",
+      "policy": "已确认方法、证据边界、可复现规则或解释约束变化后更新。"
+    },
+    {
+      "id": "parameter-exploration-guide.en",
+      "pair": "parameter-exploration-guide",
+      "group": "domain",
+      "path": "05_domains/research/PARAMETER_EXPLORATION_GUIDE.en.md",
+      "lang": "en",
+      "title": "Parameter Exploration Guide",
+      "lead": "Mandatory trade diagnosis, experiment-block design, multi-metric judgment, and next-round CSV handoff rules.",
+      "policy": "Read for every parameter exploration; update when an accepted diagnosis, improvement, experiment-block, or CSV-handoff rule changes."
+    },
+    {
+      "id": "parameter-exploration-guide.zh",
+      "pair": "parameter-exploration-guide",
+      "group": "domain",
+      "path": "05_domains/research/PARAMETER_EXPLORATION_GUIDE.zh.md",
+      "lang": "zh",
+      "title": "参数探索指南",
+      "lead": "每次参数探索必须遵守的交易诊断、实验块、多指标判断与下一轮 CSV 交付规则。",
+      "policy": "每次参数探索都要阅读；已确认诊断、改善、实验块或 CSV 交付规则变化后更新。"
+    }
+  ]
+}

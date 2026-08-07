@@ -1,0 +1,42 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution",
+  "campaign_id": "v4_4_positive_entry_signal_repair_20260805",
+  "stage_id": "continuation_round_13_stricter_entry_k_expansion_all_window",
+  "stage_kind": "single_axis_threshold_multiplier_expansion_confirmation",
+  "predecessor_stage_ids": ["continuation_round_12_s_expansion_all_window"],
+  "selection_provenance": "The user authorized a narrow continuation to test whether greater entry difficulty lowers trade count and helps returns before the next K200-to-SImain transfer. Hold E=320, BH=240, TRW=20, W=6, M=4.5, and S=332 fixed at the current SImain transfer leader and raise only K from 1.1 to 1.2, 1.3, and 1.4. The three tuples have zero overlap with the current 4,747-coordinate K200 snapshot.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+  "instrument_profile": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\instrument_profiles\\k200m.future_v2.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {"workers": 4, "batch_size": 3, "minimum_free_memory_mb": 4096},
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_13_stricter_entry_k_expansion_all_window",
+  "handoff": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\handoffs\\k200_stricter_entry_migration_20260805\\round_13\\next_round_parameters.csv",
+    "audit_path": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\handoffs\\k200_stricter_entry_migration_20260805\\round_13\\next_round_parameters_audit.json"
+  },
+  "research_block": {
+    "experiment_mode": "continuation_search",
+    "question": "Does increasing K reduce trade count and improve cost-adjusted return quality before exact migration to SImain?",
+    "diagnostic_type": "weak-decline false entry",
+    "supporting_outcome": "Trade count falls and at least two adjacent K points improve return quality without materially worse drawdown or concentration.",
+    "falsifying_outcome": "Trade count does not fall, or return quality deteriorates across the batch.",
+    "classification_values": ["improved", "mixed", "not_improved", "uncertain"],
+    "confirmation_only": true,
+    "parameter_acceptance": "none"
+  },
+  "grid_blocks": [],
+  "explicit_combos": [
+    {"candidate_id":"k_strict_1p2","objective":"reduce_entry_frequency","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":320,"bh":240,"trw":20,"k":1.2,"w":6,"m":4.5,"speed_window_bars":332},
+    {"candidate_id":"k_strict_1p3","objective":"reduce_entry_frequency","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":320,"bh":240,"trw":20,"k":1.3,"w":6,"m":4.5,"speed_window_bars":332},
+    {"candidate_id":"k_strict_1p4","objective":"reduce_entry_frequency","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":320,"bh":240,"trw":20,"k":1.4,"w":6,"m":4.5,"speed_window_bars":332}
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "schema_version": 4,
+  "status": "v4_4_temporary_single_combo_validation_source_closed",
+  "version_label": "V4.4",
+  "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_4_all_window_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+  "rebound_only_strategy_id": "net_drop_rebound_entry_peak_anchor_v4_4_all_window_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open",
+  "result_semantics_id": "v4_4_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v3",
+  "raw_output_schema_version": 7,
+  "plan_fingerprint_schema_version": 8,
+  "rebound_baseline_policy_id": "max_completed_w_h_bounded_open_to_low_v2",
+  "trade_audit_schemas": {
+    "rebound_only": {
+      "version": 3,
+      "id": "v4_4_h_bounded_w_causal_baseline_execution_audit_v3"
+    },
+    "combined": {
+      "version": 3,
+      "id": "v4_4_h_bounded_w_causal_baseline_combined_exit_audit_v3"
+    }
+  },
+  "primary_view_contract": {
+    "views": [
+      "scenario_1_qualified_total_return",
+      "unrestricted_total_return",
+      "unrestricted_average_return_ge10",
+      "unrestricted_average_return_ge20"
+    ],
+    "ranking_metrics": [
+      "train_return",
+      "train_avg_trade"
+    ],
+    "tie_breaker": "combo_id",
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "combined_score": false,
+    "automatic_parameter_acceptance": false
+  },
+  "default_baseline_sampling_policy": "all_window",
+  "supported_baseline_sampling_policies": [
+    "all_window",
+    "exclude_marked"
+  ],
+  "strategy_ids_by_baseline_sampling_policy": {
+    "all_window": "net_drop_rebound_entry_peak_anchor_v4_4_all_window_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+    "exclude_marked": "net_drop_rebound_entry_peak_anchor_v4_4_exclude_marked_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit"
+  },
+  "result_semantics_ids_by_baseline_sampling_policy": {
+    "all_window": "v4_4_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v3",
+    "exclude_marked": "v4_4_exclude_marked_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v3"
+  },
+  "baseline_filter_ids_by_baseline_sampling_policy": {
+    "all_window": "all_window_market_no_baseline_exclusion_v4_4",
+    "exclude_marked": "causal_low_activity_lifecycle_exclusion_v4_4"
+  },
+  "method_contract": {
+    "entry_baseline_method": "rolling_tr_sum",
+    "baseline_window": "exactly BH finite TR15 atoms ending at or before strict H inside one continuous segment and available by the current calculation time under the selected policy",
+    "baseline_sampling_policies": {
+      "all_window": "default; every finite TR15 atom is eligible and markers remain audit/chart evidence",
+      "exclude_marked": "an atom enters baseline only when baseline_available_from is no later than the current calculation time; recovered buffers enter at recovery confirmation; confirmed exclusions never enter"
+    },
+    "rebound_baseline": {
+      "policy_id": "max_completed_w_h_bounded_open_to_low_v2",
+      "candidate": "open[start]-low[end] with start=max(H, continuity start, end-W+1)",
+      "effective_timing": "a completed bar candidate becomes eligible on the next bar",
+      "aggregation": "monotonic maximum within one actual position",
+      "entry_reset": "clear all max-W state at every actual entry"
+    },
+    "rebound_execution": {
+      "prior_trigger_open": "open>=trigger exits at open, including equality",
+      "prior_trigger_high": "otherwise high>=trigger exits at trigger, including equality",
+      "strict_new_low": "after no prior-trigger exit, close>=new low plus M times prior-completed basis exits at the current real bar close",
+      "non_real_signal": "freeze pending exit and fill at the next real-trade bar open",
+      "sample_end": "force any remaining position closed at the sample-end bar close without reading later prices"
+    },
+    "pending_entry": {
+      "fill": "first_real_trade_bar_open",
+      "maximum_wait_bars": 120,
+      "price_retrigger_required": false,
+      "higher_high_cancellation": false,
+      "structural_reversal_cancellation": false,
+      "continuity_break_cancellation": true
+    }
+  },
+  "runtime_inputs": {
+    "manifest_path": "runtime_inputs/RUNTIME_INPUTS.json",
+    "manifest_sha256": "8988d44c24789e4fe6d2afa718ca9e4f8ad45468e26843457477ff6ffdc687f6",
+    "manifest_size_bytes": 2424,
+    "path_policy": "repository_relative_active_runtime"
+  },
+  "data_preparation": {
+    "manifest_path": "runtime_inputs/data_preparation/data_preparation_manifest.json",
+    "manifest_sha256": "36f7e3b0d24cd38a48c281c6788efb8f285692e1bf7b8fe6983688ac6cb14c68",
+    "prepared_identity": "v4_4_policy_neutral_baseline_marker_ec04981dcf7fa74a_bd5e71a902ef_4ba272a3f805",
+    "pipeline_version": "research_data_preparation_v4_4_policy_neutral_baseline_marker_20260802"
+  },
+  "scenario_definition": {
+    "path": "research_variants/short_momentum_net_drop_rebound_v4_4/plans/v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+    "sha256": "020bb4df6c535ea0e0fd5fff412fc05c39e24d40a9c35a2ada1ccdd7d7ad7af2",
+    "schema_id": "v4_4_scenario_groups_single_select_combined_exit_v3_20260801",
+    "selection_mode": "single"
+  },
+  "implementation": {
+    "engine": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/v4_4_engine.py", "sha256": "f122ac61378b03fbe7ed65f3e598564e4f26227a7aa85347351afe7be58c628c", "size_bytes": 96459},
+    "runner": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/run_v4_4_resumable_campaign.py", "sha256": "6761af584e61761b4c58a41a0b0ee91089f642caaf16bd093bae95e7d160f8f5", "size_bytes": 77537},
+    "delivery_worker": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/run_v4_4_delivery_worker.py", "sha256": "11f7f518e560cc240feab9550b88a00ce83288218b9f17b3a951dd17fcbcfd9f", "size_bytes": 9774},
+    "scenario_groups": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/scenario_groups.py", "sha256": "936bdc5db70b5a63bde7392d9574e70d2e60ea53df099581dffa5d699a9f5ebe", "size_bytes": 14767},
+    "stage_analyzer": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/analyze_v4_4_scenario_3_stage.py", "sha256": "565f675f2b85dd66bb7a9e56055f09ff815d7d46640e6fb7d0918856bbb5cf65", "size_bytes": 90210},
+    "cumulative_builder": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_combined_union_analysis.py", "sha256": "ab634ab82bd62be04693d69010032e265e1f2d6726d2c01aab6dbaa404b1a7de", "size_bytes": 43605},
+    "review_generator": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_review_delivery.py", "sha256": "c73ad09d71a9ad589fd0e9e1d5d45f245de597a4cef3527c9de114ff26783b1d", "size_bytes": 106167},
+    "preparation": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/prepare_dataset.py", "sha256": "adcc71b30c444377a6519fd43d402878dcfcbed324c3739cd20c82dc912f6f3a", "size_bytes": 17212},
+    "low_activity": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/low_activity.py", "sha256": "23d24f98750c1585bf68adc0daa77c841cebfcdb173eac57e268ee943eb8a8d4", "size_bytes": 29955},
+    "preparation_report": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/audit_report.py", "sha256": "af809270af7e2773ef91c098a89a88b8663cbb033e08826196eba25087285080", "size_bytes": 20196}
+  },
+  "validation_sources": {
+    "stage_qa": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/qa_v4_4_scenario_3_stage.mjs", "sha256": "f7c4953cb9c2901ad5c707fab59343701ed8a84ec7259aa86a21c3e5309970a8", "size_bytes": 21059},
+    "engine_tests": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_v4_4_engine.py", "sha256": "82c06c96ad885da25cba1608a45122760594bbc7a11b4dd92c33ef604d7d2920", "size_bytes": 22316},
+    "runner_tests": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_run_v4_4_resumable_campaign.py", "sha256": "1e62a57c98ee5138ba43901c2c8dd02189f9adb37adbebce8a65ba1b6bc31e71", "size_bytes": 13205},
+    "review_tests": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_review_delivery.py", "sha256": "276fcd732e7f2f3893222701c28df7d4e21b7402ee5088e38234bb75a36a3460", "size_bytes": 25165},
+    "scenario_delivery_tests": {"path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_scenario_requirements_delivery.py", "sha256": "2509e260cb92710014ae4261f73d243dbadf48291bdc7496c2322f1ba48f3093", "size_bytes": 5479},
+    "historical_template_gates": {
+      "main_sha256": "ef7ea69d9648d6fc84511f9753e7e2c07f36e73272b5e15b7ef606d7db274a72",
+      "trade_sha256": "c5c4964aa8ec14478a4ed60adb8e094d4890cba149006e3c454a55bf5ac7b146",
+      "plotly_sha256": "91c4c2879c1cee9f5cab0693f4d7c27773cbe7e22ab6252e5eef0ccfc7f2a7ef"
+    }
+  },
+  "campaign_state": {
+    "approved_plan_count": 0,
+    "completed_coordinate_count": 0,
+    "result_count": 0,
+    "parameter_acceptance": "none",
+    "compute_authorized": false,
+    "next_action": "freeze and validate the user-authorized one-coordinate temporary V4.4 comparison plan"
+  },
+  "result_roots": {
+    "campaigns": "results/campaigns",
+    "cumulative_delivery": "results/all_completed_union_analysis",
+    "current_union_snapshot": null
+  },
+  "provenance": {
+    "directory": "runtime_inputs/provenance",
+    "historical_absolute_paths_are_records_only": true,
+    "runtime_dependency": false,
+    "v4_3_terminal_source_manifest": "runtime_inputs/provenance/V4_3_SOURCE_MANIFEST_terminal_copy.json",
+    "v4_3_plans": "runtime_inputs/provenance/v4_3_plans"
+  }
+}

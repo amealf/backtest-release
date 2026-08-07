@@ -1,0 +1,267 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution_after_identity_and_plan_audit",
+  "campaign_id": "v4_4_cost_adjusted_multiround_20260803",
+  "stage_id": "round_02_broad_local_all_window",
+  "stage_kind": "concurrent_broad_and_local_cost_adjusted_refinement",
+  "predecessor_stage_ids": ["round_01_broad_all_window"],
+  "selection_provenance": "Round 1 closed immutably and delivered 372 coordinates / 316,398 trades. Cost-adjusted ranking reversed the high-turnover gross frontier. The Scenario-1 objective presses M=8 and S=320; the unrestricted top five share E40/BH720/TRW6/K2 with a W/M ridge. This plan implements the final interpretation memo without repeating closed coordinates.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {
+    "workers": 3,
+    "batch_size": 12,
+    "minimum_free_memory_mb": 4096
+  },
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_cost_adjusted_multiround_20260803\\round_02_broad_local_all_window",
+  "reserved_continuation_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_cost_adjusted_multiround_20260803",
+  "identity_contract": {
+    "version_label": "V4.4",
+    "output_schema_version": 7,
+    "plan_fingerprint_schema_version": 8,
+    "rebound_baseline_policy_id": "max_completed_w_h_bounded_open_to_low_v2",
+    "rebound_candidate_semantic_name": "w_open_to_end_low_drop",
+    "rebound_window_length_policy": "available_prefix_1_to_W",
+    "pending_entry_policy_id": "retained_signal_fill_first_real_open",
+    "trade_audit_schema_version": 3,
+    "trade_audit_schema_id": "v4_4_h_bounded_w_causal_baseline_combined_exit_audit_v3",
+    "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_4_all_window_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+    "result_semantics_id": "v4_4_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v3",
+    "baseline_filter_id": "all_window_market_no_baseline_exclusion_v4_4",
+    "source_manifest_sha256": "6fa3d0c8eb0277066ef5f70fca4a9fbab1d31fbb30e023cd8fd83d233192ae16",
+    "source_manifest_size_bytes": 13235,
+    "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "data_preparation_manifest_sha256": "36f7e3b0d24cd38a48c281c6788efb8f285692e1bf7b8fe6983688ac6cb14c68",
+    "scenario_definition_sha256": "020bb4df6c535ea0e0fd5fff412fc05c39e24d40a9c35a2ada1ccdd7d7ad7af2",
+    "engine_sha256": "5c778d90298f080f691420da8da1b0dc391b69b03fc44cae9be3fe46f6498a40",
+    "runner_sha256": "6761af584e61761b4c58a41a0b0ee91089f642caaf16bd093bae95e7d160f8f5",
+    "stage_analyzer_sha256": "e8bebae19faac35f8f06cb935dfa9a1d08e117f80b706b2fc4ffd6401914253c",
+    "cumulative_builder_sha256": "016a76a12c413b41a209e17f8f661fc9dd5f86ff89d650d59a6d7f6213c50590",
+    "review_generator_sha256": "b9932fe3d62a208b4e3913cfabadf01743f32e3c314046b023d61b8b40c3005f",
+    "stage_qa_sha256": "a2cb1626f7cfccafd6f9a4db41f69ee09bea731a6f423b3df9b7f19c2850deb7"
+  },
+  "cost_contract": {
+    "model_id": "k200m_shadow_cost_v1_slippage_2bps_commission_usd6",
+    "role": "derived_ranking_and_display_only",
+    "default_mode": "cost_adjusted",
+    "alternate_mode": "gross",
+    "round_trip_total_cost_bps": 3.56,
+    "raw_compute_entry_slippage": 0,
+    "raw_trade_mutation": false
+  },
+  "round_01_evidence": {
+    "plan_sha256": "1424dc17862a2bfe0b8f0439fef061e64efc487c5057b7cff64498ed40a78046",
+    "plan_fingerprint": "1fd03c4a6fa54d97ed455ba90dde5ccb6f65c4b08a7397795c832483120ccea1",
+    "completion_manifest_sha256": "c9532f77b626f647dcfe7b1fdc09ee76b2b895e851da0b98f6206b26ff1e6539",
+    "stage_analysis_manifest_sha256": "3c55f1222db2586f8e5fb4dee5800e4534ee695c9ce7e101fd9a7e5f7c56d03f",
+    "cumulative_snapshot_id": "2020ad7b12d57889f1c1d0cf69f981bcf2b5e3ec5b8a4808c196dbb6cdd51d47",
+    "cumulative_pointer_sha256": "24ae69b6d57becb6931d79ee630e7b9d0a91e81821a32d38fe8ee76834a784a6",
+    "cumulative_analysis_manifest_sha256": "dbaccce3bc61ea3979c2340ddd9616e82c01a0261bea25a6998ffdd2ac4534db",
+    "cumulative_completion_manifest_sha256": "46f70611a95f57a7f44c22310d1d4432cc63a9e47b089090f879f760643d4a0a",
+    "cumulative_trade_review_manifest_sha256": "a51dff3aa3855073712d90b9cec39c1aaf4c52be4bacb6c71b2aff17ca8293c2",
+    "interpretation_memo": "D:\\Code\\backtest-release\\Backtest V4.4\\.omo\\teams\\019fbd76-9439-7b10-a7e1-6b34003778c8\\artifacts\\round_01_interpretation_and_round_02_design_20260803.md",
+    "interpretation_memo_sha256": "7e500cd13ccb9c7dc928b5a8cb1bc1f3f9335b2765b577e58372ccbec1f26411",
+    "interpretation_memo_size_bytes": 8006
+  },
+  "experiment_question": "Can one new broad entry map and separate local refinements improve the Round-1 Scenario-1-qualified and unrestricted cost-adjusted total-return leaders without extending the cost-negative gross frontier?",
+  "objective_contract": {
+    "primary_objectives": [
+      "scenario_1_qualified_cost_adjusted_total_return",
+      "unrestricted_cost_adjusted_total_return"
+    ],
+    "objectives_are_independent": true,
+    "default_ranking_display_mode": "cost_adjusted",
+    "gross_mode_retained": true,
+    "combined_score": false,
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "parameter_acceptance": "none"
+  },
+  "dimension_contract": {
+    "method": "rolling_tr_sum",
+    "raw_coordinate_count": 247,
+    "expected_unique_coordinate_count": 247,
+    "expected_batch_count_before_external_anti_join": 21,
+    "grid_block_count": 7,
+    "broad_coordinate_count": 144,
+    "scenario_1_local_coordinate_count": 47,
+    "unrestricted_local_coordinate_count": 56,
+    "all_window_only": true,
+    "speed_window_values": [240, 280, 320, 400, 480, 560, 600]
+  },
+  "leader_contract": {
+    "scenario_1_seed": {
+      "coordinates": {"e": 320, "bh": 720, "trw": 24, "k": 1.25, "w": 1, "m": 8.0, "speed_window_bars": 320},
+      "trade_count": 62,
+      "gross_return": 0.196206163056378,
+      "cost_adjusted_return": 0.17015749904783495,
+      "cost_adjusted_max_drawdown_abs": 0.10673740164623835,
+      "continuation_reason": "top five press M=8 and S=320; refine W/M/S with one outward M/S expansion"
+    },
+    "unrestricted_seed": {
+      "coordinates": {"e": 40, "bh": 720, "trw": 6, "k": 2.0, "w": 192, "m": 2.0, "speed_window_bars": 480},
+      "trade_count": 114,
+      "gross_return": 0.2768835531778255,
+      "cost_adjusted_return": 0.22618702819580738,
+      "cost_adjusted_max_drawdown_abs": 0.1582046660214279,
+      "continuation_reason": "top five share entry geometry; W192/M2 and W48/M8 differ by only 0.033 percentage points"
+    },
+    "gross_leader_rejected_as_cost_seed": {
+      "coordinates": {"e": 20, "bh": 720, "trw": 3, "k": 1.25, "w": 1, "m": 0.25, "speed_window_bars": 960},
+      "trade_count": 4481,
+      "gross_return": 0.917995156556568,
+      "cost_adjusted_return": -0.6109348080350177
+    }
+  },
+  "round_progression_contract": {
+    "round_02": "one non-overlapping broad block plus separate Scenario-1 and unrestricted local blocks",
+    "next_round": "only after immutable Round-2 closure, exactly-one fixed-template delivery, and objective-specific interpretation",
+    "terminal_round": 3,
+    "new_round_minimum_remaining_work_window_minutes": 45
+  },
+  "execution_gate": [
+    "Require byte-exact SOURCE_MANIFEST and all identity_contract hashes.",
+    "Require exact Round-1 raw/delivery/interpretation evidence hashes listed in round_01_evidence.",
+    "Require exact completed plus active/pending anti-join across current V4.4 stages and zero duplicate requested combo IDs.",
+    "Require workers=3, batch_size=12, minimum_free_memory_mb=4096, validate-only success, and a fresh healthy memory measurement immediately before launch.",
+    "Run raw compute with run_stage(..., deliver_html=False); the 3.56-bps cost model is derived analysis only.",
+    "After immutable closure, create exactly one fixed-template stage delivery, then cumulative publication scoped to the active v4_4_cost_adjusted_multiround_20260803 campaign, with four review workers."
+  ],
+  "stop_conditions": [
+    "Do not interpret a partial stage; close every post-anti-join coordinate and immutable raw evidence first.",
+    "Stop interpretation on source/plan/hash mismatch, nonfinite primary evidence, trade-summary reconciliation failure, lifecycle mismatch, or fixed-template/browser QA failure.",
+    "One objective cannot rescue, overwrite, or authorize a continuation branch for the other.",
+    "Stop a local branch without strict cost-adjusted primary-metric improvement or if the same interior leader persists across two refinements.",
+    "If the Scenario-1 leader remains at the new M=12 or S=240 boundary, report unresolved boundary dependence and stop extending that dimension.",
+    "Do not seed any continuation from a gross leader that is cost-negative.",
+    "Do not start a new round with less than 45 minutes remaining in the authorized work window; preserve resumable state without interpreting partial output.",
+    "Round 3 is terminal for this bounded in-sample campaign; never claim parameter acceptance."
+  ],
+  "delivery_contract": {
+    "automatic_html_during_compute": false,
+    "fixed_historical_templates_required_after_immutable_closure": true,
+    "review_workers": 4,
+    "cumulative_campaign_inclusion_boundary": "v4_4_cost_adjusted_multiround_20260803",
+    "historical_temporary_campaign_excluded": true,
+    "dual_ranking_display_required": true,
+    "default_ranking_display_mode": "cost_adjusted",
+    "browser_and_hash_qa_required": true
+  },
+  "in_sample_limits": [
+    "One instrument and one observed period; all rankings are in-sample.",
+    "The 3.56-bps model is a selected HKD-notional shadow cost, not a KRX tick-execution model.",
+    "Both current objective leaders are gap-dependent; gap-excluded return remains display-only and cannot rerank or qualify.",
+    "No result from this plan accepts or promotes a parameter."
+  ],
+  "anti_join": {
+    "required": true,
+    "scope": "completed_plus_active_pending_current_v4_4",
+    "completed_coordinate_count_at_design": 373,
+    "completed_stage_count_at_design": 2,
+    "active_coordinate_count_at_design": 0,
+    "pending_coordinate_count_at_design": 0,
+    "fail_on_active_or_pending_overlap": true,
+    "requested_coordinates_intentionally_exclude_all_known_round_01_overlaps": true
+  },
+  "grid_blocks": [
+    {
+      "method": "rolling_tr_sum",
+      "e": [20, 40, 80, 160, 320, 640],
+      "bh": [240, 480, 720],
+      "trw": [3, 6, 12, 24],
+      "k": [1.0, 2.0],
+      "w": [48],
+      "m": [8.0],
+      "speed_window_bars": [600],
+      "seed": "round_01_shared_strong_region",
+      "objective": "both_primary_objectives",
+      "design": "round_02_broad_entry_map"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [320],
+      "bh": [720],
+      "trw": [24],
+      "k": [1.25],
+      "w": [1, 2, 4],
+      "m": [6.0, 8.0, 10.0, 12.0],
+      "speed_window_bars": [240, 280, 400],
+      "seed": "round_01_scenario_1_cost_leader",
+      "objective": "scenario_1_qualified_cost_adjusted_total_return",
+      "design": "round_02_s1_local_main"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [320],
+      "bh": [720],
+      "trw": [24],
+      "k": [1.25],
+      "w": [1, 2, 4],
+      "m": [6.0, 10.0, 12.0],
+      "speed_window_bars": [320],
+      "seed": "round_01_scenario_1_cost_leader",
+      "objective": "scenario_1_qualified_cost_adjusted_total_return",
+      "design": "round_02_s1_local_s320_nonseed_m"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [320],
+      "bh": [720],
+      "trw": [24],
+      "k": [1.25],
+      "w": [2, 4],
+      "m": [8.0],
+      "speed_window_bars": [320],
+      "seed": "round_01_scenario_1_cost_leader",
+      "objective": "scenario_1_qualified_cost_adjusted_total_return",
+      "design": "round_02_s1_local_s320_m8_nonseed_w"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [40],
+      "bh": [720],
+      "trw": [6],
+      "k": [2.0],
+      "w": [24, 48, 96, 192, 288],
+      "m": [1.5, 2.0, 4.0, 8.0],
+      "speed_window_bars": [400, 560],
+      "seed": "round_01_unrestricted_cost_leader_and_ridge",
+      "objective": "unrestricted_cost_adjusted_total_return",
+      "design": "round_02_unrestricted_local_non480_speed"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [40],
+      "bh": [720],
+      "trw": [6],
+      "k": [2.0],
+      "w": [24, 96, 288],
+      "m": [1.5, 2.0, 4.0, 8.0],
+      "speed_window_bars": [480],
+      "seed": "round_01_unrestricted_cost_leader_and_ridge",
+      "objective": "unrestricted_cost_adjusted_total_return",
+      "design": "round_02_unrestricted_local_s480_new_w"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [40],
+      "bh": [720],
+      "trw": [6],
+      "k": [2.0],
+      "w": [48, 192],
+      "m": [1.5, 4.0],
+      "speed_window_bars": [480],
+      "seed": "round_01_unrestricted_cost_leader_and_ridge",
+      "objective": "unrestricted_cost_adjusted_total_return",
+      "design": "round_02_unrestricted_local_s480_new_m"
+    }
+  ],
+  "explicit_combos": []
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution",
+  "campaign_id": "v4_4_positive_entry_signal_repair_20260805",
+  "stage_id": "continuation_round_08_trw_contraction_all_window",
+  "stage_kind": "single_axis_trw_contraction",
+  "predecessor_stage_ids": ["continuation_round_07_w_expansion_all_window"],
+  "selection_provenance": "W expansion did not form a durable improvement direction. Return to the stable anchor E=480, BH=171, TRW=12, K=1.26, W=6, M=4.5, S=388 and change only TRW. Test TRW=11, 10, and 9; all three exact tuples are absent from the protected 4,732-coordinate set.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+  "instrument_profile": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\instrument_profiles\\k200m.future_v2.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {"workers": 4, "batch_size": 3, "minimum_free_memory_mb": 4096},
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_08_trw_contraction_all_window",
+  "grid_blocks": [],
+  "explicit_combos": [
+    {"candidate_id":"trw_contract_11","objective":"trw_contraction_direction","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":480,"bh":171,"trw":11,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388},
+    {"candidate_id":"trw_contract_10","objective":"trw_contraction_direction","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":480,"bh":171,"trw":10,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388},
+    {"candidate_id":"trw_contract_9","objective":"trw_contraction_direction","design":"hold_other_parameters_fixed","search_mode":"single_axis","method":"rolling_tr_sum","baseline_sampling_policy":"all_window","e":480,"bh":171,"trw":9,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388}
+  ]
+}

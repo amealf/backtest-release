@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "immutable_closed_interpreted",
+  "source_round": "continuation_round_07_w_expansion_all_window",
+  "question": "Does increasing W above 6 improve rebound-exit timing while every other parameter remains fixed?",
+  "anchor": {"e":480,"bh":171,"trw":12,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388,"trade_count":112,"cost_adjusted_total_return":0.82435152,"cost_adjusted_average_trade":0.00561833,"cost_adjusted_max_drawdown_abs":0.15176999,"gross_return_excluding_gap_spanning_trades":0.04679482},
+  "results": [
+    {"w":7,"trade_count":113,"cost_adjusted_total_return":0.8246636778,"cost_adjusted_average_trade":0.0055714452,"cost_adjusted_max_drawdown_abs":0.1524326199,"gross_return_excluding_gap_spanning_trades":0.0320021779,"median_cost_adjusted_trade":-0.00163274,"top_two_contribution_fraction":0.382739},
+    {"w":8,"trade_count":112,"cost_adjusted_total_return":0.752451497,"cost_adjusted_average_trade":0.0052632745,"cost_adjusted_max_drawdown_abs":0.1651167731,"gross_return_excluding_gap_spanning_trades":0.0149049657,"median_cost_adjusted_trade":-0.00167263,"top_two_contribution_fraction":0.40287},
+    {"w":9,"trade_count":111,"cost_adjusted_total_return":0.7549156755,"cost_adjusted_average_trade":0.0053229001,"cost_adjusted_max_drawdown_abs":0.1743237919,"gross_return_excluding_gap_spanning_trades":0.0206343721,"median_cost_adjusted_trade":-0.00163274,"top_two_contribution_fraction":0.402119}
+  ],
+  "classification": "mixed",
+  "decision": "W=7 improves total return by only 0.0313 percentage points while average trade, drawdown, and gap-excluded return worsen. W=8 and W=9 are materially weaker. Stop the W direction and close this exploration series without accepting a parameter.",
+  "parameter_acceptance": "none"
+}

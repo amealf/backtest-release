@@ -1,0 +1,92 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution",
+  "campaign_id": "v4_4_temporary_close_fill_validation_20260802",
+  "stage_id": "single_combo_all_window",
+  "stage_kind": "temporary_single_coordinate_execution_rule_validation",
+  "predecessor_stage_ids": [],
+  "selection_provenance": "User requested a temporary V4.4 rerun of the exact V4.3 unrestricted-total leader coordinate after four execution and causal-baseline corrections. This is a behavior comparison, not parameter exploration or acceptance.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {
+    "workers": 3,
+    "batch_size": 12,
+    "minimum_free_memory_mb": 4096
+  },
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_temporary_close_fill_validation_20260802\\single_combo_all_window",
+  "identity_contract": {
+    "version_label": "V4.4",
+    "output_schema_version": 7,
+    "plan_fingerprint_schema_version": 8,
+    "rebound_baseline_policy_id": "max_completed_w_h_bounded_open_to_low_v2",
+    "trade_audit_schema_version": 3,
+    "trade_audit_schema_id": "v4_4_h_bounded_w_causal_baseline_combined_exit_audit_v3",
+    "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_4_all_window_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+    "result_semantics_id": "v4_4_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v3",
+    "baseline_filter_id": "all_window_market_no_baseline_exclusion_v4_4",
+    "source_manifest_sha256": "56a4353d20a3409e7eb7150675db75a674a585dd4e9ec77f937f12ff00397331",
+    "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "data_preparation_manifest_sha256": "36f7e3b0d24cd38a48c281c6788efb8f285692e1bf7b8fe6983688ac6cb14c68",
+    "scenario_definition_sha256": "020bb4df6c535ea0e0fd5fff412fc05c39e24d40a9c35a2ada1ccdd7d7ad7af2",
+    "engine_sha256": "f122ac61378b03fbe7ed65f3e598564e4f26227a7aa85347351afe7be58c628c",
+    "runner_sha256": "6761af584e61761b4c58a41a0b0ee91089f642caaf16bd093bae95e7d160f8f5"
+  },
+  "experiment_question": "How does the corrected V4.4 execution and H-bounded rebound logic change the exact E120/BH360/TRW6/K0.75/W1/M0.25/S480 all-window coordinate, especially the 2026-06-19 11:07:00 same-bar trade?",
+  "objective_contract": {
+    "temporary_behavior_validation": true,
+    "parameter_exploration": false,
+    "parameter_acceptance": "none",
+    "target_entry_time": "2026-06-19 11:07:00",
+    "expected_target_exit_price_basis": "same_bar_close_after_strict_new_low_confirmation",
+    "expected_target_exit_price": 1514.85
+  },
+  "dimension_contract": {
+    "method": "rolling_tr_sum",
+    "raw_coordinate_count": 1,
+    "execution_coordinate_count": 1,
+    "batch_count": 1,
+    "all_window_only": true,
+    "speed_window_values": [480]
+  },
+  "execution_gate": [
+    "Require exact V4.4 source, preparation, scenario, engine, runner, and source-manifest hashes.",
+    "Require exactly one unique coordinate and an absent isolated output root.",
+    "Require workers=3, batch_size=12, minimum_free_memory_mb=4096, and validate-only success.",
+    "Run compute with run_stage(..., deliver_html=False), then generate one fixed-template stage and cumulative delivery with four review workers."
+  ],
+  "stop_conditions": [
+    "Do not treat this temporary behavior comparison as parameter acceptance.",
+    "Do not modify or merge V4.3 raw results, cumulative delivery, or ZIP.",
+    "Do not create another parameter round from this plan."
+  ],
+  "delivery_contract": {
+    "automatic_html_during_compute": false,
+    "fixed_historical_templates_required_after_immutable_closure": true,
+    "review_workers": 4,
+    "target_trade_must_be_visually_inspected": true
+  },
+  "grid_blocks": [],
+  "explicit_combos": [
+    {
+      "method": "rolling_tr_sum",
+      "e": 120,
+      "bh": 360,
+      "trw": 6,
+      "k": 0.75,
+      "w": 1,
+      "m": 0.25,
+      "speed_window_bars": 480,
+      "seed": "v4_3_terminal_unrestricted_total_leader",
+      "objective": "temporary_v4_4_behavior_comparison",
+      "design": "single_coordinate_exact_rerun"
+    }
+  ]
+}

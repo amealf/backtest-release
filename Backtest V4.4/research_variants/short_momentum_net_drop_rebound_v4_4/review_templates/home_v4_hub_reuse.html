@@ -1,0 +1,200 @@
+<!doctype html>
+<!-- generated-by: v4.2-review-delivery -->
+<!-- design-reuse: project_management\research_hub.html -->
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>V4.41 研究审阅工作台</title>
+  <script>
+    try {
+      document.documentElement.dataset.theme = localStorage.getItem("backtest-research-hub-theme") || "light";
+    } catch (error) {
+      document.documentElement.dataset.theme = "light";
+    }
+  </script>
+  <style>
+{{{HUB_REFERENCE_STYLE}}}
+  </style>
+  <link rel="stylesheet" href="assets/v4_4_review.css">
+  <script src="assets/home.js" defer></script>
+</head>
+<body class="home-page">
+  <header class="topbar">
+    <a class="brand" href="#top">V4.4 Research</a>
+    <div class="top-actions">
+      <nav class="section-nav" aria-label="入口分类">
+        <a href="#group-v4-1-foundation">V4.4 · 数据与修复</a>
+        <a href="#group-v4-1-exploration">V4.4 · 候选探索</a>
+        <a href="#group-v4-1-trades">V4.4 · 逐笔证据</a>
+      </nav>
+      <button type="button" class="theme-button" id="theme-toggle" aria-label="切换深浅主题" title="切换深浅主题">◐</button>
+    </div>
+  </header>
+
+  <main id="top" class="v41-hub">
+    <section class="briefing" aria-labelledby="page-title">
+      <div class="briefing-copy">
+        <p class="briefing-label">当前 V4.4</p>
+        <h1 id="page-title">研究审阅工作台</h1>
+        <p class="briefing-description">沿用既有 V4 研究入口的导航、分组和卡片结构，集中查看 V4.4 数据准备、8 坐标修复验证、24 坐标候选探索、独立排名、诊断候选与逐笔成交证据。当前页面属于同样本零滑点诊断，没有接受参数。</p>
+      </div>
+      <aside class="contract-summary" aria-label="当前研究合同">
+        <h2>当前研究合同</h2>
+        <dl>
+          <div class="contract-fact"><dt>版本</dt><dd>{{VERSION_LABEL}}</dd></div>
+          <div class="contract-fact"><dt>策略</dt><dd class="mono compact-id" title="{{STRATEGY_ID}}">{{STRATEGY_ID}}</dd></div>
+          <div class="contract-fact"><dt>结果语义</dt><dd class="mono compact-id" title="{{RESULT_SEMANTICS_ID}}">{{RESULT_SEMANTICS_ID}}</dd></div>
+          <div class="contract-fact"><dt>来源</dt><dd class="mono">{{SOURCE_SHA_SHORT}}…</dd></div>
+          <div class="contract-fact"><dt>准备身份</dt><dd class="mono compact-id" title="{{PREPARED_IDENTITY}}">{{PREPARED_IDENTITY}}</dd></div>
+        </dl>
+      </aside>
+    </section>
+
+    <section class="hub-section hub-section-current" id="group-v4-1-foundation">
+      <header class="section-header">
+        <div>
+          <p class="section-kicker">V4.4 · 当前基础证据</p>
+          <h2>数据准备与修复验证</h2>
+          <p>数据准备和 8 坐标验证保持独立证据角色；历史 V4 只提供坐标来源与同坐标比较。</p>
+        </div>
+        <span class="section-count">2 项</span>
+      </header>
+      <div class="report-grid">
+        <article class="report-card" id="preparation" data-evidence-role="current-audit">
+          <div class="card-heading">
+            <div>
+              <p class="card-subtitle">V4.4 · 当前完整准备</p>
+              <h3>数据准备与低成交审计</h3>
+            </div>
+            <span class="status status-available"><span aria-hidden="true"></span>可审阅</span>
+          </div>
+          <p class="card-description">pending、恢复回填、正式排除与 K200 专用机制保持分开记录；准备身份与来源哈希持续可见。</p>
+          <dl id="preparation-facts" class="fact-table loading-block" aria-live="polite">
+            <div><dt>数据状态</dt><dd>等待载入闭合统计…</dd></div>
+          </dl>
+          <div class="card-actions"><a class="action action-primary" href="{{LOW_ACTIVITY_AUDIT_URL}}" target="_blank" rel="noreferrer">打开低成交审计</a></div>
+        </article>
+
+        <article class="report-card report-card-primary" id="repair" data-evidence-role="current-validation">
+          <div class="card-heading">
+            <div>
+              <p class="card-subtitle">V4.4 · 8 coordinates</p>
+              <h3>8 坐标修复验证</h3>
+            </div>
+            <span class="status status-available"><span aria-hidden="true"></span>已闭合</span>
+          </div>
+          <p class="card-description">每种方法分别重新计算高交易数与低绝对回撤坐标；验证 manifest {{VALIDATION_MANIFEST_SHA_SHORT}}…，没有接受参数。</p>
+          <div id="repair-summary" class="summary-band loading-block">等待载入验证统计…</div>
+        </article>
+      </div>
+      <div id="repair-table" class="table-wrap section-table" aria-live="polite"><div class="table-loading">正在读取 8 坐标比较资料…</div></div>
+    </section>
+
+    <section class="hub-section hub-section-current" id="group-v4-1-exploration">
+      <header class="section-header">
+        <div>
+          <p class="section-kicker">V4.4 · 当前诊断探索</p>
+          <h2>24 坐标候选与独立排名</h2>
+          <p>两个方法、六个选择目标与最低交易数保持独立。诊断短名单继续显示缺口、回撤、事件与低交易数边界。</p>
+        </div>
+        <span class="section-count">24 坐标</span>
+      </header>
+      <div class="report-grid">
+        <article class="report-card" id="exploration" data-evidence-role="current-diagnostic">
+          <div class="card-heading">
+            <div>
+              <p class="card-subtitle">manifest {{PROMISING_MANIFEST_SHA_SHORT}}…</p>
+              <h3>候选探索概览</h3>
+            </div>
+            <span class="status status-available"><span aria-hidden="true"></span>已闭合</span>
+          </div>
+          <p class="card-description">24 个坐标全部使用 V4.4 重新计算，与此前 8 个修复控制坐标零重叠。</p>
+          <div id="exploration-summary" class="summary-band loading-block">等待载入候选探索统计…</div>
+        </article>
+        <article class="report-card" data-evidence-role="current-diagnostic">
+          <div class="card-heading">
+            <div>
+              <p class="card-subtitle">independent objectives</p>
+              <h3>目标证据摘要</h3>
+            </div>
+            <span class="status status-available"><span aria-hidden="true"></span>可审阅</span>
+          </div>
+          <p class="card-description">收益、笔均、排除缺口收益、低回撤、事件与短跌结果分别保留。</p>
+          <div id="objective-summary" class="evidence-list loading-block" aria-live="polite"></div>
+        </article>
+      </div>
+
+      <article class="report-card report-card-wide" id="rankings" data-evidence-role="current-diagnostic">
+        <div class="card-heading">
+          <div>
+            <p class="card-subtitle">V4.4 · independent ranking views</p>
+            <h3>独立排名</h3>
+          </div>
+          <span class="status status-available"><span aria-hidden="true"></span>可筛选</span>
+        </div>
+        <p class="card-description">方法、目标与最低交易数分别选择，没有合成分数。</p>
+        <div class="control-toolbar" aria-label="排名控制">
+          <label>方法<select id="ranking-method"><option value="rolling_tr_sum">滚动 TR 总和</option></select></label>
+          <label>基准采样<select id="ranking-baseline-policy"><option value="all_window">全部</option><option value="exclude_marked">排除标记</option></select></label>
+          <label>目标<select id="ranking-objective"><option value="absolute_return">总收益</option><option value="average_trade">笔均收益</option><option value="gap_excluded_return">排除缺口收益</option><option value="low_drawdown">低回撤</option><option value="event_01">event_01</option><option value="event_02">event_02</option><option value="dual_event_and">双事件 AND</option><option value="short_drop_3_15m">3–15 分钟短跌</option></select></label>
+          <label>最低交易数<select id="ranking-minimum"><option value="10">至少 10 笔</option><option value="20">至少 20 笔</option><option value="0">不限</option></select></label>
+          <div id="ranking-status" class="toolbar-status" role="status" aria-live="polite">排名资料载入中…</div>
+        </div>
+        <div id="ranking-table" class="table-wrap"><div class="table-loading">正在读取独立排名…</div></div>
+      </article>
+
+      <article class="report-card report-card-wide" id="shortlist" data-evidence-role="current-diagnostic">
+        <div class="card-heading">
+          <div>
+            <p class="card-subtitle">diagnostic shortlist · no acceptance</p>
+            <h3>诊断候选与低成交审计</h3>
+          </div>
+          <span class="status status-warning"><span aria-hidden="true"></span>未接受参数</span>
+        </div>
+        <p class="card-description">12 个去重坐标保留全部入选原因；低交易数、跨缺口与事件不足继续作为可见证据。</p>
+        <div id="shortlist-table" class="table-wrap"><div class="table-loading">正在读取诊断候选…</div></div>
+      </article>
+    </section>
+
+    <section class="hub-section hub-section-current" id="group-v4-1-trades">
+      <header class="section-header">
+        <div>
+          <p class="section-kicker">V4.4 · 逐笔证据</p>
+          <h2>逐笔成交与交付闭包</h2>
+          <p>逐笔页面沿用既有 V4 K 线审阅模板，同时保留 V4.4 真实成交柱、等待执行与身份哈希。</p>
+        </div>
+        <span class="section-count">2,385 笔</span>
+      </header>
+      <div class="report-grid">
+        <article class="report-card report-card-primary" id="trade-entry" data-evidence-role="current-trade-evidence">
+          <div class="card-heading">
+            <div>
+              <p class="card-subtitle">24 combo chunks · lazy loading</p>
+              <h3>V4.4 逐笔成交分析</h3>
+            </div>
+            <span class="status status-available"><span aria-hidden="true"></span>可打开</span>
+          </div>
+          <p class="card-description">覆盖全部 2,385 笔交易；按 combo、方法、参数、等待、退出原因、缺口与 synthetic 信号筛选，选择交易后只载入一个 combo 分块。</p>
+          <div class="card-actions"><a class="action action-primary" href="trade_analysis/index.html">打开逐笔分析</a></div>
+        </article>
+        <article class="report-card" data-evidence-role="delivery-closure">
+          <div class="card-heading">
+            <div>
+              <p class="card-subtitle">V4.4 · identity and hashes</p>
+              <h3>身份与交付 manifest</h3>
+            </div>
+            <span class="status status-available"><span aria-hidden="true"></span>已闭合</span>
+          </div>
+          <p class="card-description">页面、资源、输入哈希、V4.4 路由和真实成交柱验证由独立 manifest 绑定。</p>
+          <div id="provenance-list" class="provenance-list loading-block" aria-live="polite">正在读取输入哈希…</div>
+          <div class="card-actions"><a class="action" href="v4_4_review_manifest.json">打开 manifest</a></div>
+        </article>
+      </div>
+    </section>
+
+    <footer class="page-footer">V4.4 当前审阅沿用既有 V4 研究入口模板；V4 历史页面与结果保持不变。</footer>
+  </main>
+</body>
+</html>

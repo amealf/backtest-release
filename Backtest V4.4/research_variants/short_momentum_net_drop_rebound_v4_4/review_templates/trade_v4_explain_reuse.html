@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- generated-by: v4.2-review-delivery -->
+<!-- design-reuse: rbw13 V4 trade_explain\index.html -->
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>{{REVIEW_TITLE}}</title>
+  <script>
+    try {
+      const savedTheme = localStorage.getItem("short-drop-value-theme");
+      document.documentElement.dataset.theme = savedTheme === "light" ? "light" : "dark";
+    } catch (error) {
+      document.documentElement.dataset.theme = "dark";
+    }
+  </script>
+  <style>
+{{{TRADE_REFERENCE_STYLE}}}
+  </style>
+  <link rel="stylesheet" href="{{ASSET_PREFIX}}/v4_4_review.css">
+  <script>window.V41_TRADE_ASSET_PREFIX="{{ASSET_PREFIX}}";</script>
+  <script src="{{ASSET_PREFIX}}/trade_analysis.js" defer></script>
+</head>
+<body class="trade-page">
+  <div class="wrap">
+    <div class="view-switch">
+      <div class="view-copy">
+        <span class="review-label">{{REVIEW_TITLE}}</span>
+        <span id="viewModeCopy">沿用既有 V4 逐笔模板；当前目录覆盖 {{COORDINATE_COUNT}} 个坐标与 {{TRADE_COUNT}} 笔 V4.4 交易。</span>
+      </div>
+      <div class="view-actions">
+        <span id="startup-resource-status" class="resource-status" aria-live="polite">等待载入交易目录</span>
+        <div class="segmented theme-segmented" role="group" aria-label="页面主题 Page theme">
+          <button id="darkThemeBtn" class="segmented-option" type="button" aria-pressed="true">深色 Dark</button>
+          <button id="lightThemeBtn" class="segmented-option" type="button" aria-pressed="false">浅色 Light</button>
+        </div>
+        <div class="view-tabs">
+          <button id="chart-entry" class="view-btn active" type="button" aria-pressed="true">开仓理由</button>
+          <button id="chart-exit" class="view-btn" type="button" aria-pressed="false">平仓理由</button>
+          <a class="view-btn" href="{{MAIN_HREF}}">研究主入口</a>
+          <a class="view-btn" href="{{MANIFEST_HREF}}">交付 manifest</a>
+        </div>
+      </div>
+    </div>
+
+    <aside id="controlsDrawer" class="controls-drawer" data-open="true" aria-label="参数与交易筛选" aria-hidden="false">
+      <div class="drawer-head">
+        <div><h2>参数选择</h2><div class="drawer-copy">调整条件后载入真实 V4.4 逐笔结果</div></div>
+        <button id="controlsCollapse" class="drawer-collapse" type="button" aria-controls="controlsDrawer" aria-expanded="true" aria-label="收起参数侧边栏">▶</button>
+      </div>
+      <div class="controls">
+        <div class="field field--wide drawer-span-two"><label for="filter-combo">组合 combo</label><select id="filter-combo"><option value="">全部 combo</option></select></div>
+        <div class="field field--wide"><label for="filter-method">BM 开仓基准方法</label><select id="filter-method"><option value="">全部方法</option><option value="rolling_tr_sum">滚动 TR 总和</option></select></div>
+        <div class="field field--wide"><label for="filter-baseline-policy">基准采样</label><select id="filter-baseline-policy"><option value="">全部策略</option><option value="all_window">全部</option><option value="exclude_marked">排除标记</option></select></div>
+        <div class="field"><label for="filter-e">E 开仓窗口</label><select id="filter-e"><option value="">全部</option></select></div>
+        <div class="field field--wide"><label for="filter-bh">BH 开仓完整 15s TR 原子跨度</label><select id="filter-bh"><option value="">全部</option></select></div>
+        <div class="field field--wide"><label for="filter-trw">TRW 开仓完整 15s TR 原子滚动窗口</label><select id="filter-trw"><option value="">全部</option></select></div>
+        <div class="field"><label for="filter-k">K 开仓阈值倍率</label><select id="filter-k"><option value="">全部</option></select></div>
+        <div class="field"><label for="filter-w">W 净下跌窗口</label><select id="filter-w"><option value="">全部</option></select></div>
+        <div class="field"><label for="filter-m">M 回撤阈值倍率</label><select id="filter-m"><option value="">全部</option></select></div>
+        <div class="field"><label for="filter-speed">S 速度窗口</label><select id="filter-speed"><option value="">全部</option></select></div>
+        <div class="field"><label for="filter-wait">等待真实成交</label><select id="filter-wait"><option value="">全部</option><option value="waited">有等待</option><option value="immediate">立即成交</option></select></div>
+        <div class="field"><label for="filter-exit">退出原因</label><select id="filter-exit"><option value="">全部</option></select></div>
+        <div class="field"><label for="filter-gap">跨真实缺口</label><select id="filter-gap"><option value="">全部</option><option value="yes">是</option><option value="no">否</option></select></div>
+        <div class="field"><label for="filter-synthetic">synthetic 信号</label><select id="filter-synthetic"><option value="">全部</option><option value="yes">含 synthetic bar</option><option value="no">不含 synthetic bar</option></select></div>
+        <div class="field field--wide drawer-span-two"><label for="filter-search">搜索时间／combo</label><input id="filter-search" type="search" placeholder="例如 2026-06-23 或 e320" autocomplete="off"></div>
+        <div class="field field--wide"><label>筛选结果</label><div id="filter-summary" class="status">目录载入中…</div></div>
+        <button id="reset-filters" class="view-btn drawer-reset" type="button">重置筛选</button>
+      </div>
+    </aside>
+    <button id="controlsOpen" class="controls-open-tab" type="button" aria-controls="controlsDrawer" aria-expanded="true" aria-label="展开参数侧边栏" hidden><span aria-hidden="true">◀</span><span>参数</span></button>
+
+    <section id="trade-detail" aria-labelledby="detail-title">
+      <div id="detail-empty" class="box empty-state"><h2>正在载入 V4.4 逐笔证据</h2><p>页面会读取轻量目录，并只载入所选 combo 的交易与局部行情分块。</p></div>
+      <div id="detail-content" hidden>
+        <div class="detail-layout">
+          <div class="panel chart-panel">
+            <div class="chart-toolbar">
+              <div>
+                <span id="detail-position" class="muted">选择一笔交易</span>
+                <h2 id="detail-title">逐笔证据</h2>
+              </div>
+              <div class="chart-meta"><span id="chart-caption">—</span><span id="chunk-status" class="resource-status" aria-live="polite">等待选择</span></div>
+            </div>
+            <div class="canvas-wrap"><canvas id="evidence-chart" width="960" height="560" aria-label="所选交易的局部 K 线证据"></canvas></div>
+            <p id="chart-accessible-summary" class="sr-status" aria-live="polite"></p>
+            <div class="selection-card" aria-live="polite">
+              <div class="selection-card-title">当前 V4.4 身份</div>
+              <div class="selection-summary"><span>{{VERSION_LABEL}}</span> · 来源 {{SOURCE_SHA_SHORT}}… · <span class="mono compact-id" title="{{RESULT_SEMANTICS_ID}}">{{RESULT_SEMANTICS_ID}}</span></div>
+            </div>
+          </div>
+
+          <div class="side">
+            <div class="box entry-proof" aria-labelledby="entry-proof-title">
+              <div class="reason-head">
+                <div><span class="review-label">actual fill evidence</span><h2 id="entry-proof-title">实际开仓柱</h2></div>
+                <span id="entry-proof-state" class="state-label state-label-good">真实成交柱 · 通过</span>
+              </div>
+              <dl id="entry-proof-list" class="proof-list"></dl>
+            </div>
+            <div class="box timeline-panel">
+              <h2>交易时间线</h2>
+              <ol id="trade-timeline" class="trade-timeline"></ol>
+            </div>
+            <div class="box">
+              <h2>baseline 说明</h2>
+              <dl id="baseline-facts" class="fact-table"></dl>
+            </div>
+          </div>
+        </div>
+
+        <div class="box param-panel">
+          <h2>参数与交易说明</h2>
+          <div class="detail-columns">
+            <section><h3>信号与参数</h3><dl id="signal-facts" class="fact-table"></dl></section>
+            <section><h3>退出与持仓</h3><dl id="exit-facts" class="fact-table"></dl></section>
+            <section><h3>证据边界</h3><dl class="fact-table"><div><dt>campaign</dt><dd>{{CAMPAIGN_ID}}</dd></div><div><dt>stage</dt><dd>{{STAGE_ID}}</dd></div><div><dt>准备身份</dt><dd class="mono compact-id" title="{{PREPARED_IDENTITY}}">{{PREPARED_IDENTITY}}</dd></div><div><dt>闭合指纹</dt><dd class="mono">{{PROMISING_MANIFEST_SHA_SHORT}}…</dd></div><div><dt>参数状态</dt><dd>诊断证据；无已接受参数</dd></div></dl></section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="box trade-results" aria-labelledby="results-title">
+      <div class="results-header">
+        <div><h2 id="results-title">交易目录</h2><p id="results-status" role="status" aria-live="polite">正在读取 {{TRADE_COUNT}} 笔交易目录…</p></div>
+        <div class="pagination" aria-label="交易目录分页"><button id="page-previous" class="view-btn" type="button">上一页</button><span id="page-status">—</span><button id="page-next" class="view-btn" type="button">下一页</button></div>
+      </div>
+      <div id="trade-table" class="table-wrap trade-table-wrap"><div class="table-loading">正在载入轻量交易目录；combo 详情尚未请求。</div></div>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "plan_id": "v4_2_scenario_3_all_window_rolling_20260801_s02_long_e_preperiod_lifecycle",
+  "checks": {
+    "scenario_schema_current": true,
+    "source_hash_current": true,
+    "v4_2_preparation_closed": true,
+    "calculated_entry_only": true,
+    "raw_coordinate_count_expected": true,
+    "execution_ids_unique": true,
+    "execution_ids_anti_joined": true,
+    "rolling_only": true,
+    "fixed_s480_w6_m4": true,
+    "historical_template_current": true,
+    "background_delivery_recorded": true,
+    "next_stage_overlap_allowed": true,
+    "single_method_scope": true,
+    "composite_score_disabled": true
+  },
+  "plan": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_scenario_3_all_window_rolling_20260801_s02_long_e_preperiod_lifecycle.json",
+    "sha256": "ea6f49212b56ef460b86f121f854822d61bb622389e40ba7dd0ab3ca305ad385",
+    "size_bytes": 336045
+  },
+  "source": {
+    "path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks\\k200_ticks_20260523_to_20260723_20260723_014534\\data_clean_immediate_tick_recovery_filter_v2_20260729\\k200_clean_15s_session_filled.csv",
+    "sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "size_bytes": 42822886
+  },
+  "data_preparation_manifest": {
+    "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\data_preparation_manifest.json",
+    "sha256": "77f7e261bd3876b827dddc7ce8b6dcdf502de28f9e51c76aaef8de55c0da342b",
+    "size_bytes": 6174
+  },
+  "scenario_definition": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_scenario_groups_single_select_combined_exit_20260801.json",
+    "sha256": "fdb242160e0fe55dfd2420ef4cf0d1e78d5670cc5cfea8269d3c3fefde9918a7",
+    "size_bytes": 2624
+  },
+  "historical_trade_template": {
+    "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\rebound_only\\campaigns\\rbw13_v4_extreme_activity_filtered_20260729\\all_completed_union_analysis\\trade_explain\\index.html",
+    "sha256": "c5c4964aa8ec14478a4ed60adb8e094d4890cba149006e3c454a55bf5ac7b146",
+    "size_bytes": 194085
+  },
+  "pre_execution_evidence": {
+    "evidence_role": "historical_selection_provenance_only",
+    "v4_1_rebound_analysis": {
+      "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\combined_exit\\campaigns\\v4_1_scenario_3_rebound_lifecycle_20260731\\s01_pre_gap_rebound_exit_screen\\analysis\\analysis_manifest.json",
+      "sha256": "0f044f8f71eb86c0597ef5c726361257034f2fd6744cc8f72296eca63945e0ae",
+      "size_bytes": 13426
+    },
+    "v4_1_final_analysis": {
+      "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\combined_exit\\campaigns\\v4_1_scenario_3_pre_gap_clear_20260731\\s01_final_pre_gap_position_clearance_screen\\analysis\\analysis_manifest.json",
+      "sha256": "7a8ded95a9fbdfc0115c51b93d9a52b44841de71117517141f68898d8a797c39",
+      "size_bytes": 14005
+    },
+    "lower_endpoint": [
+      {
+        "combo_id": "v4_1_rolling_tr_sum_fillnext_bar_open_execwait_next_real_trade_slip0_sx1_s480_rx1_e120_bh300_trw8_k2p5_w6_m4_2d397c5c81",
+        "method": "rolling_tr_sum",
+        "segments": {
+          "market_01": {
+            "qualified": true,
+            "entry_count": 1,
+            "exit_count": 0,
+            "holds_past_end": true
+          },
+          "market_02": {
+            "qualified": true,
+            "entry_count": 1,
+            "exit_count": 0,
+            "holds_past_end": true
+          },
+          "market_03": {
+            "qualified": false,
+            "entry_count": 0,
+            "exit_count": 1,
+            "holds_past_end": false
+          }
+        }
+      }
+    ],
+    "upper_endpoint": [
+      {
+        "combo_id": "v4_1_rolling_tr_sum_fillnext_bar_open_execwait_next_real_trade_slip0_sx1_s480_rx1_e280_bh120_trw12_k1p33333333333_w6_m4_e7aa786a50",
+        "method": "rolling_tr_sum",
+        "segments": {
+          "market_01": {
+            "qualified": false,
+            "entry_count": 3,
+            "exit_count": 3,
+            "holds_past_end": false
+          },
+          "market_02": {
+            "qualified": false,
+            "entry_count": 2,
+            "exit_count": 1,
+            "holds_past_end": false
+          },
+          "market_03": {
+            "qualified": true,
+            "entry_count": 1,
+            "exit_count": 0,
+            "holds_past_end": true
+          }
+        }
+      }
+    ],
+    "v4_1_rows_may_enter_v4_2_rankings": false,
+    "v4_2_recomputation_required": true
+  },
+  "planned_output_root": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_scenario_3_all_window_rolling_20260801\\s02_long_e_preperiod_lifecycle"
+}

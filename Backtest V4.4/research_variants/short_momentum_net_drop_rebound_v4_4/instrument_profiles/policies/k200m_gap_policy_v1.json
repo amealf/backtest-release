@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "policy_id": "k200m_current_continuity_and_real_gap_policy_v1",
+  "mode": "preserve_existing_v4_4_behavior",
+  "bar_seconds": 15,
+  "contract": {
+    "continuity": "prepared continuous and continuous_segment_id columns",
+    "real_gap": "prepared real-trade gap audit fields",
+    "engine_change": false
+  }
+}

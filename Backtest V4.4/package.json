@@ -1,0 +1,15 @@
+{
+  "name": "backtest-v4-41",
+  "version": "4.41.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:dashboard": "node project_management/tools/build_dashboard.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

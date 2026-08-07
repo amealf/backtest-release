@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "immutable_closed_interpreted",
+  "source_round": "continuation_round_05_k_expansion_all_window",
+  "question": "Does increasing K above 1.26 remove weak entries and improve the current unrestricted anchor?",
+  "anchor": {"e":480,"bh":171,"trw":12,"k":1.26,"w":6,"m":4.5,"speed_window_bars":388,"trade_count":112,"cost_adjusted_total_return":0.82435152,"cost_adjusted_average_trade":0.00561833,"cost_adjusted_max_drawdown_abs":0.15176999},
+  "results": [
+    {"k":1.4,"trade_count":106,"cost_adjusted_total_return":0.7115732402,"cost_adjusted_average_trade":0.0053301397,"cost_adjusted_max_drawdown_abs":0.1667014897,"gross_return_excluding_gap_spanning_trades":0.0120426775,"median_cost_adjusted_trade":-0.00208852,"top_two_contribution_fraction":0.414409},
+    {"k":1.5,"trade_count":104,"cost_adjusted_total_return":0.6670144601,"cost_adjusted_average_trade":0.0051739067,"cost_adjusted_max_drawdown_abs":0.1764414096,"gross_return_excluding_gap_spanning_trades":0.0032345066,"median_cost_adjusted_trade":-0.00220469,"top_two_contribution_fraction":0.429598},
+    {"k":1.6,"trade_count":101,"cost_adjusted_total_return":0.6638496569,"cost_adjusted_average_trade":0.0053008723,"cost_adjusted_max_drawdown_abs":0.1558393111,"gross_return_excluding_gap_spanning_trades":-0.0152467238,"median_cost_adjusted_trade":-0.00239464,"top_two_contribution_fraction":0.429685}
+  ],
+  "classification": "not_improved",
+  "decision": "Stop upward K expansion, return to K=1.26, and test three lower K values as the opposite direction.",
+  "parameter_acceptance": "none"
+}

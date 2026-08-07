@@ -1,0 +1,88 @@
+{
+  "status": "frozen_before_compute",
+  "plan": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_k200_large_multiblock_20260805_round_14.json",
+  "plan_sha256": "2674438ab96a2ddee95b709956a32d58b227f748b877d18f30935d39dd5199ef",
+  "plan_size_bytes": 173855,
+  "source_snapshot_id": "0126cd77b436aef1434e7072bac0d6dfa15b3d2ad4dc2cf1b2fafe936ee1e626",
+  "output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_14_large_multiblock_exploration_all_window",
+  "output_root_absent": true,
+  "completed_coordinate_count": 4747,
+  "requested_coordinate_count": 355,
+  "unique_requested_coordinate_count": 343,
+  "internal_duplicate_count": 12,
+  "completed_overlap_count": 49,
+  "retained_new_coordinate_count": 294,
+  "block_counts": [
+    {
+      "block_id": "unrestricted_e_bh_surface",
+      "requested_count": 25,
+      "retained_count": 14
+    },
+    {
+      "block_id": "unrestricted_trw_k_surface",
+      "requested_count": 25,
+      "retained_count": 20
+    },
+    {
+      "block_id": "unrestricted_w_m_surface",
+      "requested_count": 25,
+      "retained_count": 20
+    },
+    {
+      "block_id": "unrestricted_e_s_surface",
+      "requested_count": 25,
+      "retained_count": 17
+    },
+    {
+      "block_id": "scenario_1_e_bh_surface",
+      "requested_count": 25,
+      "retained_count": 24
+    },
+    {
+      "block_id": "scenario_1_trw_k_surface",
+      "requested_count": 25,
+      "retained_count": 16
+    },
+    {
+      "block_id": "scenario_1_m_s_surface",
+      "requested_count": 20,
+      "retained_count": 12
+    },
+    {
+      "block_id": "average_e_bh_surface",
+      "requested_count": 25,
+      "retained_count": 16
+    },
+    {
+      "block_id": "average_trw_k_surface",
+      "requested_count": 25,
+      "retained_count": 24
+    },
+    {
+      "block_id": "average_w_m_surface",
+      "requested_count": 25,
+      "retained_count": 24
+    },
+    {
+      "block_id": "low_drawdown_e_s_surface",
+      "requested_count": 25,
+      "retained_count": 24
+    },
+    {
+      "block_id": "low_drawdown_bh_m_surface",
+      "requested_count": 25,
+      "retained_count": 23
+    },
+    {
+      "block_id": "remote_sparse_controls",
+      "requested_count": 60,
+      "retained_count": 60
+    }
+  ],
+  "resources": {
+    "workers": 4,
+    "batch_size": 8,
+    "minimum_free_memory_mb": 4096
+  },
+  "parameter_acceptance": "none"
+}

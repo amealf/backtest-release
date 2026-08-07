@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "status": "approved",
+  "mode": "transfer_exact",
+  "source": {
+    "instrument_id": "K200",
+    "display_name": "K200",
+    "role": "pre_migration",
+    "sample_start": "2026-05-26 00:00:00",
+    "sample_end": "2026-07-08 23:52:00",
+    "timezone": "Asia/Seoul"
+  },
+  "target": {
+    "instrument_id": "SImain",
+    "display_name": "SImain",
+    "role": "post_migration",
+    "sample_start": "2026-01-29 00:00:00",
+    "sample_end": "2026-02-23 23:59:45",
+    "timezone": "America/Chicago"
+  },
+  "bar_interval_seconds": 15,
+  "candidate_filter_contract": "deferred"
+}

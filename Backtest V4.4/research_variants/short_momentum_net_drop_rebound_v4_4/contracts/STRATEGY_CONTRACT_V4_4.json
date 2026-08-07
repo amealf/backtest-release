@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "strategy_contract_id": "short_momentum_net_drop_rebound_v4_4_cross_instrument_core_v2_positive_entry",
+  "status": "active",
+  "bar_seconds": 15,
+  "instrument_specific_fields_forbidden": [
+    "instrument_id",
+    "exchange",
+    "currency",
+    "contract_multiplier",
+    "commission",
+    "slippage",
+    "scenario_dates"
+  ],
+  "entry": {
+    "high_anchor": "ordered_high_H",
+    "entry_window": "E",
+    "baseline": "BH_completed_TR_atoms_grouped_by_TRW",
+    "threshold": "max(K_times_baseline, absolute_floor)",
+    "qualification": "baseline_positive_and_drop_positive_and_threshold_positive_and_drop_greater_or_equal_threshold",
+    "qualification_policy_id": "positive_baseline_drop_threshold_with_inclusive_boundary_v1",
+    "fill": "calculated_threshold_or_gap_adjusted_open",
+    "pending_entry": "retained_signal_fill_first_real_open_within_120_continuous_candidate_bars"
+  },
+  "exit": {
+    "w_baseline": "maximum_available_prefix_open_start_to_low_end_drop_with_start_at_or_after_H",
+    "rebound_multiplier": "M",
+    "speed_window": "S",
+    "prior_trigger_order": "open_greater_or_equal_then_high_greater_or_equal",
+    "same_bar_strict_new_low": "confirm_with_close_and_exit_at_that_close",
+    "pending_exit": "next_real_trade_open",
+    "sample_end": "force_close_at_declared_sample_end_close"
+  },
+  "state": {
+    "flat_reset": true,
+    "synthetic_pending_entry_pending_exit_machine": "shared_core",
+    "low_activity_baseline_availability": "pending_no_effect_then_retroactive_exclusion_at_confirmation",
+    "low_activity_entry_gate": "block_new_entries_and_cancel_unfilled_entry_orders_from_confirmation_until_first_normal_volume_atom"
+  },
+  "instrument_bound_elsewhere": [
+    "market_data",
+    "exchange_session",
+    "gap_policy",
+    "low_activity_thresholds",
+    "cost_model",
+    "scenario_set"
+  ]
+}

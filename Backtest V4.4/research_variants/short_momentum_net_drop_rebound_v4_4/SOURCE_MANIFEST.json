@@ -1,0 +1,887 @@
+{
+  "schema_version": 4,
+  "status": "v4_4_confirmed_low_activity_gate_extended_k200_data_20260807",
+  "version_label": "V4.4",
+  "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_4_confirmed_low_activity_gate_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+  "rebound_only_strategy_id": "net_drop_rebound_entry_peak_anchor_v4_4_confirmed_low_activity_gate_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open",
+  "result_semantics_id": "v4_4_confirmed_low_activity_gate_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_positive_entry_signal_combined_zero_extension_exit_results_v4",
+  "raw_output_schema_version": 7,
+  "plan_fingerprint_schema_version": 8,
+  "plan_schema_version": 6,
+  "rebound_baseline_policy_id": "max_completed_w_h_bounded_open_to_low_v2",
+  "trade_audit_schemas": {
+    "rebound_only": {
+      "version": 3,
+      "id": "v4_4_h_bounded_w_causal_baseline_execution_audit_v3"
+    },
+    "combined": {
+      "version": 3,
+      "id": "v4_4_h_bounded_w_causal_baseline_combined_exit_audit_v3"
+    }
+  },
+  "primary_view_contract": {
+    "views": [
+      "scenario_1_qualified_total_return",
+      "unrestricted_total_return",
+      "unrestricted_average_return_ge10",
+      "unrestricted_average_return_ge20"
+    ],
+    "ranking_metrics": [
+      "train_cost_adjusted_return",
+      "train_cost_adjusted_avg_trade",
+      "train_return",
+      "train_avg_trade"
+    ],
+    "ranking_modes": [
+      "cost_adjusted",
+      "gross"
+    ],
+    "default_ranking_display_mode": "cost_adjusted",
+    "tie_breaker": "combo_id",
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "combined_score": false,
+    "automatic_parameter_acceptance": false
+  },
+  "per_trade_review_ui_contract": {
+    "on_demand_range_statistics": {
+      "activation": "explicit range statistics button",
+      "selection": "horizontal Plotly box selection over the current candlestick chart",
+      "calculation_timing": "once after plotly_selected",
+      "data_source": "already loaded visible OHLC arrays",
+      "panel_layout": "compact flat three-column metric layout in the right detail column above trade reasons",
+      "close_behavior": "hide panel, clear Plotly selections and selectedpoints, then restore zoom drag mode",
+      "selection_visual": "clear native Plotly selection state, preserve normal opacity outside the interval, and redraw a pale borderless theme-aware ordinary shape inside it",
+      "startup_precomputation": false,
+      "additional_request": false,
+      "metrics": [
+        "start_time",
+        "end_time",
+        "start_open",
+        "highest_high",
+        "lowest_low",
+        "final_close",
+        "candlestick_count",
+        "price_change",
+        "amplitude",
+        "maximum_high_to_later_low_drawdown"
+      ]
+    },
+    "on_demand_holding_check": {
+      "activation": "explicit holding check button keeps Plotly zoom drag; chart pointer-down is paired with document-level pointer-up, movement beyond five pixels is treated as a drag, and a short left press selects the nearest candle; right clicks are excluded",
+      "aggregation_policy": "a raw candlestick uses its exact source bar; an aggregated candlestick uses its final source bar, matching the displayed close",
+      "panel_layout": "right detail column above trade reasons",
+      "position_test": "entry_index <= selected_index < exit_index",
+      "calculation_timing": "once after the click",
+      "data_source": "already loaded OHLC arrays, fixed combo parameters, and the selected combo's trade audit rows",
+      "rebound_contract": "maximum positive completed-bar W candidate bounded by H and continuity, effective from the next bar",
+      "speed_contract": "running-low difference across S bars with the engine's continuity gate",
+      "pending_exit_contract": "use the recorded pending_exit_trigger_index when the position is waiting for the next real-trade open",
+      "highlight_contract": "darker borderless blue fill from the effective baseline start to the selected-time active low; a blue Plotly marker at the displayed candle's aggregate high and center using the entry marker's pixel size and zoom behavior; a labeled pale-red dense dashed horizontal guide at active-low plus rebound threshold; and a labeled vertical guide at active-low-index plus S, the no-new-low theoretical speed-exit position, with remaining bars and elapsed time; the exact max-W candidate source interval remains listed in the panel",
+      "startup_precomputation": false,
+      "additional_request": false,
+      "candlestick_whiskerwidth": 0
+    },
+    "entry_reason_step_2_highlight": {
+      "highlight_key": "drop_points",
+      "shape_helper": "pointShape",
+      "shape_scope": "entry_reason_step_2_only",
+      "fill": "transparent_rgba_0_0_0_0",
+      "outline": "existing_semantic_point_color",
+      "qa_color_comparison": "lowercase_remove_css_whitespace_then_require_rgba_0_0_0_alpha_0",
+      "qa_nonzero_alpha_rejected": true,
+      "other_circle_helpers_unchanged": true
+    },
+    "collapsed_parameters_tab": {
+      "desktop_top": "calc(84px + 8px)",
+      "prior_desktop_top": "calc(84px + 14px)",
+      "upward_delta_pixels": 6,
+      "mobile_top": "16px",
+      "responsive_drawer_behavior_unchanged": true
+    },
+    "candlestick_interval_and_guide_strokes": {
+      "line_guide_stroke_style": "solid",
+      "range_rectangle_border": "absent",
+      "range_rectangle_fill": "semantic_translucent_color_only",
+      "dash_configurability": false,
+      "semantic_colors_retained": true,
+      "scopes": [
+        "filtered_market_intervals",
+        "signal_reset_guides",
+        "baseline_and_rebound_ranges",
+        "drawdown_and_exit_ranges",
+        "signal_high_low_guides",
+        "quiet_activity_shapes"
+      ],
+      "legend_and_audit_copy_uses_color_only": true
+    },
+    "candlestick_chart_annotations": {
+      "theoretical_line_actual_fill_exit_basis_annotation": "absent",
+      "detailed_side_panel_exit_reasoning": "retained",
+      "frozen_low_annotation": "L=<formatted value>",
+      "frozen_low_freeze_duration_bar_count_suffixes": "absent",
+      "green_semantic_styling_retained": true
+    },
+    "role": "derived_review_presentation_only_raw_results_unchanged"
+  },
+  "cumulative_main_review_ui_contract": {
+    "summary_cards": "hidden",
+    "top_header_summary": "dynamic_all_strategy_coordinate_count",
+    "top_header_label": "全部策略 <coordinateCount>",
+    "speed_window_control_grid_span": "full_row",
+    "speed_window_control_mode": "minute_ranges",
+    "speed_window_ranges": [
+      "all",
+      "lt5",
+      "5_15",
+      "15_30",
+      "30_60",
+      "60_120",
+      "gte120"
+    ],
+    "speed_window_range_semantics": "left_closed_right_open_on_speed_window_bars_div_4_minutes",
+    "speed_window_desktop_layout": "one_row_seven_equal_columns",
+    "speed_window_mobile_layout": "two_columns",
+    "entry_baseline_window_control": {
+      "field": "BH",
+      "mode": "multi_select_minute_ranges",
+      "ranges": [
+        "all",
+        "lt45",
+        "45_60",
+        "60_90",
+        "90_150",
+        "gte150"
+      ]
+    },
+    "entry_market_window_control": {
+      "field": "E",
+      "mode": "multi_select_minute_ranges",
+      "ranges": [
+        "all",
+        "lt30",
+        "30_60",
+        "60_90",
+        "90_120",
+        "gte120"
+      ]
+    },
+    "exit_baseline_window_control": {
+      "field": "W",
+      "mode": "multi_select_minute_ranges",
+      "ranges": [
+        "all",
+        "lt1",
+        "1_2",
+        "2_5",
+        "5_15",
+        "15_30",
+        "gte30"
+      ]
+    },
+    "exit_market_window_control": {
+      "field": "S",
+      "mode": "multi_select_minute_ranges",
+      "ranges": [
+        "all",
+        "lt5",
+        "5_15",
+        "15_30",
+        "30_60",
+        "60_120",
+        "gte120"
+      ]
+    },
+    "window_range_semantics": "left_closed_right_open_on_parameter_bars_div_4_minutes",
+    "window_range_selection_semantics": "or_within_each_window_axis_and_across_window_axes",
+    "window_range_all_semantics": "empty_selection_means_unrestricted",
+    "ranking_metric_control_grid_span": "separate_row",
+    "gap_dependence_audit": "display_only_existing_diagnostic_not_a_ranking_or_filter_input",
+    "current_hash_sealed_snapshot": "presentation_only_revision_published_with_analysis_and_completion_manifest_reconciliation",
+    "role": "derived_review_presentation_only_raw_results_unchanged"
+  },
+  "execution_orchestration_contract": {
+    "id": "v4_4_deferred_intermediate_final_shared_cumulative_delivery_governance_v6",
+    "one_or_multiple_executors_permitted_for_analysis_compute_and_delivery": true,
+    "delivery_requires_immutable_raw_closure": true,
+    "analysis_may_run_concurrently_with_delivery_after_immutable_closure": true,
+    "next_round_may_start_after_prior_round_raw_closure": true,
+    "overlap_gates": {
+      "current_source_final_closed": true,
+      "plan_and_source_identity_exact": true,
+      "completed_active_pending_anti_join_exact": true,
+      "process_output_roots_and_locks_separate": true,
+      "fresh_memory_resource_gate_includes_live_delivery_process": true,
+      "cumulative_html_union_writer_count": 1
+    },
+    "final_exploration_series_html_refresh": [
+      "cumulative_main",
+      "shared_cumulative_per_trade"
+    ],
+    "intermediate_round_html_refresh_default": false,
+    "intermediate_round_html_refresh_requires_explicit_user_request": true,
+    "new_stage_specific_per_trade_html_required": false,
+    "existing_stage_html_role": "preserved_historical_evidence",
+    "delivery_final_required_once_per_exploration_series": true,
+    "intermediate_round_raw_closure_blocks_next_round_analysis_or_compute": false,
+    "result_affecting_source_inconsistency_pauses_new_compute_until_new_source_identity": true
+  },
+  "parameter_exploration_resolution_contract": {
+    "id": "v4_4_parameter_scale_relative_one_axis_directional_batch_v2",
+    "large_time_parameters": [
+      "E",
+      "BH",
+      "S"
+    ],
+    "single_digit_absolute_step_densification_for_large_time_parameters": "treated_as_overfitting",
+    "large_time_parameter_multiplicative_grids": {
+      "broad": [
+        0.7,
+        0.85,
+        1.0,
+        1.2,
+        1.5
+      ],
+      "local": [
+        0.9,
+        1.0,
+        1.1
+      ],
+      "stability_only": [
+        0.95,
+        1.0,
+        1.05
+      ]
+    },
+    "resolution_table_authority": "project_management/05_domains/research/PARAMETER_EXPLORATION_GUIDE.en.md",
+    "one_parameter_changes_per_batch": true,
+    "new_points_per_directional_batch_min": 2,
+    "new_points_per_directional_batch_max": 3,
+    "all_other_parameters_remain_at_anchor": true,
+    "exploratory_block_required_per_search_round": true,
+    "fixed_exploratory_coordinate_quota": false,
+    "round_without_exploratory_block": "explicitly_justified_confirmation_only_cannot_claim_global_convergence",
+    "raw_result_or_method_semantics_change": false
+  },
+  "cross_instrument_comparison_contract": {
+    "id": "v4_4_cross_instrument_frozen_candidate_validation_v5",
+    "source_instrument": "K200",
+    "target_instrument": "SImain",
+    "target_contract": "SIH6",
+    "target_test_interval": "2026-01-29 through 2026-02-23",
+    "candidate_count": 180,
+    "candidate_content_sha256": "14961b09ba28212b77b38b486f65ca20a9d41138d7a071f4a764750f27366ab6",
+    "target_results_may_modify_candidates": false,
+    "round_trip_cost_bps": 3.57,
+    "combined_score": false,
+    "posthoc_full_grid_status": "not_run_separate_optional_diagnostic",
+    "result_root": "results/cross_instrument_comparison",
+    "dedicated_target_trade_review": true,
+    "target_trade_review_candidate_count": 180,
+    "target_trade_review_trade_count": 17044,
+    "comparison_global_filter": true,
+    "visible_candidate_source_column": false,
+    "visible_combo_id_column": false,
+    "dataset_selectors": true,
+    "field_specific_filters": true,
+    "available_return_views": [
+      "cost_adjusted",
+      "gross"
+    ],
+    "default_return_view": "cost_adjusted",
+    "return_view_changes_rank_and_display": true,
+    "return_view_metric_scope": [
+      "total_return",
+      "median_trade",
+      "maximum_drawdown",
+      "win_rate"
+    ],
+    "ranking_component": "k200_return_view_rank_link",
+    "ranking_headers": [
+      "成本后排名",
+      "成本前排名"
+    ],
+    "source_total_return_header": "K200 总收益",
+    "target_total_return_header": "SImain 总收益",
+    "table_field_group_order": [
+      "parameter_fields",
+      "target_instrument_metrics",
+      "source_instrument_metrics",
+      "transfer_diagnostics"
+    ],
+    "target_metrics_precede_source_metrics": true,
+    "mfe_mae_raw_points_retained": true,
+    "source_total_return_precedes_target": false,
+    "source_total_return_hover_discloses_longer_sample": true,
+    "ranking_action_label": "查看 #N",
+    "ranking_action_target": "new_tab_dedicated_simain_trade_review",
+    "cumulative_stable_switch_hub": true,
+    "role": "derived_presentation_and_trade_evidence_only_frozen_candidates_raw_trades_and_migration_metrics_unchanged"
+  },
+  "cost_model": {
+    "id": "k200m_shadow_cost_v2_derived_krw_notional_20260803",
+    "role": "derived_ranking_and_display_only_raw_trades_unchanged",
+    "reference": {
+      "path": "runtime_inputs/cost_models/k200m_current_notional_cost_reference_20260803.json",
+      "sha256": "9a13431ebf03e91fe496ba7514b5fcf689bd9d197292a8c6c4cb57b576229ffe",
+      "size_bytes": 2178
+    },
+    "contract_multiplier_krw_per_point": 50000.0,
+    "reference_price": 1106.7,
+    "reference_price_observed_at": "2026-07-23T02:43:45+08:00",
+    "contract_notional_krw": 55335000.0,
+    "usdkrw": 1446.7,
+    "round_trip_slippage_bps": 2.0,
+    "round_trip_commission_usd": 6.0,
+    "round_trip_commission_krw": 8680.2,
+    "round_trip_commission_bps": 1.568663594470046,
+    "round_trip_slippage_krw": 11067.0,
+    "round_trip_total_cost_krw": 19747.2,
+    "round_trip_total_cost_bps": 3.568663594470046,
+    "ranking_display_default": "cost_adjusted",
+    "calculation": "K200M price 1106.70 × KRW 50,000 = KRW 55,335,000 notional; USD 6 × KRW/USD 1446.7 = KRW 8,680.2 commission (1.568663594470046 bps); plus 2 bps slippage = 3.568663594470046 bps per completed trade",
+    "raw_compute_entry_slippage": 0.0,
+    "raw_trade_mutation": false,
+    "krx_mini_kospi_200_tick_reference": {
+      "point_per_tick": 0.02,
+      "krw_per_tick": 1000,
+      "two_tick_reference_points": 0.04,
+      "two_tick_reference_krw": 2000,
+      "role": "provenance_only_not_used_in_selected_cost_model"
+    },
+    "historical_results_policy": "prior raw results and legacy derived outputs remain preserved; refreshed cumulative derived rankings use this reference"
+  },
+  "instrument_campaign_contract": {
+    "id": "v4_4_instrument_profile_and_campaign_modes_positive_entry_v2",
+    "strategy_contract": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/contracts/STRATEGY_CONTRACT_V4_4.json",
+      "sha256": "16e5ff4c3b290fbbbb2ce7282e73a22bbed8e048a257934ef82598300e40035d",
+      "size_bytes": 1867
+    },
+    "ready_k200_profile": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/k200m.json",
+      "sha256": "5ab0adbaaf65646aedc39dfa7b895ddfdde84bbc29ed67e90004d60ffae4c45e",
+      "size_bytes": 2665,
+      "ranking_lineage_id": "k200m_v4_4_positive_entry_future_lineage"
+    },
+    "incomplete_profile_templates": [
+      {
+        "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/simain.template.json",
+        "sha256": "10be623c7e66828911130e842f4bdebf60d142ac28bb818b7cedd735413b98bf",
+        "size_bytes": 1249
+      },
+      {
+        "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/nq.template.json",
+        "sha256": "8c239fdd8a19f7b6efc0837237d2fd2341b1a5e12e5419e6b525ef2546262f39",
+        "size_bytes": 1222
+      }
+    ],
+    "campaign_manifest_template": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/campaign_contracts/CAMPAIGN_MANIFEST.template.json",
+      "sha256": "3d7ede3f2ac63808aa893dc3c953fc813754509b6d90be7256e3815bbd4c191a",
+      "size_bytes": 1200
+    },
+    "modes": [
+      "transfer_exact",
+      "target_local_refinement",
+      "continuation_search",
+      "fresh_search"
+    ],
+    "ranking_merge_policy": "same_instrument_and_accepted_major_version_lineage_minor_hashes_are_provenance",
+    "existing_k200_results_recomputed": false,
+    "future_compatible_k200_results_join_existing_ranking": true,
+    "other_instrument_ranks_mixed_with_k200": false,
+    "stage_bound_cost_models": true,
+    "new_instrument_requires_user_cost_and_gap_decisions": true,
+    "future_k200_positive_entry_profile": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/k200m.json",
+      "sha256": "5ab0adbaaf65646aedc39dfa7b895ddfdde84bbc29ed67e90004d60ffae4c45e",
+      "size_bytes": 2665
+    },
+    "policy_contracts": {
+      "k200_gap": {
+        "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/policies/k200m_gap_policy_v1.json",
+        "sha256": "fdb3948ff47ea83bb6cc6ddfb52158b920663e267559f6cab52ee401e9e69572",
+        "size_bytes": 337
+      },
+      "k200_low_activity": {
+        "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/policies/k200m_low_activity_policy_v2.json",
+        "sha256": "60fe6ce0c07daaea99fe0865bcf9c9e10950997babcbd2624175934068cecbf9",
+        "size_bytes": 601
+      },
+      "k200_preparation_attestation": {
+        "path": "research_variants/short_momentum_net_drop_rebound_v4_4/instrument_profiles/policies/k200m_preparation_policy_attestation_v2.json",
+        "sha256": "edd6435f5912c5e2f6c93a99ee642339339b82fb4fa0130653d8ec4b71c60b2a",
+        "size_bytes": 962
+      }
+    },
+    "existing_k200_result_repair_status": "existing_results_preserved_future_v4_4_runs_use_confirmed_gate"
+  },
+  "default_baseline_sampling_policy": "confirmed_low_activity_gate",
+  "supported_baseline_sampling_policies": [
+    "all_window",
+    "exclude_marked",
+    "confirmed_low_activity_gate"
+  ],
+  "strategy_ids_by_baseline_sampling_policy": {
+    "all_window": "net_drop_rebound_entry_peak_anchor_v4_4_all_window_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+    "exclude_marked": "net_drop_rebound_entry_peak_anchor_v4_4_exclude_marked_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit",
+    "confirmed_low_activity_gate": "net_drop_rebound_entry_peak_anchor_v4_4_confirmed_low_activity_gate_rolling_tr_sum_calculated_execution_price_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_combined_exit"
+  },
+  "result_semantics_ids_by_baseline_sampling_policy": {
+    "all_window": "v4_4_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_positive_entry_signal_combined_zero_extension_exit_results_v4",
+    "exclude_marked": "v4_4_exclude_marked_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_positive_entry_signal_combined_zero_extension_exit_results_v4",
+    "confirmed_low_activity_gate": "v4_4_confirmed_low_activity_gate_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_h_bounded_max_completed_w_drop_rebound_strict_low_close_fill_sample_end_close_pending_exit_next_real_trade_open_positive_entry_signal_combined_zero_extension_exit_results_v4"
+  },
+  "baseline_filter_ids_by_baseline_sampling_policy": {
+    "all_window": "all_window_market_no_baseline_exclusion_v4_4",
+    "exclude_marked": "causal_low_activity_lifecycle_exclusion_v4_4",
+    "confirmed_low_activity_gate": "confirmed_low_activity_retroactive_baseline_exclusion_and_entry_gate_v4_4"
+  },
+  "method_contract": {
+    "entry_baseline_method": "rolling_tr_sum",
+    "baseline_window": "exactly BH finite TR15 atoms ending at or before strict H inside one continuous segment and available by the current calculation time under the selected policy",
+    "baseline_sampling_policies": {
+      "all_window": "every finite TR15 atom is eligible and markers remain audit/chart evidence",
+      "exclude_marked": "an atom enters baseline only when baseline_available_from is no later than the current calculation time; recovered buffers enter at recovery confirmation; confirmed exclusions never enter",
+      "confirmed_low_activity_gate": "default; pending atoms remain eligible, then confirmation excludes the run from its first atom for later baselines and gates new entries until normal volume returns"
+    },
+    "rebound_baseline": {
+      "policy_id": "max_completed_w_h_bounded_open_to_low_v2",
+      "semantic_name": "w_open_to_end_low_drop",
+      "candidate": "w_open_to_end_low_drop=open[start]-low[end] with start=max(H, continuity start, end-W+1)",
+      "window_length_policy": "available_prefix_1_to_W",
+      "full_w_required": false,
+      "minimum_window_ratio": 0.0,
+      "early_prefix_maximum_can_govern_trade": true,
+      "internal_maximum_ordered_decline": false,
+      "effective_timing": "a completed bar candidate becomes eligible on the next bar",
+      "aggregation": "monotonic maximum within one actual position",
+      "entry_reset": "clear all max-W state at every actual entry",
+      "raw_compatibility": "legacy rebound_max_w_drop and candidate audit field names remain unchanged"
+    },
+    "rebound_execution": {
+      "prior_trigger_open": "open>=trigger exits at open, including equality",
+      "prior_trigger_high": "otherwise high>=trigger exits at trigger, including equality",
+      "strict_new_low": "after no prior-trigger exit, close>=new low plus M times prior-completed basis exits at the current real bar close",
+      "non_real_signal": "freeze pending exit and fill at the next real-trade bar open",
+      "sample_end": "force any remaining position closed at the sample-end bar close without reading later prices"
+    },
+    "pending_entry": {
+      "policy_id": "retained_signal_fill_first_real_open",
+      "fill": "first_real_trade_bar_open",
+      "maximum_wait_bars": 120,
+      "signal_retained_during_wait": true,
+      "price_retrigger_required": false,
+      "higher_high_cancellation": false,
+      "structural_reversal_cancellation": false,
+      "continuity_break_cancellation": true
+    }
+  },
+  "runtime_inputs": {
+    "manifest_path": "runtime_inputs/RUNTIME_INPUTS.json",
+    "manifest_sha256": "702634c69d5edf6753307d75a25125b0aef2036b0bc3765cd831acf16968ac4c",
+    "manifest_size_bytes": 2733,
+    "path_policy": "repository_relative_active_runtime"
+  },
+  "data_preparation": {
+    "manifest_path": "runtime_inputs/data_preparation/data_preparation_manifest.json",
+    "manifest_sha256": "29936ddcd48bd18d112531813915223b72eff36801e3460e06b6b4684da88bc2",
+    "prepared_identity": "v4_4_confirmed_low_activity_gate_9760d367a109777c_76f2695bc1f4_9e27394dbe49",
+    "pipeline_version": "research_data_preparation_v4_4_confirmed_low_activity_gate_20260806",
+    "manifest_size_bytes": 6601
+  },
+  "scenario_definition": {
+    "path": "research_variants/short_momentum_net_drop_rebound_v4_4/plans/v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+    "sha256": "020bb4df6c535ea0e0fd5fff412fc05c39e24d40a9c35a2ada1ccdd7d7ad7af2",
+    "schema_id": "v4_4_scenario_groups_single_select_combined_exit_v3_20260801",
+    "selection_mode": "single"
+  },
+  "implementation": {
+    "engine": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/v4_4_engine.py",
+      "sha256": "219c190926a4012518ec7669a0c27938fd97355cecd8baf4e5948f4d9e380d16",
+      "size_bytes": 102798
+    },
+    "runner": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/run_v4_4_resumable_campaign.py",
+      "sha256": "6b8c0cc9dcf9df399072de76007c25008db2f86dc4e031f26f5df32490d2ce61",
+      "size_bytes": 99796
+    },
+    "instrument_contracts": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/instrument_contracts.py",
+      "sha256": "8437d538389476bce3c4440ee241b9f2fbd8963dc7ad1434e5b182bbc5891bda",
+      "size_bytes": 26002
+    },
+    "delivery_worker": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/run_v4_4_delivery_worker.py",
+      "sha256": "11f7f518e560cc240feab9550b88a00ce83288218b9f17b3a951dd17fcbcfd9f",
+      "size_bytes": 9774
+    },
+    "scenario_groups": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/scenario_groups.py",
+      "sha256": "936bdc5db70b5a63bde7392d9574e70d2e60ea53df099581dffa5d699a9f5ebe",
+      "size_bytes": 14767
+    },
+    "stage_analyzer": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/analyze_v4_4_scenario_3_stage.py",
+      "sha256": "5ccd42137a64769353993d29ce1e1342ad634adbb96e93240c8a0f070a3dc66c",
+      "size_bytes": 123969
+    },
+    "cumulative_builder": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_combined_union_analysis.py",
+      "sha256": "467ff7ff65f90eb905644ac6170c09af14f7e0c6489bc4f00a750cd9e7f18c56",
+      "size_bytes": 65889
+    },
+    "cross_instrument_comparison": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_cross_instrument_comparison.py",
+      "sha256": "2fb2535a9381df7916071a362baa551eafcf1dff6c5f8ea293965f7f129387c0",
+      "size_bytes": 93368
+    },
+    "strict_entry_transfer": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_strict_entry_transfer.py",
+      "sha256": "f8f3e22821d6bdc3a0d3a4f8cf74c01913197bfc073c3fc7f83cdcb2ba9e9698",
+      "size_bytes": 33655
+    },
+    "review_generator": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_review_delivery.py",
+      "sha256": "2043d0751cd00acda9bcb34d5f8c1c85defd7a2873cf0207a4580be089931a55",
+      "size_bytes": 132692
+    },
+    "trade_design_template": {
+      "path": "runtime_inputs/templates/historical_v4_trade.html",
+      "sha256": "e36fcdca4d3ea99a2d6518286e10b471d2a4108039b9c4285a0942aea305a72f",
+      "size_bytes": 224110
+    },
+    "preparation": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/prepare_dataset.py",
+      "sha256": "645e0b10f089eb0ef6c51c19060518436b33d51b3a3e85d8cf7d234adb83b908",
+      "size_bytes": 17621
+    },
+    "low_activity": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/low_activity.py",
+      "sha256": "2d70a36475d1e4c14c595e29a704bb02c226c9d10dfa4e92f028cfd863796787",
+      "size_bytes": 31654
+    },
+    "preparation_report": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/audit_report.py",
+      "sha256": "4a535ea4860d04abfce9dcfcb35bf99bc6aa23fabbd07ed8c7912417ec9ac64d",
+      "size_bytes": 20310
+    },
+    "package_trade_records": {
+      "path": "tools/package_v4_4_with_trade_records.ps1",
+      "sha256": "1e4a12a7c2e138ca253b9d2be9f78973af54f7f7220e0c961966e76bba2cd191",
+      "size_bytes": 17698
+    },
+    "incremental_tick_update": {
+      "path": "tools/download_k200_incremental_ticks.py",
+      "sha256": "c27ccabcd949d3243656727c016f0a0b3b115e98486c255333f3c23a4572705e",
+      "size_bytes": 13394
+    },
+    "incremental_15s_activation": {
+      "path": "tools/activate_k200_incremental_15s.py",
+      "sha256": "cbf4a71554459e652db15be3e778938dcf70ca9f8247bd29a91b475a7c074376",
+      "size_bytes": 10534
+    },
+    "market_data_download_readme": {
+      "path": "tools/write_k200_download_readme.py",
+      "sha256": "30d08370b693b0d128907f0d95e1d3725d6973fa86772702c8cd7ef454915fcd",
+      "size_bytes": 7672
+    }
+  },
+  "validation_sources": {
+    "stage_qa": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/qa_v4_4_scenario_3_stage.mjs",
+      "sha256": "377452d61d4f9914e271db17ffb480ac13efecb1d4a9e7b99a31e8a7a1f086ae",
+      "size_bytes": 32985
+    },
+    "engine_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_v4_4_engine.py",
+      "sha256": "85483df7933251a009a9d3076b9ebe3a570616b9ee17ab15131b718d7cfe3213",
+      "size_bytes": 26579
+    },
+    "runner_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_run_v4_4_resumable_campaign.py",
+      "sha256": "fd5f6fa9fd401371509be75da3154c9af882e3f2627d378811094c3e11f20afc",
+      "size_bytes": 14333
+    },
+    "review_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_review_delivery.py",
+      "sha256": "c91d4e62aa2af552d155efa02e0f6368e4365ba93eb8cb4d2119e2dfc15aff79",
+      "size_bytes": 30457
+    },
+    "scenario_delivery_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_scenario_requirements_delivery.py",
+      "sha256": "09310818a66237301e20fac1606a893b2f3e9e4d6ff1ede9c1617f05c86ee3cd",
+      "size_bytes": 9897
+    },
+    "cross_instrument_qa": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/qa_v4_4_cross_instrument_comparison.mjs",
+      "sha256": "bdadcc7b2cd24b9dd2e979b8ad75720d00dea3145313e9967726b050f2c038d5",
+      "size_bytes": 19840
+    },
+    "cross_instrument_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_cross_instrument_comparison.py",
+      "sha256": "558502c3fda1053519a7f0b6ae4e6248693752db9725e667636623e32e5c7f54",
+      "size_bytes": 6802
+    },
+    "strict_entry_transfer_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_strict_entry_transfer.py",
+      "sha256": "264327cc469119d121a7d5ef71673c99b53fa3e33c2e14eae62057ec85ba47f4",
+      "size_bytes": 3258
+    },
+    "instrument_contract_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_instrument_contracts.py",
+      "sha256": "52c13057f8fa2cf043530b24ae7865e94c6a690e7b76141a4500d08f200df814",
+      "size_bytes": 25012
+    },
+    "cumulative_union_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_combined_union_analysis.py",
+      "sha256": "8923b085bd68702f0ffb1824ef213a689a3ffd514c9c4ca0e788219955b5b706",
+      "size_bytes": 2967
+    },
+    "historical_template_gates": {
+      "main_sha256": "ef7ea69d9648d6fc84511f9753e7e2c07f36e73272b5e15b7ef606d7db274a72",
+      "trade_sha256": "0b30ac0e0ed189d83a6cf962cf1bf826a82d312bfd07ca294dc9952ece3d6fc9",
+      "plotly_sha256": "91c4c2879c1cee9f5cab0693f4d7c27773cbe7e22ab6252e5eef0ccfc7f2a7ef"
+    }
+  },
+  "project_operating_contract_authorities": {
+    "role": "durable_strategy_instrument_campaign_role_neutral_delivery_and_parameter_exploration_rules",
+    "documents": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "23e085dac57bd01456cd4e05ecb84f630605eab5a1022dbaa2eea119d3c19558",
+        "size_bytes": 7559
+      },
+      {
+        "path": "AGENTS.zh.md",
+        "sha256": "2202e6671353b17f637bfa69e9d0d8031df4d20a7b9bfc923ca25d2c589bcf4b",
+        "size_bytes": 6756
+      },
+      {
+        "path": "project_management/00_START_HERE.en.md",
+        "sha256": "9fbb23b01abf98d834602688a00f33da34fb0b45a9653eefe817b43a89d5ae7b",
+        "size_bytes": 12212
+      },
+      {
+        "path": "project_management/00_START_HERE.zh.md",
+        "sha256": "a39f8c732fe42d4040d5c6212fa4c88414df053e44833fcdbf72ee665146e6a0",
+        "size_bytes": 10844
+      },
+      {
+        "path": "project_management/01_goal/PROJECT_CONSTRAINTS.en.md",
+        "sha256": "c1acac0bbcb4061b73828b2a22981b5cd6eb32e6d841ce0d55d78a274038e011",
+        "size_bytes": 8051
+      },
+      {
+        "path": "project_management/01_goal/PROJECT_CONSTRAINTS.zh.md",
+        "sha256": "888189415728bc9cf21bf1c434f8e55d77207e54cd745486bfdbfb34bb13d2e4",
+        "size_bytes": 7255
+      },
+      {
+        "path": "project_management/04_decisions/DECISIONS.en.md",
+        "sha256": "786c82bca98470f00da85cb20462b6fb1e4a967bd00ba20d1eab515993308566",
+        "size_bytes": 16871
+      },
+      {
+        "path": "project_management/04_decisions/DECISIONS.zh.md",
+        "sha256": "0e43e8cf2a42d7a534a78a867b3483141d752d697642aa845a0709bd89d20bee",
+        "size_bytes": 15057
+      },
+      {
+        "path": "project_management/04_decisions/CHANGE_REASONS.en.md",
+        "sha256": "99f3478d991e96a71967e4a08feee3332830e87bf4aded0cf9acdd9961dc1e79",
+        "size_bytes": 30039
+      },
+      {
+        "path": "project_management/04_decisions/CHANGE_REASONS.zh.md",
+        "sha256": "ab3002d94a157cfe6e82864d0bd0640c1341671dd4db6a7578d831c68ce31572",
+        "size_bytes": 26625
+      },
+      {
+        "path": "project_management/05_domains/research/PARAMETER_EXPLORATION_GUIDE.en.md",
+        "sha256": "6f67d577956114977e423483185dbe06de13bd7364a27b25172ce6b6db910e2a",
+        "size_bytes": 16292
+      },
+      {
+        "path": "project_management/05_domains/research/PARAMETER_EXPLORATION_GUIDE.zh.md",
+        "sha256": "6b2a884092faff487e25b557bc3c095c81b1b864684cee712411938294ef8603",
+        "size_bytes": 16006
+      },
+      {
+        "path": "project_management/05_domains/research/RESEARCH_CONSTRAINTS.en.md",
+        "sha256": "c1ebb696bf6e589019d3393eaa551feba980e0b74b52af89d109a0ef2b0f743c",
+        "size_bytes": 7452
+      },
+      {
+        "path": "project_management/05_domains/research/RESEARCH_CONSTRAINTS.zh.md",
+        "sha256": "fb16996a2982e7d02b3f8cce29644f90f013a769ed5a2be5b20dc3178e94d4fe",
+        "size_bytes": 6569
+      },
+      {
+        "path": "project_management/00_core/STRATEGY_CONTRACT_V4_4.en.md",
+        "sha256": "4ea177ff65e462d76690568f11ed2724c58d5d6acf880e78c32cdaee9214df6f",
+        "size_bytes": 2473
+      },
+      {
+        "path": "project_management/00_core/STRATEGY_CONTRACT_V4_4.zh.md",
+        "sha256": "1e410321b914cef0e3c1ada3792ba4ee219d7a92eb099aa6ef38671f1c48d80d",
+        "size_bytes": 2282
+      },
+      {
+        "path": "project_management/10_instruments/INSTRUMENT_PROFILE_CONTRACT.en.md",
+        "sha256": "f8b1053afeada0352d57f4754f282686e6c0d4168241ffdfb02d369ec258d50e",
+        "size_bytes": 3089
+      },
+      {
+        "path": "project_management/10_instruments/INSTRUMENT_PROFILE_CONTRACT.zh.md",
+        "sha256": "194fca39afcff3209cc46d31e03c204de41cc8ce8d5baf8bec41d97c7be85706",
+        "size_bytes": 2787
+      },
+      {
+        "path": "project_management/20_campaigns/CAMPAIGN_WORKFLOW.en.md",
+        "sha256": "79415f26187872c0fc586de1f88473778543262517b60c37af59c74e17744a09",
+        "size_bytes": 4667
+      },
+      {
+        "path": "project_management/20_campaigns/CAMPAIGN_WORKFLOW.zh.md",
+        "sha256": "9d8f3866374ae9389dfa655c410c708f62d04cdb365f98376fa72a3124f8f066",
+        "size_bytes": 4277
+      }
+    ]
+  },
+  "source_closure": {
+    "validation_tier": "complete_source_suite_plus_current_result_invariance_sampling",
+    "validation_policy": "instrument and campaign interfaces may change without raw-result rebuild only when the complete suite passes and stored K200 cost metrics reproduce from immutable trades",
+    "full_source_suite": "103_passed_2_expected_result_dependent_skips",
+    "focused_review_delivery_suite": "covered_by_complete_103_passed_suite",
+    "stage_qa_javascript_syntax_check": "passed",
+    "cross_instrument_focused_tests": "covered by complete source suite",
+    "cross_instrument_browser_qa": "desktop_and_mobile_pass_zero_runtime_errors_zero_external_requests_zero_layout_failures",
+    "cross_instrument_frozen_candidate_content_sha256": "14961b09ba28212b77b38b486f65ca20a9d41138d7a071f4a764750f27366ab6",
+    "project_management_dashboard_document_count": 44,
+    "project_management_dashboard_build_status": "pass",
+    "project_management_global_validator_status": "pass_schema1_pinned_validator",
+    "project_management_validation_errors": 0,
+    "project_management_validation_warnings": 0,
+    "trade_record_zip_packaging_contract": "current code, management, reports, hash-bound 15-second OHLC, and completed-stage raw/derived transaction CSVs; all other result payloads excluded",
+    "existing_trade_record_zip_role": "historical_source_final_v4_package_not_current_v7_source",
+    "recursive_runtime_artifact_count": 10,
+    "recursive_runtime_artifact_mismatches": 0,
+    "nested_data_preparation_artifact_count": 6,
+    "nested_data_preparation_artifact_mismatches": 0,
+    "raw_compute_rerun_required": true,
+    "existing_k200_snapshot_rebuilt": false,
+    "existing_k200_invariance_sample_count": 5,
+    "existing_k200_invariance_maximum_absolute_difference": 8.326672684688674e-17,
+    "existing_k200_invariance_tolerance": 1e-12,
+    "corrected_source_delivery_execution_model": "one_or_multiple_executors_permitted_with_exactly_one_cumulative_publisher",
+    "corrected_source_redelivery_count_completed_before_v6": 1,
+    "qa_only_recovery_reuses_existing_html": true,
+    "html_or_raw_rerun_required_for_v6": false,
+    "isolated_pytest_runtime_record_set_sha256": "95de40ef59dacb070dd1b5e570fc0496536442fb6437d72f33e12887a5b4d17d",
+    "no_filter_empty_reinsertion_regression": "passed; an instrument profile without a low-activity filter does not compare empty recovery timestamps",
+    "superseded_v39_freeze_role": "preserved pre-target evidence only; target evaluation never started because the no-filter loader rejected an empty reinserted set",
+    "v40_target_evaluation": "complete for the frozen 86-coordinate strict-entry batch; 81 candidates positive after the fixed 3.57-bps research cost",
+    "superseded_v40_v41_aggregate_role": "preserved incomplete presentation evidence only; no transaction or return calculation failed or changed; V40 omitted the aggregate frozen-candidate CSV and V41 exposed the invalid local variable before any HTML publication",
+    "aggregate_freeze_pair_regression": "passed; every new aggregate root writes matching frozen-candidate JSON and CSV before page construction",
+    "aggregate_browser_qa_candidate_count_policy": "derive expected row, positive-result, and trade-catalog counts from the immutable migration report instead of assuming the original 180-candidate batch",
+    "aggregate_browser_qa_column_policy": "locate source and target return columns by semantic data-sort field rather than fixed column positions so added audit columns cannot shift the assertions",
+    "aggregate_run_catalog_policy": "include the current run while its page is being built and include prior runs only after their cross-instrument manifest exists; incomplete output roots never appear in the selector",
+    "aggregate_same_scope_selector_policy": "when multiple completed batches share the same instrument and interval tuple, the aggregate page retains its current union instead of navigating to the first historical batch",
+    "next_gate": "run artifact and browser visual QA on the completed V42 aggregate output, then close the shared SImain migration entry; never run a SImain local grid",
+    "cumulative_memory_contract": "stage and union analyzers may reuse disposable loaded data frames after immutable raw-artifact validation; this avoids duplicate full-trade frame copies and does not alter fills, returns, coordinates, or cost calculations",
+    "raw_compute_rerun_scope": "complete_4704_coordinate_k200_lineage"
+  },
+  "campaign_state": {
+    "approved_plan_count": 1,
+    "compatible_completed_stage_count": 0,
+    "compatible_completed_coordinate_count": 0,
+    "parameter_acceptance": "none",
+    "compute_authorized": true,
+    "repair_status": "source_closed_exact_4704_coordinate_plan_authorized",
+    "retired_campaign_root": "F:\\Backtest\\Backtest V4.4\\results\\staging_recoverable\\p0_8_zero_signal_retired_20260805\\v4_4_cost_adjusted_multiround_20260803",
+    "retired_coordinate_count": 4704,
+    "retired_trade_count": 706470,
+    "retired_stage_count": 19,
+    "next_action": "freeze validate and execute the exact 4704-coordinate P0-8 repair plan without parameter expansion"
+  },
+  "result_roots": {
+    "campaigns": "results/campaigns",
+    "cumulative_delivery": "results/all_completed_union_analysis",
+    "storage_contract": {
+      "logical_result_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results",
+      "physical_result_root": "F:\\Backtest\\Backtest V4.4\\results",
+      "logical_path_type": "windows_directory_junction",
+      "future_result_writes": "logical_d_path_resolves_to_physical_f_root",
+      "migration_recovery_root": "F:\\Backtest\\migration_recovery\\Backtest V4.4 results before junction 20260804",
+      "old_non_v4_4_result_quarantine_root": "F:\\Backtest\\D_cleanup_quarantine_20260804"
+    },
+    "current_union_snapshot": {
+      "id": "20464535ee48376b73b847ea8454355b2acd58ab4c78c1273f3e97f9e37f76c7",
+      "pointer_sha256": "cada016193dd551dd4a0930b739dc04bd5907732ad84cfa71aef457ef7ee2983",
+      "analysis_manifest_sha256": "0cd061ca54d17acc1673f42c3f4d273b66dbdaa554473f6f2699a6695c3435b5",
+      "completion_manifest_sha256": "22aa69610483145e946d9458bbf09271a1ad006c988f1b3f407f1049daa26db5",
+      "trade_review_manifest_sha256": "1ead44e9bd49f0cfc5d95f073f24e68925879481dd8fad122c4653e928c899a6",
+      "coordinate_count": 4704,
+      "trade_count": 706470,
+      "active_stage_count": 19,
+      "source_state": "historical_reference_snapshot_pending_positive_entry_replacement"
+    }
+  },
+  "provenance": {
+    "directory": "runtime_inputs/provenance",
+    "historical_absolute_paths_are_records_only": true,
+    "runtime_dependency": false,
+    "v4_3_terminal_source_manifest": "runtime_inputs/provenance/V4_3_SOURCE_MANIFEST_terminal_copy.json",
+    "v4_3_plans": "runtime_inputs/provenance/v4_3_plans",
+    "v4_4_compute_time_source_manifest": {
+      "path": "runtime_inputs/provenance/V4_4_SOURCE_MANIFEST_compute_time_56a4353d.json",
+      "sha256": "56a4353d20a3409e7eb7150675db75a674a585dd4e9ec77f937f12ff00397331"
+    }
+  },
+  "operating_documents": {
+    "root_readme": {
+      "path": "README.md",
+      "sha256": "6e72592874675cc9bfe0cc67e3175be7ffab8749166ca995ab2149934c74c295",
+      "size_bytes": 3164
+    },
+    "research_readme": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_4/README.md",
+      "sha256": "b3f27ab803411a832fcc250c9fbb92583c12cb1ac64cd3314d94f0f4529b1a80",
+      "size_bytes": 4171
+    },
+    "runtime": {
+      "path": "RUNTIME.md",
+      "sha256": "59feb6d0e8087c70b76a8070661258b602b918f1ecec87a3780c6e060c53d714",
+      "size_bytes": 3719
+    },
+    "node_package": {
+      "path": "package.json",
+      "sha256": "f5ca1e46fcee7d253dbbbad43961db5e989aca759b6bd6a0fa3994dbe2ec8daa",
+      "size_bytes": 280
+    }
+  },
+  "result_semantics_repair": {
+    "id": "p0_8_positive_entry_signal_full_k200_lineage_repair_20260805",
+    "status": "source_closed_rerun_pending",
+    "old_snapshot_id": "20464535ee48376b73b847ea8454355b2acd58ab4c78c1273f3e97f9e37f76c7",
+    "old_campaign_recovery_root": "F:\\Backtest\\Backtest V4.4\\results\\staging_recoverable\\p0_8_zero_signal_retired_20260805\\v4_4_cost_adjusted_multiround_20260803",
+    "old_coordinate_count": 4704,
+    "affected_coordinate_count": 4383,
+    "unaffected_coordinate_count": 321,
+    "invalid_trade_count": 4404,
+    "replacement_coordinate_count": 4704,
+    "affected_combo_inventory": {
+      "path": ".omo/teams/019fbd76-9439-7b10-a7e1-6b34003778c8/artifacts/p0_8_zero_signal_affected_combos.csv",
+      "sha256": "3469a630fc47e2614594536d3301746d8e68811e1171fd19f027933accf88c44",
+      "size_bytes": 1504229
+    },
+    "affected_summary": {
+      "path": ".omo/teams/019fbd76-9439-7b10-a7e1-6b34003778c8/artifacts/p0_8_zero_signal_affected_summary.json",
+      "sha256": "7f3b6d8b6b4a06137edd4eb381f5158bf3c77aeea7147cda55dba2eb50c0cb7f",
+      "size_bytes": 4288
+    },
+    "old_snapshot_authority": "historical_reference_only_after_replacement_publication"
+  }
+}

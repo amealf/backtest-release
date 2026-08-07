@@ -1,0 +1,116 @@
+{
+  "schema_version": 2,
+  "status": "complete",
+  "dataset_id": "K200_v4_2_ec04981dcf7fa74a",
+  "prepared_identity": "v4_2_static_baseline_ec04981dcf7fa74a_31b39ae5760b_11d3508e5e43",
+  "instrument": "K200",
+  "source_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks\\k200_ticks_20260523_to_20260723_20260723_014534\\data_clean_immediate_tick_recovery_filter_v2_20260729\\k200_clean_15s_session_filled.csv",
+  "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+  "source_bytes": 42822886,
+  "pipeline_version": "research_data_preparation_v4_2_static_baseline_marker_20260801",
+  "rule_contract": {
+    "pipeline_version": "research_data_preparation_v4_2_static_baseline_marker_20260801",
+    "low_activity_rule_version": "low_activity_v4_2_static_baseline_marker_20260801",
+    "instrument": "K200",
+    "extreme_tick_rule": {
+      "method": "same_bar_immediate_tick_recovery",
+      "preceding_trade_deviation": 0.03,
+      "anchor_return_tolerance": 0.001,
+      "maximum_recovery_seconds": 1
+    },
+    "universal_low_volume": {
+      "reference_hours": 84,
+      "positive_volume_median_ratio": 0.2,
+      "continuous_minutes": 30,
+      "minimum_low_share": 1.0,
+      "end_policy": "first_high_volume_atom",
+      "baseline_lifecycle": {
+        "suspected": "hold the run in the preparation-only pending_low_activity_buffer until its final classification is known",
+        "transient_recovery": "after the first normal 15-second recovery bar completes, retain the pending atoms and recovery bar in the final static baseline marker",
+        "confirmed": "at 30 continuous minutes, mark the pending buffer and later low-volume atoms as excluded until the first normal recovery bar"
+      }
+    },
+    "k200_mechanism": {
+      "price_lock": "30 complete minutes; >=10 traded minutes; <=4 ticks; TR and range <=5% of earlier 84h median",
+      "circuit": "internal real-trade separation exactly 30 minutes; 20-minute halt plus 10-minute call auction",
+      "extended_pause": "display-only mechanism candidate because OHLCV cannot disambiguate the cause; remains eligible for universal low-volume detection",
+      "universal_input_policy": "remove only mechanism intervals with apply_to_baseline=true; retain display-only candidates in universal input"
+    },
+    "static_baseline_policy": "run pending, recovery, and confirmation classification once during preparation; the final marker excludes only confirmed universal and apply_to_baseline K200 mechanism atoms; V4.2 skips marked atoms only while sampling the entry baseline"
+  },
+  "rule_contract_sha256": "31b39ae5760b86848a492b4e0abf3ddca80fc856918ac8ce52fed68d6285d8b7",
+  "implementation_sha256": "11d3508e5e43d220aa12da1c65b985ad0bb9a45015ce53aae6f1f128d9d4270e",
+  "processed_at": "2026-07-31T17:45:38+00:00",
+  "extreme_cleaning": {
+    "status": "passed",
+    "passed": true,
+    "audit_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks\\k200_ticks_20260523_to_20260723_20260723_014534\\data_clean_immediate_tick_recovery_filter_v2_20260729\\data_preparation_audit.json",
+    "audit_sha256": "e7b59b8cc45cad9be4f5628982b200835c6dd002b3dba7a45c1812f30767cae4",
+    "filtered_tick_count": 3,
+    "method": "same_bar_immediate_tick_recovery",
+    "parameters": {
+      "tick_deviation": "0.03",
+      "recovery_tolerance": "0.001",
+      "max_recovery_seconds": 1
+    }
+  },
+  "low_activity_summary": {
+    "rule_version": "low_activity_v4_2_static_baseline_marker_20260801",
+    "instrument": "K200",
+    "atom_count": 183056,
+    "baseline_excluded_atom_count": 3379,
+    "baseline_excluded_minutes": 844.75,
+    "backtest_baseline_eligible_atom_count": 179677,
+    "universal_event_count": 3,
+    "price_lock_event_count": 2,
+    "circuit_event_count": 5,
+    "extended_pause_display_only_count": 1,
+    "applied_event_count": 10,
+    "buffer_reinserted_atom_count": 72377,
+    "buffer_confirmed_excluded_atom_count": 2480,
+    "recovery_confirmation_count": 17159,
+    "tick_size": 0.05
+  },
+  "report_loading_contract": {
+    "startup": "HTML shell and summary only",
+    "section_payloads": "loaded after the matching title is expanded",
+    "plotly": "loaded after the first title is expanded"
+  },
+  "report_audit": {
+    "index": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\low_activity_report\\index.html",
+    "index_bytes": 15016,
+    "section_bytes": {
+      "universal": 1953335,
+      "mechanism": 2231529
+    },
+    "startup_embeds_section_payload": false
+  },
+  "artifacts": {
+    "filter_atoms": {
+      "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\baseline_filter_atoms.csv",
+      "sha256": "b803df31d7a1bfec5f396d7148aa99227d0109b2c97e02262e8e92e6ac5740c2",
+      "rows": 183056
+    },
+    "filter_events": {
+      "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\baseline_filter_events.json",
+      "sha256": "d97c157728ffdc74231ab4c6e1414a41790a3ec2f4552076357a2251705c8cf1",
+      "events": 11
+    },
+    "report_index": {
+      "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\low_activity_report\\index.html",
+      "sha256": "174e7a831e7eb4dce8303c8292a6b02897c3fb652cd87b2afe9f3070ce2a2a2b"
+    },
+    "report_universal": {
+      "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\low_activity_report\\sections\\universal.js",
+      "sha256": "c65af569d3816f61f16172ba891a0fb5b9dc3f8e676b6f45be24718e59765db2"
+    },
+    "report_mechanism": {
+      "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\low_activity_report\\sections\\mechanism.js",
+      "sha256": "38b0df3f3e4ecc00d7964fa0c163a7bd7c44ed1a7bab90e8b7cc3a9809bea202"
+    },
+    "report_plotly": {
+      "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\low_activity_report\\assets\\plotly.min.js",
+      "sha256": "91c4c2879c1cee9f5cab0693f4d7c27773cbe7e22ab6252e5eef0ccfc7f2a7ef"
+    }
+  }
+}

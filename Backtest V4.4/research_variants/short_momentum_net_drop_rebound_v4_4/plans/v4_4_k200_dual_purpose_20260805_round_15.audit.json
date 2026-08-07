@@ -1,0 +1,173 @@
+{
+  "status": "frozen_before_compute",
+  "plan": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\v4_4_k200_dual_purpose_20260805_round_15.json",
+  "plan_sha256": "f4bb715f8da1c57b3afb083657e3f423c52448204a1acc09d6c8ec10474e2d55",
+  "plan_size_bytes": 163825,
+  "source_snapshot_id": "db85efb36f3de1c1f8255c6108fb365ad9f3d337f77a8d37a0e0ae41982e5699",
+  "output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_15_dual_purpose_broad_and_single_axis_all_window",
+  "output_root_absent": true,
+  "completed_coordinate_count": 5044,
+  "requested_coordinate_count": 276,
+  "unique_requested_coordinate_count": 276,
+  "internal_duplicate_count": 0,
+  "completed_overlap_count": 0,
+  "retained_new_coordinate_count": 276,
+  "block_counts": [
+    {
+      "block_id": "refine_unrestricted_e",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_unrestricted_bh",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_unrestricted_trw",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_unrestricted_k",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_unrestricted_w",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_unrestricted_m",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_unrestricted_speed_window_bars",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_e",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_bh",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_trw",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_k",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_w",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_m",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_scenario_1_speed_window_bars",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_e",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_bh",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_trw",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_k",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_w",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_m",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_average_return_speed_window_bars",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_e",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_bh",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_trw",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_k",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_w",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_m",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "refine_low_drawdown_speed_window_bars",
+      "requested_count": 3,
+      "retained_count": 3
+    },
+    {
+      "block_id": "broad_global_stratified",
+      "requested_count": 96,
+      "retained_count": 96
+    },
+    {
+      "block_id": "broad_midpoint_stratified",
+      "requested_count": 96,
+      "retained_count": 96
+    }
+  ],
+  "resources": {
+    "workers": 4,
+    "batch_size": 8,
+    "minimum_free_memory_mb": 4096
+  },
+  "parameter_acceptance": "none"
+}

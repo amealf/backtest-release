@@ -1,0 +1,322 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution",
+  "campaign_id": "v4_3_max_w_multiround_20260802",
+  "stage_id": "round_05_all_window",
+  "stage_kind": "max_completed_w_terminal_micro_refinement_round_05",
+  "predecessor_stage_ids": [
+    "round_01_all_window",
+    "round_02_all_window",
+    "round_03_all_window",
+    "round_04_all_window"
+  ],
+  "selection_provenance": "Terminal Round 5 after stable Round-4 raw/delivery closure and leader approval. Only Scenario-1 total and unrestricted total passed their exact continuation rules; two average-return views stopped and have no block.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\research_variants\\short_momentum_net_drop_rebound_v4_3\\plans\\v4_3_scenario_groups_single_select_combined_exit_20260801.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {
+    "workers": 3,
+    "batch_size": 12,
+    "minimum_free_memory_mb": 4096
+  },
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\results\\campaigns\\v4_3_max_w_multiround_20260802\\round_05_all_window",
+  "reserved_continuation_root": null,
+  "identity_contract": {
+    "version_label": "V4.3",
+    "output_schema_version": 6,
+    "plan_fingerprint_schema_version": 7,
+    "rebound_baseline_policy_id": "max_completed_w_window_open_to_low_v1",
+    "trade_audit_schema_version": 2,
+    "trade_audit_schema_id": "v4_3_max_completed_w_drop_combined_exit_audit_v2",
+    "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_3_all_window_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_exit",
+    "result_semantics_id": "v4_3_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v2",
+    "baseline_filter_id": "all_window_market_no_baseline_exclusion_v4_3",
+    "source_manifest_sha256": "306bf83ca50dab913fc7d8f081ec249dc05e03529ced7ce1c6dc58addab3f946",
+    "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "data_preparation_manifest_sha256": "5a4cc09b04e0330ab6425fb7f5ff55dde70039933bb417e7791b516d77830cfb",
+    "scenario_definition_sha256": "d6db5d72be6cb9f498659588aa904cb10f634e8c1a23ba6aaabfed18c4efcdd6",
+    "engine_sha256": "8b5559313082813d9485d6868a2533f124ccf88fb0faaf83a164906b48e15ebd",
+    "runner_sha256": "880196a44d8a29e5ede8f8ef49e55775ee0ab3421e5ad4543bd8ee83a28e33ec"
+  },
+  "experiment_question": "Do the Round-4 Scenario-1 and unrestricted-total improvements persist in two terminal 12-point micro-blocks beyond their new lower boundaries under the unchanged all-window max-completed-W identity?",
+  "objective_contract": {
+    "views": [
+      {
+        "view_id": "scenario_1_qualified_total_return",
+        "scenario_id": "scenario_1",
+        "qualification_required": true,
+        "minimum_trade_count": null,
+        "metric": "train_return",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_total_return",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": null,
+        "metric": "train_return",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge10",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": 10,
+        "metric": "train_avg_trade",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge20",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": 20,
+        "metric": "train_avg_trade",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      }
+    ],
+    "active_continuation_views": [
+      "scenario_1_qualified_total_return",
+      "unrestricted_total_return"
+    ],
+    "stopped_views": [
+      "unrestricted_average_return_ge10",
+      "unrestricted_average_return_ge20"
+    ],
+    "average_block_exists": false,
+    "single_composite_score": false,
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "gap_excluded_return_may_filter_or_rank": false,
+    "diagnostic_metrics_are_ranking_views": false,
+    "baseline_sampling_policy_partitions_are_separate": true,
+    "parameter_acceptance": "none_from_terminal_in_sample_round_05"
+  },
+  "dimension_contract": {
+    "design": "two_independent_terminal_3x2x2_micro_blocks",
+    "method": "rolling_tr_sum",
+    "block_count": 2,
+    "coordinates_per_block": 12,
+    "raw_coordinate_count": 24,
+    "execution_coordinate_count": 24,
+    "batch_count": 2,
+    "speed_window_values": [
+      480
+    ],
+    "all_trw_le_bh": true,
+    "average_block_count": 0,
+    "all_other_trading_and_identity_fields_fixed": true
+  },
+  "round_04_leader_contract": {
+    "views": [
+      {
+        "view_id": "scenario_1_qualified_total_return",
+        "coordinates": {
+          "e": 30,
+          "bh": 720,
+          "trw": 6,
+          "k": 1.5,
+          "w": 1,
+          "m": 2,
+          "speed_window_bars": 480
+        },
+        "train_trade_count": 598,
+        "train_return": 0.3708274323581177,
+        "refinement_block": "scenario_1_terminal_lower_boundary"
+      },
+      {
+        "view_id": "unrestricted_total_return",
+        "coordinates": {
+          "e": 180,
+          "bh": 360,
+          "trw": 6,
+          "k": 0.75,
+          "w": 1,
+          "m": 0.5,
+          "speed_window_bars": 480
+        },
+        "train_trade_count": 3493,
+        "train_return": 3.4013720638881786,
+        "refinement_block": "unrestricted_total_terminal_lower_boundary"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge10",
+        "coordinates": {
+          "e": 200,
+          "bh": 720,
+          "trw": 24,
+          "k": 0.75,
+          "w": 192,
+          "m": 12,
+          "speed_window_bars": 480
+        },
+        "train_trade_count": 77,
+        "train_avg_trade": 0.0057461503417173,
+        "continuation": "stopped_no_block"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge20",
+        "coordinates": {
+          "e": 200,
+          "bh": 720,
+          "trw": 24,
+          "k": 0.75,
+          "w": 192,
+          "m": 12,
+          "speed_window_bars": 480
+        },
+        "train_trade_count": 77,
+        "train_avg_trade": 0.0057461503417173,
+        "continuation": "stopped_no_block"
+      }
+    ],
+    "deduplicated_active_leader_count": 2,
+    "rankings_remain_independent": true
+  },
+  "round_progression_contract": {
+    "round_05_coordinate_count": 24,
+    "round_05_rule": "Two separate 12-point 3x2x2 micro-blocks for the two views that passed Round-4 continuation, exact anti-join, no average block, no combined score.",
+    "round_05_is_terminal": true,
+    "automatic_round_06": false
+  },
+  "execution_gate": [
+    "Verify current SOURCE_MANIFEST, source, preparation, scenario, engine, runner, and identity hashes.",
+    "Require exactly 24 requested coordinates, 24 unique combo IDs, zero overlap with the exact 660 completed IDs, and zero active-or-pending-plan overlap.",
+    "Repeat completed and active/pending anti-joins immediately before launch.",
+    "Require an absent or empty isolated round_05_all_window output root and no competing raw, delivery, analyzer, or cumulative writer.",
+    "Require workers=3, batch_size=12, minimum_free_memory_mb=4096, and measured available memory at or above the floor.",
+    "Require validate-only success and compute-only run_stage(..., deliver_html=False); automatic HTML is prohibited.",
+    "Stop before compute on any plan, source, preparation, scenario, engine, runner, identity, schema, hash, lock, output, duplicate, resource, anti-join, or delivery-suppression drift."
+  ],
+  "stop_conditions": [
+    "Do not interpret a partial stage; close all 24 coordinates and immutable stage/cumulative delivery first.",
+    "A view with no eligible row nominates no candidate; one view cannot rescue another.",
+    "Average views remain independently displayed but cannot authorize a block or continuation.",
+    "Gap-excluded return is display-only and cannot stop, filter, rank, qualify, continue, accept, or reject.",
+    "Round 5 is terminal; no Round 6 is authorized under any outcome.",
+    "Never claim parameter acceptance from this in-sample campaign."
+  ],
+  "delivery_contract": {
+    "automatic_html_during_compute": false,
+    "compute_invocation": "run_stage(..., deliver_html=False)",
+    "fixed_historical_templates_required_after_immutable_closure": true,
+    "stage_main_data_field": "highReturnViews",
+    "cumulative_main_data_field": "highReturnViews",
+    "high_return_view_count": 4,
+    "primary_metrics": [
+      "train_return",
+      "train_avg_trade"
+    ],
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "baseline_sampling_policy_partitions_are_separate": true,
+    "diagnostic_metrics_remain_tables_not_ranking_views": true,
+    "one_markdown_record_per_round": true,
+    "round_record_sections": [
+      "why",
+      "run",
+      "observed",
+      "next"
+    ]
+  },
+  "in_sample_limits": [
+    "One K200 instrument and one inspected training period.",
+    "Round-5 blocks are selected from inspected Round-4 leaders and are not independent.",
+    "Four views over 684 cumulative coordinates create multiple-comparison and winner's-curse risk.",
+    "Minimum-trade filters define eligibility, not statistical confidence.",
+    "No holdout, new-date, cross-instrument, cost-sensitivity, or out-of-sample evidence is created."
+  ],
+  "pre_execution_evidence": {
+    "pre_run_design_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\.omo\\teams\\team-a31b9876\\artifacts\\A_v4_3_max_w_round_05_pre_run_design_20260802.md",
+    "pre_run_design_sha256": "155ab3dd0da3dd2c26332f3f9943fde0e38a650d9a15a250d3cd0472b27909f8",
+    "round_04_interpretation_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\.omo\\teams\\team-a31b9876\\artifacts\\A_v4_3_max_w_round_04_20260802.md",
+    "round_04_interpretation_sha256": "1882f9c1bcf3ec5a9811d44d9366ab92a2af7b1a86f3a469edcacc16f843bb00",
+    "round_04_completion_manifest_sha256": "24532112095f30aa594b3af9e021de572249fc505644a5cf77708ee82205be10",
+    "round_04_immutable_closure_evidence_sha256": "cfbefeefcadf8c5e32db6c3755a5fb021b901bbcfc4ceae5db1e4396af428bc4",
+    "round_04_delivery_evidence_sha256": "0d5d3187de8a2a1297bbb35f1de220930d34ed30c117906b936506cd404b7fb8",
+    "round_04_snapshot_id": "a87b910dfb648c2619e850c639991db21662eb29bb856747eb7702640320fc98"
+  },
+  "anti_join": {
+    "scope": "compatible V4.3 all_window max-completed-W identity only",
+    "completed_compatible_coordinate_count_before_plan": 660,
+    "active_or_pending_coordinate_count_before_plan": 0,
+    "proposed_coordinate_count": 24,
+    "proposed_unique_coordinate_count": 24,
+    "proposed_completed_tuple_overlap_count": 0,
+    "completed_authority": "union of combo_id values in validated Round-1 through Round-4 batch manifests cross-checked against grid_manifest.csv and stage_summary.csv",
+    "launch_time_repeat_required": true
+  },
+  "grid_blocks": [
+    {
+      "method": "rolling_tr_sum",
+      "e": [
+        15,
+        20,
+        25
+      ],
+      "bh": [
+        720
+      ],
+      "trw": [
+        6
+      ],
+      "k": [
+        1.25,
+        1.75
+      ],
+      "w": [
+        1,
+        2
+      ],
+      "m": [
+        2
+      ],
+      "speed_window_bars": [
+        480
+      ],
+      "seed": "round_04_scenario_1_qualified_total_leader",
+      "objective": "scenario_1_qualified_total_return",
+      "design": "round_05_scenario_1_terminal_lower_boundary"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": [
+        120,
+        150,
+        180
+      ],
+      "bh": [
+        360
+      ],
+      "trw": [
+        6
+      ],
+      "k": [
+        0.75
+      ],
+      "w": [
+        1,
+        2
+      ],
+      "m": [
+        0.25,
+        0.75
+      ],
+      "speed_window_bars": [
+        480
+      ],
+      "seed": "round_04_unrestricted_total_leader",
+      "objective": "unrestricted_total_return",
+      "design": "round_05_unrestricted_total_terminal_lower_boundary"
+    }
+  ],
+  "explicit_combos": []
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "status": "frozen_current_reference_for_derived_cost_ranking",
+  "cost_model_id": "k200m_shadow_cost_v2_derived_krw_notional_20260803",
+  "role": "derived_ranking_and_display_only_raw_trades_unchanged",
+  "reference_date": "2026-08-03",
+  "contract": {
+    "instrument": "Mini KOSPI 200 Futures",
+    "contract_multiplier_krw_per_point": 50000.0,
+    "source_url": "https://global.krx.co.kr/contents/GLB/02/0201/0201040204/GLB0201040204.jsp",
+    "source_statement": "Contract Size = Mini KOSPI 200 futures price times KRW 50,000"
+  },
+  "market_price": {
+    "price": 1106.7,
+    "currency": "index_points",
+    "contract": "016U",
+    "expiry": "20260910",
+    "observed_at": "2026-07-23T02:43:45+08:00",
+    "field": "close",
+    "selection_rule": "last real-trade 15-second bar in the hash-bound active runtime market-data input",
+    "source_path": "runtime_inputs/market_data/k200_clean_15s_session_filled.csv",
+    "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4"
+  },
+  "fx": {
+    "pair": "KRW_per_USD",
+    "krw_per_usd": 1446.7,
+    "observed_on": "2026-07-29",
+    "source_url": "https://english.mofe.go.kr/?boardCd=N0001&division=002",
+    "source_statement": "KRW/USD (Closing Rate): 1446.7 Won"
+  },
+  "cost_inputs": {
+    "round_trip_slippage_bps": 2.0,
+    "round_trip_commission_usd": 6.0
+  },
+  "derived": {
+    "contract_notional_krw": 55335000.0,
+    "round_trip_commission_krw": 8680.2,
+    "round_trip_commission_bps": 1.568663594470046,
+    "round_trip_slippage_krw": 11067.0,
+    "round_trip_total_cost_krw": 19747.2,
+    "round_trip_total_cost_bps": 3.568663594470046
+  },
+  "calculation": {
+    "contract_notional_krw": "market_price.price * contract.contract_multiplier_krw_per_point",
+    "commission_bps": "10000 * cost_inputs.round_trip_commission_usd * fx.krw_per_usd / derived.contract_notional_krw",
+    "total_cost_bps": "cost_inputs.round_trip_slippage_bps + derived.round_trip_commission_bps"
+  },
+  "historical_results_policy": "Previously delivered raw results remain immutable. Future derived analysis and cumulative rankings use this reference without raw-compute reruns."
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "status": "ready",
+  "instrument_id": "k200m",
+  "display_name": "Mini KOSPI 200 Futures",
+  "timezone": "Asia/Seoul",
+  "bar_seconds": 15,
+  "strategy_contract_id": "short_momentum_net_drop_rebound_v4_4_cross_instrument_core_v2_positive_entry",
+  "ranking_lineage_id": "k200m_v4_4_positive_entry_future_lineage",
+  "data": {
+    "path": "../../../runtime_inputs/market_data/k200_clean_15s_session_filled.csv",
+    "size_bytes": 54562343,
+    "sha256": "9760d367a109777c4789ce45d982a6c0708bacddad8f549450ed94f81ad5c405",
+    "preparation_manifest": {
+      "path": "../../../runtime_inputs/data_preparation/data_preparation_manifest.json",
+      "size_bytes": 6601,
+      "sha256": "29936ddcd48bd18d112531813915223b72eff36801e3460e06b6b4684da88bc2"
+    },
+    "policy_attestation": {
+      "path": "policies/k200m_preparation_policy_attestation_v2.json",
+      "size_bytes": 962,
+      "sha256": "edd6435f5912c5e2f6c93a99ee642339339b82fb4fa0130653d8ec4b71c60b2a"
+    }
+  },
+  "cost_model": {
+    "path": "../../../runtime_inputs/cost_models/k200m_current_notional_cost_reference_20260803.json",
+    "size_bytes": 2178,
+    "sha256": "9a13431ebf03e91fe496ba7514b5fcf689bd9d197292a8c6c4cb57b576229ffe"
+  },
+  "gap_policy": {
+    "status": "ready",
+    "policy_id": "k200m_current_continuity_and_real_gap_policy_v1",
+    "mode": "preserve_existing_v4_4_behavior",
+    "config": {
+      "path": "policies/k200m_gap_policy_v1.json",
+      "size_bytes": 337,
+      "sha256": "fdb3948ff47ea83bb6cc6ddfb52158b920663e267559f6cab52ee401e9e69572"
+    },
+    "implementation": {
+      "path": "../code/v4_4_engine.py",
+      "size_bytes": 102798,
+      "sha256": "219c190926a4012518ec7669a0c27938fd97355cecd8baf4e5948f4d9e380d16"
+    }
+  },
+  "low_activity_policy": {
+    "status": "ready",
+    "policy_id": "confirmed_low_activity_retroactive_baseline_exclusion_and_entry_gate_v4_4",
+    "mode": "pending_no_effect_confirmed_gate",
+    "config": {
+      "path": "policies/k200m_low_activity_policy_v2.json",
+      "size_bytes": 601,
+      "sha256": "60fe6ce0c07daaea99fe0865bcf9c9e10950997babcbd2624175934068cecbf9"
+    },
+    "implementation": {
+      "path": "../data_preparation/low_activity.py",
+      "size_bytes": 31654,
+      "sha256": "2d70a36475d1e4c14c595e29a704bb02c226c9d10dfa4e92f028cfd863796787"
+    }
+  },
+  "scenario_set": {
+    "path": "../plans/v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+    "size_bytes": 2624,
+    "sha256": "020bb4df6c535ea0e0fd5fff412fc05c39e24d40a9c35a2ada1ccdd7d7ad7af2",
+    "ranking_role": "optional_filter_only"
+  }
+}

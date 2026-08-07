@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "status": "approved",
+  "mode": "target_local_refinement",
+  "question": "Does a higher K threshold reduce entry count and improve return quality?",
+  "source": {
+    "instrument_id": "K200",
+    "display_name": "K200",
+    "role": "pre_migration",
+    "sample_start": "2026-05-26 00:00:00",
+    "sample_end": "2026-07-08 23:52:00",
+    "timezone": "Asia/Seoul",
+    "source_stage": "continuation_round_13_stricter_entry_k_expansion_all_window"
+  },
+  "target": {
+    "instrument_id": "SImain",
+    "display_name": "SImain",
+    "role": "post_migration",
+    "sample_start": "2026-01-29 00:00:00",
+    "sample_end": "2026-02-23 23:59:45",
+    "timezone": "America/Chicago"
+  },
+  "bar_interval_seconds": 15,
+  "parent_transfer_run": "k200_20260526_20260708__simain_20260129_20260223__original_180_plus_repaired_64_v50_20260805",
+  "anchor_combo_id": "v4_4_rolling_tr_sum_bpall_window_fillcalculated_threshold_execwait_next_real_trade_slip0_sx1_s332_rx1_e320_bh240_trw20_k1p1_w6_m4p5_f7d4aa551c",
+  "bounded_neighborhood": {
+    "fixed_fields": {
+      "method": "rolling_tr_sum",
+      "baseline_sampling_policy": "all_window",
+      "e": 320,
+      "bh": 240,
+      "trw": 20,
+      "w": 6,
+      "m": 4.5,
+      "speed_window_bars": 332
+    },
+    "changed_field": "k",
+    "parent_value": 1.1,
+    "values": [1.2, 1.3, 1.4]
+  },
+  "candidate_filter_contract": {
+    "status": "approved_for_this_run",
+    "rule": "Use exactly the three completed K200 Round-13 coordinates; target results cannot add, remove, or edit candidates."
+  },
+  "cost_bps": 3.57,
+  "workers": 4,
+  "publish_html": "once_after_the_three_target_results_complete",
+  "parameter_acceptance": "none"
+}

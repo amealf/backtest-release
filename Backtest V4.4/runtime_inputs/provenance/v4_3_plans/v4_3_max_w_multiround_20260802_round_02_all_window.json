@@ -1,0 +1,188 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution",
+  "campaign_id": "v4_3_max_w_multiround_20260802",
+  "stage_id": "round_02_all_window",
+  "stage_kind": "max_completed_w_broad_cartesian_round_02",
+  "predecessor_stage_ids": [
+    "round_01_all_window"
+  ],
+  "selection_provenance": "Round 1 is a closed 12-coordinate implementation/smoke probe. Round 2 is the user-approved deterministic 504-coordinate broad Cartesian exploration. Axis bounds retain and widely bracket the smoke-probe geometries; no Round-1 parameter is accepted.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\research_variants\\short_momentum_net_drop_rebound_v4_3\\plans\\v4_3_scenario_groups_single_select_combined_exit_20260801.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0.0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {
+    "workers": 3,
+    "batch_size": 12,
+    "minimum_free_memory_mb": 4096
+  },
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\results\\campaigns\\v4_3_max_w_multiround_20260802\\round_02_all_window",
+  "reserved_continuation_root": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\results\\campaigns\\v4_3_max_w_multiround_20260802\\round_03_all_window",
+  "identity_contract": {
+    "version_label": "V4.3",
+    "output_schema_version": 6,
+    "plan_fingerprint_schema_version": 7,
+    "rebound_baseline_policy_id": "max_completed_w_window_open_to_low_v1",
+    "trade_audit_schema_version": 2,
+    "trade_audit_schema_id": "v4_3_max_completed_w_drop_combined_exit_audit_v2",
+    "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_3_all_window_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_exit",
+    "result_semantics_id": "v4_3_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v2",
+    "baseline_filter_id": "all_window_market_no_baseline_exclusion_v4_3",
+    "source_manifest_sha256": "306bf83ca50dab913fc7d8f081ec249dc05e03529ced7ce1c6dc58addab3f946",
+    "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "data_preparation_manifest_sha256": "5a4cc09b04e0330ab6425fb7f5ff55dde70039933bb417e7791b516d77830cfb",
+    "scenario_definition_sha256": "d6db5d72be6cb9f498659588aa904cb10f634e8c1a23ba6aaabfed18c4efcdd6",
+    "engine_sha256": "8b5559313082813d9485d6868a2533f124ccf88fb0faaf83a164906b48e15ebd",
+    "runner_sha256": "880196a44d8a29e5ede8f8ef49e55775ee0ab3421e5ad4543bd8ee83a28e33ec"
+  },
+  "experiment_question": "Across deterministic wide jumps in E/BH/TRW/K/W/M, which coordinates independently lead Scenario-1-qualified full total return, unrestricted full total return, unrestricted average return at >=10 trades, and unrestricted average return at >=20 trades under the current max-completed-W all-window identity?",
+  "objective_contract": {
+    "views": [
+      {
+        "view_id": "scenario_1_qualified_total_return",
+        "scenario_id": "scenario_1",
+        "qualification_required": true,
+        "minimum_trade_count": null,
+        "metric": "train_return",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_total_return",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": null,
+        "metric": "train_return",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge10",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": 10,
+        "metric": "train_avg_trade",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge20",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": 20,
+        "metric": "train_avg_trade",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      }
+    ],
+    "single_composite_score": false,
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "gap_excluded_return_may_filter_or_rank": false,
+    "diagnostic_metrics_are_ranking_views": false,
+    "baseline_sampling_policy_partitions_are_separate": true,
+    "parameter_acceptance": "none_from_in_sample_broad_round"
+  },
+  "dimension_contract": {
+    "design": "single_deterministic_cartesian_block",
+    "method": "rolling_tr_sum",
+    "e_values": [40, 80, 120, 200, 320, 480, 720],
+    "bh_values": [120, 360, 720],
+    "trw_values": [6, 24],
+    "k_values": [0.75, 2.5],
+    "w_values": [3, 48, 192],
+    "m_values": [2.0, 8.0],
+    "speed_window_values": [480],
+    "all_trw_le_bh": true,
+    "raw_coordinate_count": 504,
+    "execution_coordinate_count": 504,
+    "batch_count": 42,
+    "all_other_trading_and_identity_fields_fixed": true
+  },
+  "round_progression_contract": {
+    "round_01_classification": "implementation_smoke_probe",
+    "round_02_classification": "broad_cartesian_exploration",
+    "round_02_coordinate_count": 504,
+    "round_03_stage_id": "round_03_all_window",
+    "round_03_maximum_coordinate_count": 12,
+    "round_03_rule": "Record the independent leaders from Scenario-1 total, unrestricted total, average >=10, and average >=20 before deduplication; for each distinct eligible leader add at most three fresh one-axis neighbors on the axis with strongest ordered local primary-metric support; exact anti-join; no combined score.",
+    "round_03_is_terminal": true
+  },
+  "execution_gate": [
+    "Recompute and verify every identity and bound SHA-256 against the final gap-contract SOURCE_MANIFEST.",
+    "Expand the Cartesian block and require exactly 504 requested coordinates, 504 unique combo IDs, zero compatible-completed overlap, and zero active-or-pending-plan overlap.",
+    "Bind Round-1 completion and stage-summary evidence, then scan every compatible completion and active/pending plan again at audit and launch.",
+    "Require an empty isolated round_02_all_window output root and no competing raw, delivery, or cumulative writer lock.",
+    "Require workers=3, batch_size=12, minimum_free_memory_mb=4096, and measured available memory at or above the floor.",
+    "Stop before compute on plan, source, preparation, scenario, engine, runner, identity, schema, hash, lock, output, duplicate, resource, or anti-join drift."
+  ],
+  "stop_conditions": [
+    "Do not interpret a partial stage; close all 504 coordinates and immutable stage/cumulative delivery first.",
+    "Stop interpretation on incomplete closure, nonfinite primary evidence, fill/wait/exit/lifecycle mismatch, or fixed-template failure.",
+    "A view with no eligible row nominates no Round-3 leader; one view cannot rescue or overwrite another.",
+    "Gap-excluded return is display-only audit evidence and cannot stop, filter, rank, or select a branch.",
+    "Round 3 is terminal for this in-sample direction; never claim parameter acceptance from this campaign."
+  ],
+  "delivery_contract": {
+    "fixed_historical_templates_required": true,
+    "stage_main_data_field": "highReturnViews",
+    "cumulative_main_data_field": "highReturnViews",
+    "high_return_view_count": 4,
+    "primary_metrics": ["train_return", "train_avg_trade"],
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "baseline_sampling_policy_partitions_are_separate": true,
+    "diagnostic_metrics_remain_tables_not_ranking_views": true,
+    "one_markdown_record_per_round": true,
+    "round_record_sections": ["why", "run", "observed", "next"]
+  },
+  "in_sample_limits": [
+    "One K200 instrument and one inspected training period.",
+    "Round-2 axes are informed by the Round-1 smoke probe and are not independent of prior inspection.",
+    "Four views over 504 coordinates create multiple-comparison and winner's-curse risk.",
+    "Minimum-trade filters define eligibility, not statistical confidence.",
+    "No holdout, new-date, cross-instrument, cost-sensitivity, or out-of-sample evidence is created."
+  ],
+  "pre_execution_evidence": {
+    "source_manifest_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\research_variants\\short_momentum_net_drop_rebound_v4_3\\SOURCE_MANIFEST.json",
+    "source_manifest_sha256": "306bf83ca50dab913fc7d8f081ec249dc05e03529ced7ce1c6dc58addab3f946",
+    "gap_contract_source_closure_artifact_sha256": "ed7a38dd949abb3332b7447ef274bcdc3c4dc9a8a4795102fc2fe7589c95aa22",
+    "round_01_completion_manifest_sha256": "3a3428b5d5f8b8f24db07b0d8f8ed733a03a48c6950e7a3e63196c7df4e273ca",
+    "round_01_stage_summary_sha256": "76b49413ee8610b72df322cbf3381e2ce482619522dfbb1fe359dc5eb37d7b15",
+    "round_01_immutable_closure_artifact_sha256": "935fd5e562b54deb8d8334251753a5b04e2ed3b71148d8ad00a9f5137dcdc216",
+    "round_01_delivery_qa_artifact_sha256": "7c5e2033305a2479a80e4121b87d7128071a9a008a2e8dd1e24f23bbde56b14a",
+    "round_02_record_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\.omo\\teams\\019fbd76-9439-7b10-a7e1-6b34003778c8\\artifacts\\A_v4_3_max_w_round_02_20260802.md"
+  },
+  "anti_join": {
+    "scope": "compatible V4.3 all_window max-completed-W identity only",
+    "completed_compatible_coordinate_count_before_plan": 12,
+    "active_or_pending_coordinate_count_before_plan": 0,
+    "proposed_coordinate_count": 504,
+    "proposed_unique_coordinate_count": 504,
+    "proposed_completed_overlap_count": 0,
+    "proposed_active_or_pending_overlap_count": 0,
+    "round_01_overlap_structurally_absent_because_m_not_4": true,
+    "launch_time_repeat_required": true
+  },
+  "grid_blocks": [
+    {
+      "method": "rolling_tr_sum",
+      "e": [40, 80, 120, 200, 320, 480, 720],
+      "bh": [120, 360, 720],
+      "trw": [6, 24],
+      "k": [0.75, 2.5],
+      "w": [3, 48, 192],
+      "m": [2.0, 8.0],
+      "speed_window_bars": [480],
+      "seed": "round_01_smoke_bounded_axes",
+      "objective": "all_four_current_views",
+      "design": "round_02_deterministic_broad_cartesian"
+    }
+  ],
+  "explicit_combos": []
+}

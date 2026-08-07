@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "release_version": "V4.41",
+  "release_kind": "minor",
+  "strategy_major_version": "V4.4",
+  "ranking_major_version": "V4.4",
+  "ranking_lineage_id": "k200m_v4_4_positive_entry_future_lineage",
+  "result_compatibility": "Completed V4.4 and V4.41-minor runs remain eligible for the same cumulative V4.4 ranking when their ranking lineage and result contracts match.",
+  "effective_date": "2026-08-08"
+}

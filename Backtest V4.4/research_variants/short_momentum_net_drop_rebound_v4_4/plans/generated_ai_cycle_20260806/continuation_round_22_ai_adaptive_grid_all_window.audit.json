@@ -1,0 +1,43 @@
+{
+  "status": "frozen_before_compute",
+  "plan": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\generated_ai_cycle_20260806\\continuation_round_22_ai_adaptive_grid_all_window.json",
+  "plan_sha256": "79d417407700940e918d45f8fc916e595ae83d1225bc1d4d750e289f256498ce",
+  "stage_id": "continuation_round_22_ai_adaptive_grid_all_window",
+  "phase": "adaptive-grid",
+  "output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_22_ai_adaptive_grid_all_window",
+  "completed_coordinate_count": 6707,
+  "pending_coordinate_count": 0,
+  "requested_coordinate_count": 33,
+  "internal_duplicate_count": 0,
+  "completed_overlap_count": 14,
+  "pending_overlap_count": 0,
+  "retained_new_coordinate_count": 19,
+  "block_counts": {
+    "adaptive_total_return_e": {
+      "requested": 7,
+      "retained": 4
+    },
+    "adaptive_scenario_1_total_bh": {
+      "requested": 7,
+      "retained": 1
+    },
+    "adaptive_average_ge20_trw": {
+      "requested": 7,
+      "retained": 6
+    },
+    "adaptive_non_gap_return_speed_window_bars": {
+      "requested": 7,
+      "retained": 4
+    },
+    "adaptive_low_drawdown_positive_w": {
+      "requested": 5,
+      "retained": 4
+    }
+  },
+  "resources": {
+    "workers": 4,
+    "batch_size": 8,
+    "minimum_free_memory_mb": 4096
+  },
+  "parameter_acceptance": "none"
+}

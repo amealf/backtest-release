@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "status": "approved",
+  "mode": "transfer_exact",
+  "source": {
+    "instrument_id": "K200_train",
+    "display_name": "K200（训）",
+    "sample_start": "2026-05-26 00:00:00",
+    "sample_end": "2026-07-08 23:52:00",
+    "timezone": "Asia/Seoul"
+  },
+  "source_test": {
+    "instrument_id": "K200_test",
+    "display_name": "K200（测）",
+    "sample_start": "2026-07-08 23:52:15",
+    "sample_end": "2026-08-07 03:21:45",
+    "timezone": "Asia/Seoul",
+    "evidence_role": "old_250_forward_test; new_100_posthoc_descriptive"
+  },
+  "target": {
+    "instrument_id": "SImain",
+    "display_name": "SI",
+    "sample_start": "2026-01-29 00:00:00",
+    "sample_end": "2026-02-23 23:59:45",
+    "timezone": "America/Chicago"
+  },
+  "bar_interval_seconds": 15,
+  "candidate_filter_contract": {
+    "new_candidate_count": 100,
+    "exclude_existing_si_candidate_count": 250,
+    "source_evidence": "closed K200 four-slice temporal migration only",
+    "si_results_read_for_selection": false,
+    "combined_score": false
+  },
+  "cost_bps": 3.568663594470046,
+  "workers": 4,
+  "incremental_parent_run": "k200_20260526_20260708__simain_20260129_20260223__combined_250_stricter_entry_v54_20260806",
+  "main_columns": [
+    "K200（训）总收益",
+    "K200（测）总收益",
+    "SI 总收益"
+  ],
+  "parameter_acceptance": "none"
+}

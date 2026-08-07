@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "policy_id": "causal_pending_buffer_recovery_or_confirmed_exclusion_v1",
+  "mode": "causal_pending_buffer",
+  "bar_seconds": 15,
+  "thresholds": {
+    "reference_hours": 84,
+    "positive_volume_median_ratio": 0.2,
+    "continuous_minutes": 30,
+    "minimum_low_share": 1.0
+  },
+  "baseline_availability": "normal_at_bar_completion_recovered_at_recovery_confirmation_excluded_never"
+}

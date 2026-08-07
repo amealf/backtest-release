@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "policy_id": "confirmed_low_activity_retroactive_baseline_exclusion_and_entry_gate_v4_4",
+  "mode": "pending_no_effect_confirmed_gate",
+  "bar_seconds": 15,
+  "thresholds": {
+    "reference_hours": 84,
+    "positive_volume_median_ratio": 0.2,
+    "continuous_minutes": 30,
+    "minimum_low_share": 1.0
+  },
+  "pending_behavior": "baseline_eligible_and_entries_allowed",
+  "confirmation_behavior": "exclude_from_run_start_for_later_baselines_cancel_unfilled_entries_and_block_new_entries",
+  "end_behavior": "first_normal_volume_atom_ends_gate_and_is_immediately_eligible"
+}

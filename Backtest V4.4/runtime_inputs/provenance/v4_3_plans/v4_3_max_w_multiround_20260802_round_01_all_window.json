@@ -1,0 +1,348 @@
+{
+  "schema_version": 4,
+  "status": "approved_for_execution_after_identity_and_plan_audit",
+  "campaign_id": "v4_3_max_w_multiround_20260802",
+  "stage_id": "round_01_all_window",
+  "stage_kind": "max_completed_w_broad_jump_round_01",
+  "predecessor_stage_ids": [],
+  "selection_provenance": "V4.3 max-completed-W Round 1: three provenance geometries from frozen V4.2 evidence only, evaluated under four independent current V4.3 views; historical metrics do not enter V4.3 ranking or acceptance.",
+  "source": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+  "data_preparation_manifest": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\runtime_inputs\\data_preparation\\data_preparation_manifest.json",
+  "scenario_definition": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\research_variants\\short_momentum_net_drop_rebound_v4_3\\plans\\v4_3_scenario_groups_single_select_combined_exit_20260801.json",
+  "train_start": "2026-05-26 00:00:00",
+  "train_end": "2026-07-08 23:52:00",
+  "entry_fill_mode": "calculated_threshold",
+  "entry_execution_policy": "wait_next_real_trade",
+  "entry_slippage": 0.0,
+  "baseline_sampling_policy": "all_window",
+  "exit_mode": "combined",
+  "resources": {
+    "workers": 3,
+    "batch_size": 12,
+    "minimum_free_memory_mb": 4096
+  },
+  "planned_output_root": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\results\\campaigns\\v4_3_max_w_multiround_20260802\\round_01_all_window",
+  "reserved_continuation_roots": [
+    "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\results\\campaigns\\v4_3_max_w_multiround_20260802\\round_02_all_window",
+    "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\results\\campaigns\\v4_3_max_w_multiround_20260802\\round_03_all_window"
+  ],
+  "identity_contract": {
+    "version_label": "V4.3",
+    "output_schema_version": 6,
+    "plan_fingerprint_schema_version": 7,
+    "rebound_baseline_policy_id": "max_completed_w_window_open_to_low_v1",
+    "trade_audit_schema_version": 2,
+    "trade_audit_schema_id": "v4_3_max_completed_w_drop_combined_exit_audit_v2",
+    "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_3_all_window_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_exit",
+    "result_semantics_id": "v4_3_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v2",
+    "baseline_filter_id": "all_window_market_no_baseline_exclusion_v4_3",
+    "source_manifest_sha256": "78fcea5452769fe14f531c4e3036fe7ba3b2513092a0ad1e43a5b7d495c949ec",
+    "source_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "data_preparation_manifest_sha256": "5a4cc09b04e0330ab6425fb7f5ff55dde70039933bb417e7791b516d77830cfb",
+    "scenario_definition_sha256": "d6db5d72be6cb9f498659588aa904cb10f634e8c1a23ba6aaabfed18c4efcdd6",
+    "engine_sha256": "8b5559313082813d9485d6868a2533f124ccf88fb0faaf83a164906b48e15ebd",
+    "runner_sha256": "880196a44d8a29e5ede8f8ef49e55775ee0ab3421e5ad4543bd8ee83a28e33ec"
+  },
+  "experiment_question": "Across three independent provenance geometries, how does a broad causal W ladder affect Scenario-1-qualified total return, unrestricted total return, and unrestricted average return at the >=10 and >=20 trade thresholds under the new max-completed-W rebound identity?",
+  "objective_contract": {
+    "views": [
+      {
+        "view_id": "scenario_1_qualified_total_return",
+        "scenario_id": "scenario_1",
+        "qualification_required": true,
+        "minimum_trade_count": null,
+        "metric": "train_return",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_total_return",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": null,
+        "metric": "train_return",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge10",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": 10,
+        "metric": "train_avg_trade",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      },
+      {
+        "view_id": "unrestricted_average_return_ge20",
+        "scenario_id": null,
+        "qualification_required": false,
+        "minimum_trade_count": 20,
+        "metric": "train_avg_trade",
+        "direction": "descending",
+        "tie_breaker": "combo_id"
+      }
+    ],
+    "single_composite_score": false,
+    "diagnostic_metrics_are_ranking_views": false,
+    "baseline_sampling_policy_partitions_are_separate": true,
+    "parameter_acceptance": "none_from_in_sample_multiround_campaign"
+  },
+  "dimension_contract": {
+    "method": "rolling_tr_sum",
+    "changed_axis": "w",
+    "w_values": [3, 12, 48, 192],
+    "w_jump_ratio": 4,
+    "provenance_geometries": [
+      {
+        "seed": "scenario_1_geometry",
+        "e": 120,
+        "bh": 360,
+        "trw": 20,
+        "k": 1.0,
+        "m": 4.0,
+        "speed_window_bars": 480
+      },
+      {
+        "seed": "unrestricted_total_geometry",
+        "e": 320,
+        "bh": 180,
+        "trw": 12,
+        "k": 1.1666666666666667,
+        "m": 4.0,
+        "speed_window_bars": 480
+      },
+      {
+        "seed": "unrestricted_average_geometry",
+        "e": 80,
+        "bh": 360,
+        "trw": 6,
+        "k": 3.0,
+        "m": 4.0,
+        "speed_window_bars": 480
+      }
+    ],
+    "raw_coordinate_count": 12,
+    "execution_coordinate_count": 12,
+    "all_other_trading_and_identity_fields_fixed": true
+  },
+  "round_progression_contract": {
+    "coordinate_budget": {
+      "round_01": 12,
+      "round_02_maximum": 12,
+      "round_03_maximum": 12,
+      "entire_direction_maximum": 36
+    },
+    "round_02_stage_id": "round_02_all_window",
+    "round_03_stage_id": "round_03_all_window",
+    "continuation_is_evidence_driven": true,
+    "round_02_requires_closed_round_01": true,
+    "round_03_requires_reproduced_round_02_evidence": true,
+    "round_03_is_terminal": true
+  },
+  "execution_gate": [
+    "Recompute and verify every identity and bound SHA-256 against the current closed source manifest.",
+    "Require exactly 12 requested coordinates, 12 unique combo IDs, zero compatible-completed overlap, and zero active-or-pending-plan overlap.",
+    "Require an empty isolated round_01_all_window output root and no competing raw, delivery, or cumulative writer lock.",
+    "Require workers=3, batch_size=12, minimum_free_memory_mb=4096, and measured available memory at or above the floor.",
+    "Stop before compute on plan, source, preparation, scenario, engine, runner, identity, schema, hash, lock, output, duplicate, resource, or anti-join drift."
+  ],
+  "continuation_gates": {
+    "scenario_1_qualified_total_return": "Continue only after a qualified finite positive-total and positive-gap-excluded row, or an ordered improvement across at least three W values in one explicit Scenario-1 qualification component with no regression in already-satisfied components.",
+    "unrestricted_total_return": "Continue only with finite positive-total and positive-gap-excluded evidence plus an ordered same-geometry total-return pattern across at least three W values; no trade-count filter.",
+    "unrestricted_average_return_ge10": "Continue only with train_trade_count >= 10, finite positive-total and positive-gap-excluded evidence, and an ordered same-geometry average-return pattern across at least three W values.",
+    "unrestricted_average_return_ge20": "Continue independently only with train_trade_count >= 20, finite positive-total and positive-gap-excluded evidence, and an ordered same-geometry average-return pattern across at least three W values."
+  },
+  "stop_conditions": [
+    "Close all 12 coordinates and immutable stage/cumulative delivery before interpretation or continuation.",
+    "Stop each independent view when its declared continuation evidence is absent; do not use one view to rescue another.",
+    "Stop interpretation on incomplete closure, nonfinite evidence, fill/wait/exit/lifecycle mismatch, or fixed-template failure.",
+    "Remain in the all_window partition; exclude_marked requires a separately motivated and authorized stage.",
+    "Stop the direction when all four views stop or after Round 3; never claim parameter acceptance from in-sample evidence."
+  ],
+  "delivery_contract": {
+    "fixed_historical_templates_required": true,
+    "stage_main_data_field": "highReturnViews",
+    "cumulative_main_data_field": "highReturnViews",
+    "high_return_view_count": 4,
+    "baseline_sampling_policy_partitions_are_separate": true,
+    "diagnostic_metrics_remain_tables_not_ranking_views": true,
+    "one_markdown_record_per_round": true,
+    "round_record_sections": ["why", "run", "observed", "next"]
+  },
+  "pre_execution_evidence": {
+    "source_manifest_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\research_variants\\short_momentum_net_drop_rebound_v4_3\\SOURCE_MANIFEST.json",
+    "source_manifest_sha256_before_plan_materialization": "78fcea5452769fe14f531c4e3036fe7ba3b2513092a0ad1e43a5b7d495c949ec",
+    "design_protocol_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\.omo\\teams\\019fbd76-9439-7b10-a7e1-6b34003778c8\\artifacts\\A_v4_3_max_w_multiround_design_protocol_20260802.md",
+    "round_record_path": "D:\\Code\\backtest-release\\Backtest V4.3 max-W rebound\\.omo\\teams\\019fbd76-9439-7b10-a7e1-6b34003778c8\\artifacts\\A_v4_3_max_w_round_01_20260802.md"
+  },
+  "anti_join": {
+    "scope": "compatible V4.3 identity only",
+    "completed_compatible_coordinate_count_before_plan": 0,
+    "active_or_pending_coordinate_count_before_plan": 0,
+    "proposed_coordinate_count": 12,
+    "proposed_unique_coordinate_count": 12,
+    "proposed_completed_overlap_count": 0,
+    "proposed_active_or_pending_overlap_count": 0,
+    "launch_time_repeat_required": true
+  },
+  "grid_blocks": [],
+  "explicit_combos": [
+    {
+      "method": "rolling_tr_sum",
+      "e": 120,
+      "bh": 360,
+      "trw": 20,
+      "k": 1.0,
+      "w": 3,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "scenario_1_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 120,
+      "bh": 360,
+      "trw": 20,
+      "k": 1.0,
+      "w": 12,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "scenario_1_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 120,
+      "bh": 360,
+      "trw": 20,
+      "k": 1.0,
+      "w": 48,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "scenario_1_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 120,
+      "bh": 360,
+      "trw": 20,
+      "k": 1.0,
+      "w": 192,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "scenario_1_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 320,
+      "bh": 180,
+      "trw": 12,
+      "k": 1.1666666666666667,
+      "w": 3,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_total_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 320,
+      "bh": 180,
+      "trw": 12,
+      "k": 1.1666666666666667,
+      "w": 12,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_total_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 320,
+      "bh": 180,
+      "trw": 12,
+      "k": 1.1666666666666667,
+      "w": 48,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_total_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 320,
+      "bh": 180,
+      "trw": 12,
+      "k": 1.1666666666666667,
+      "w": 192,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_total_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 80,
+      "bh": 360,
+      "trw": 6,
+      "k": 3.0,
+      "w": 3,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_average_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 80,
+      "bh": 360,
+      "trw": 6,
+      "k": 3.0,
+      "w": 12,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_average_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 80,
+      "bh": 360,
+      "trw": 6,
+      "k": 3.0,
+      "w": 48,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_average_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    },
+    {
+      "method": "rolling_tr_sum",
+      "e": 80,
+      "bh": 360,
+      "trw": 6,
+      "k": 3.0,
+      "w": 192,
+      "m": 4.0,
+      "speed_window_bars": 480,
+      "seed": "unrestricted_average_geometry",
+      "objective": "all_four_current_views",
+      "design": "round_01_broad_w_jump"
+    }
+  ]
+}

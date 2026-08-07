@@ -1,0 +1,197 @@
+<!doctype html>
+<!-- generated-by: v4.2-review-delivery -->
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>V4.41 研究审阅入口</title>
+  <script>
+    try {
+      document.documentElement.dataset.theme = localStorage.getItem("v4-1-review-theme") || "light";
+    } catch (error) {
+      document.documentElement.dataset.theme = "light";
+    }
+  </script>
+  <link rel="stylesheet" href="assets/v4_4_review.css">
+  <script src="assets/home.js" defer></script>
+</head>
+<body class="home-page">
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="返回 V4.4 页面顶部">
+      <span class="brand-version">V4.4</span>
+      <span>Research Review</span>
+    </a>
+    <div class="top-actions">
+      <nav class="section-nav" aria-label="页面章节">
+        <a href="#preparation">数据准备</a>
+        <a href="#repair">8 坐标验证</a>
+        <a href="#exploration">24 坐标探索</a>
+        <a href="#rankings">独立排名</a>
+        <a href="#shortlist">诊断候选</a>
+      </nav>
+      <a class="button button-quiet top-trade-link" href="trade_analysis/index.html">逐笔分析</a>
+      <button class="theme-button" id="theme-toggle" type="button" aria-label="切换深浅主题" aria-pressed="false">◐</button>
+    </div>
+  </header>
+
+  <main id="top" class="page-shell">
+    <section class="briefing" aria-labelledby="page-title">
+      <div class="briefing-copy">
+        <p class="version-line"><span class="status-dot status-dot-good" aria-hidden="true"></span>闭合诊断 · 参数接受状态：无</p>
+        <h1 id="page-title">V4.41 研究审阅入口</h1>
+        <p class="briefing-description">统一查看 V4.4 数据准备、8 坐标修复验证、24 坐标候选探索、独立目标排名与逐笔成交证据。当前证据来自完整训练样本和零滑点合同，所有候选保持诊断状态。</p>
+        <div class="briefing-actions">
+          <a class="button button-primary" href="trade_analysis/index.html">查看 2,385 笔交易</a>
+          <a class="button button-secondary" href="v4_4_review_manifest.json">打开交付 manifest</a>
+        </div>
+      </div>
+      <aside class="identity-panel" aria-label="V4.4 当前身份">
+        <h2>当前身份</h2>
+        <dl>
+          <div><dt>版本</dt><dd>{{VERSION_LABEL}}</dd></div>
+          <div><dt>策略</dt><dd class="mono compact-id" title="{{STRATEGY_ID}}">{{STRATEGY_ID}}</dd></div>
+          <div><dt>结果语义</dt><dd class="mono compact-id" title="{{RESULT_SEMANTICS_ID}}">{{RESULT_SEMANTICS_ID}}</dd></div>
+          <div><dt>数据来源</dt><dd class="mono">{{SOURCE_SHA_SHORT}}…</dd></div>
+          <div><dt>准备身份</dt><dd class="mono compact-id" title="{{PREPARED_IDENTITY}}">{{PREPARED_IDENTITY}}</dd></div>
+        </dl>
+      </aside>
+    </section>
+
+    <ol class="evidence-map" aria-label="V4.4 审阅路径">
+      <li><a href="#preparation"><span>数据</span>准备与低成交量审计</a></li>
+      <li><a href="#repair"><span>验证</span>8 个修复坐标</a></li>
+      <li><a href="#exploration"><span>探索</span>24 个新计算坐标</a></li>
+      <li><a href="#rankings"><span>比较</span>独立目标排名</a></li>
+      <li><a href="trade_analysis/index.html"><span>逐笔</span>真实成交柱证据</a></li>
+    </ol>
+
+    <section id="preparation" class="content-section" aria-labelledby="preparation-title">
+      <header class="section-header">
+        <div>
+          <p class="section-context">V4.4 data preparation</p>
+          <h2 id="preparation-title">数据准备与低成交量审计</h2>
+          <p>可疑低成交量区间在 pending 阶段暂缓进入基准；短暂恢复在确认后按时间顺序重入，达到 30 分钟的区间保持排除。K200 锁价、熔断与展示候选继续分开记录。</p>
+        </div>
+        <a class="button button-secondary" href="{{LOW_ACTIVITY_AUDIT_URL}}" target="_blank" rel="noreferrer">打开低成交审计</a>
+      </header>
+      <dl id="preparation-facts" class="fact-table loading-block" aria-live="polite">
+        <div><dt>数据状态</dt><dd>等待载入闭合统计…</dd></div>
+      </dl>
+    </section>
+
+    <section id="repair" class="content-section" aria-labelledby="repair-title">
+      <header class="section-header">
+        <div>
+          <p class="section-context">repair validation · 8 coordinates</p>
+          <h2 id="repair-title">8 坐标修复验证</h2>
+          <p>每种方法各选择高交易数与低绝对回撤坐标，在 V4.4 身份下重新计算。历史 V4 行仅保存为同坐标比较来源。</p>
+        </div>
+        <span class="section-status">manifest {{VALIDATION_MANIFEST_SHA_SHORT}}…</span>
+      </header>
+      <div id="repair-summary" class="summary-band loading-block">等待载入验证统计…</div>
+      <div id="repair-table" class="table-wrap" aria-live="polite">
+        <div class="table-loading">正在读取 8 坐标比较资料…</div>
+      </div>
+    </section>
+
+    <section id="exploration" class="content-section" aria-labelledby="exploration-title">
+      <header class="section-header">
+        <div>
+          <p class="section-context">promising exploration · 24 coordinates</p>
+          <h2 id="exploration-title">24 坐标候选探索</h2>
+          <p>两个基准方法 × 六个历史 V4 选择目标 × 每目标两项；全部坐标在 V4.4 下新计算，并与前述 8 个验证坐标零重叠。</p>
+        </div>
+        <span class="section-status">manifest {{PROMISING_MANIFEST_SHA_SHORT}}…</span>
+      </header>
+      <div id="exploration-summary" class="summary-band loading-block">等待载入候选探索统计…</div>
+      <div id="objective-summary" class="evidence-list loading-block" aria-live="polite"></div>
+    </section>
+
+    <section id="rankings" class="content-section" aria-labelledby="rankings-title">
+      <header class="section-header">
+        <div>
+          <p class="section-context">independent ranking views</p>
+          <h2 id="rankings-title">独立排名</h2>
+          <p>方法、目标与最低交易数各自选择。收益、笔均、缺口排除收益、低回撤、事件与短跌保持独立，没有合成分数。</p>
+        </div>
+      </header>
+      <div class="control-toolbar" aria-label="排名控制">
+        <label>方法
+          <select id="ranking-method">
+            <option value="rolling_tr_sum">滚动 TR 总和</option>
+          </select>
+        </label>
+        <label>基准采样
+          <select id="ranking-baseline-policy">
+            <option value="all_window">全部</option>
+            <option value="exclude_marked">排除标记</option>
+          </select>
+        </label>
+        <label>目标
+          <select id="ranking-objective">
+            <option value="absolute_return">总收益</option>
+            <option value="average_trade">笔均收益</option>
+            <option value="gap_excluded_return">排除缺口收益</option>
+            <option value="low_drawdown">低回撤</option>
+            <option value="event_01">event_01</option>
+            <option value="event_02">event_02</option>
+            <option value="dual_event_and">双事件 AND</option>
+            <option value="short_drop_3_15m">3–15 分钟短跌</option>
+          </select>
+        </label>
+        <label>最低交易数
+          <select id="ranking-minimum">
+            <option value="10">至少 10 笔</option>
+            <option value="20">至少 20 笔</option>
+            <option value="0">不限</option>
+          </select>
+        </label>
+        <div id="ranking-status" class="toolbar-status" role="status" aria-live="polite">排名资料载入中…</div>
+      </div>
+      <div id="ranking-table" class="table-wrap">
+        <div class="table-loading">正在读取独立排名…</div>
+      </div>
+    </section>
+
+    <section id="shortlist" class="content-section" aria-labelledby="shortlist-title">
+      <header class="section-header">
+        <div>
+          <p class="section-context">diagnostic shortlist · no acceptance</p>
+          <h2 id="shortlist-title">诊断候选</h2>
+          <p>每个方法／目标在至少 20 笔视图中的第 1 名去重形成 12 个坐标。重复入选原因全部保留；候选仍需成本、缺口与跨品种证据。</p>
+        </div>
+        <span class="state-label state-label-warning">未接受参数</span>
+      </header>
+      <div id="shortlist-table" class="table-wrap">
+        <div class="table-loading">正在读取诊断候选…</div>
+      </div>
+    </section>
+
+    <section id="trade-entry" class="content-section trade-entry-section" aria-labelledby="trade-entry-title">
+      <div>
+        <p class="section-context">trade-by-trade evidence</p>
+        <h2 id="trade-entry-title">逐笔成交分析</h2>
+        <p>覆盖本次闭合 campaign 的 2,385 笔交易。可按 combo、方法、E／BH／TRW／K／W／M、等待成交、退出原因、跨缺口与 synthetic 信号过滤。</p>
+        <a class="button button-primary" href="trade_analysis/index.html">进入逐笔分析</a>
+      </div>
+      <dl class="proof-list">
+        <div><dt>启动载入</dt><dd>页面壳与轻量交易目录</dd></div>
+        <div><dt>选择交易后</dt><dd>仅载入所属 combo 分块</dd></div>
+        <div><dt>开仓证据</dt><dd>源数据 OHLC、volume、trade count、synthetic 状态</dd></div>
+        <div><dt>返回路径</dt><dd>逐笔页顶部返回当前主入口</dd></div>
+      </dl>
+    </section>
+
+    <section class="provenance-section" aria-labelledby="provenance-title">
+      <h2 id="provenance-title">身份与哈希来源</h2>
+      <div id="provenance-list" class="provenance-list loading-block" aria-live="polite">正在读取输入哈希…</div>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <span>V4.4 closed diagnostic review</span>
+    <span>当前页面不接受参数 · 所有输出由 <a href="v4_4_review_manifest.json">v4_4_review_manifest.json</a> 闭合</span>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,1 @@
+candidate_id,experiment_block,search_mode,anchor_combo_id,diagnostic_type,hypothesis,method,baseline_sampling_policy,e,bh,trw,k,abs_floor_value,w,m,speed_window_bars,cost_bps,expected_behavior_change,evidence_summary,selection_reason,source_round,status

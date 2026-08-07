@@ -1,0 +1,222 @@
+{
+  "schema_version": 2,
+  "status": "active_all_window_rolling_high_return_round_1_prelaunch_ready",
+  "version_label": "V4.2",
+  "activated_on": "2026-08-01",
+  "change_summary": {
+    "entry_method": "calculated execution price replaces next-bar-open entry",
+    "entry_baseline_method": "rolling_tr_sum is the sole current method; tr_average is rejected",
+    "baseline_filter": "every finite TR15 atom inside the exact continuous BH window participates in the entry baseline; baseline_excluded and filter intervals are audit/chart-coloring only",
+    "workflow": "background multithreaded fixed-template delivery may overlap the next distinct stage computation; the main entry links to a generated scenario-requirements market viewer",
+    "active_exploration": "High-total/high-average Round 1 changes exactly one of M, W, or S around separate total-return and average-return anchors; four min10/min20 total/average views remain independent and Scenario 3 remains a separate promotion gate",
+    "historical_boundary": "V4.1 and causal-availability V4.2 source/results remain immutable historical evidence"
+  },
+  "strategy": {
+    "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_2_all_window_rolling_tr_sum_calculated_execution_price_combined_exit",
+    "result_semantics_id": "v4_2_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_combined_zero_extension_exit_results_v1",
+    "baseline_filter_id": "all_window_market_no_baseline_exclusion_v4_2",
+    "entry_baseline_method": "rolling_tr_sum",
+    "entry_fill_mode": "calculated_threshold",
+    "entry_fill_formula": "min(signal_bar_open, H - K * baseline)",
+    "entry_execution_policy": "wait_next_real_trade",
+    "maximum_wait_bars": 120,
+    "entry_slippage": 0.0,
+    "baseline_filter_policy": "use every finite TR15 atom inside the exact continuous BH window; baseline_excluded and filter intervals remain audit/chart-coloring only and change no backtest calculation",
+    "exit_mode": "combined",
+    "rebound_evaluated_before_speed": true,
+    "speed_window_bars": "coordinate_parameter",
+    "current_speed_window_values": [80, 160, 320, 480, 960]
+  },
+  "source": {
+    "path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks\\k200_ticks_20260523_to_20260723_20260723_014534\\data_clean_immediate_tick_recovery_filter_v2_20260729\\k200_clean_15s_session_filled.csv",
+    "sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4"
+  },
+  "data_preparation": {
+    "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\data_preparation_manifest.json",
+    "sha256": "77f7e261bd3876b827dddc7ce8b6dcdf502de28f9e51c76aaef8de55c0da342b",
+    "prepared_identity": "v4_2_static_baseline_ec04981dcf7fa74a_31b39ae5760b_11d3508e5e43",
+    "atom_count": 183056,
+    "baseline_excluded_atom_count": 3379,
+    "audit_marker_unexcluded_atom_count": 179677,
+    "backtest_baseline_eligible_atom_count": 183056,
+    "baseline_excluded_is_audit_only": true,
+    "universal_event_count": 3,
+    "applied_event_count": 10,
+    "event_count": 11,
+    "buffer_reinserted_atom_count": 72377,
+    "buffer_confirmed_excluded_atom_count": 2480,
+    "recovery_confirmation_count": 17159,
+    "filter_atoms_sha256": "b803df31d7a1bfec5f396d7148aa99227d0109b2c97e02262e8e92e6ac5740c2",
+    "filter_events_sha256": "d97c157728ffdc74231ab4c6e1414a41790a3ec2f4552076357a2251705c8cf1",
+    "audit_index_sha256": "174e7a831e7eb4dce8303c8292a6b02897c3fb652cd87b2afe9f3070ce2a2a2b"
+  },
+  "scenario_definition": {
+    "path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_scenario_groups_single_select_combined_exit_20260801.json",
+    "sha256": "fdb242160e0fe55dfd2420ef4cf0d1e78d5670cc5cfea8269d3c3fefde9918a7",
+    "scenario_schema_id": "v4_2_scenario_groups_single_select_combined_exit_v3_20260801",
+    "selection_mode": "single",
+    "required_scenario_id": "scenario_3"
+  },
+  "implementation": {
+    "data_preparation": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\data_preparation\\prepare_dataset.py", "sha256": "f1001b2083117738a59b886a73979e1848ff5bc5f22fede680cc2cb2af6e3caa"},
+    "low_activity": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\data_preparation\\low_activity.py", "sha256": "3c9b25d2e40dfbdb191f5cfc0911e8b4fec0c397adadb136ee0deaed6e99de4a"},
+    "audit_report": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\data_preparation\\audit_report.py", "sha256": "21e397affcb69826a4282f6151cde3e45505174dc9e79fef364336bff3a91ab4"},
+    "engine": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\v4_2_engine.py", "sha256": "d11515513ac795626e6a546225b455e9b723222cc301b7706025ac553ce3d4ad"},
+    "runner": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\run_v4_2_resumable_campaign.py", "sha256": "23ce1fbbc7ce6125fc6d5e48b9fc3db8735e7ffa76092948033799b49e934d5a"},
+    "delivery_worker": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\run_v4_2_delivery_worker.py", "sha256": "4d90d1460feb38a16d3e3ce7b8be5f4876b823da5f90b85795648abfa0edaa2c"},
+    "review_generator": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\build_v4_2_review_delivery.py", "sha256": "ef1dfd87244347269e63a5227602da1362e00e3f422ef6b02c9a1147fdab72fb"},
+    "stage_analyzer": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\analyze_v4_2_scenario_3_stage.py", "sha256": "467423eae49bf43b3f4192b15e1b92a431929b9614b8748df27aeb0f47c11bb4"},
+    "cumulative_builder": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\build_v4_2_combined_union_analysis.py", "sha256": "7a8db7b1e25e1d5768259b9a05b92fb3397bb9d855425341c173a89e4e2e9309"},
+    "plan_builder": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\build_v4_2_scenario_3_calculated_entry_plans.py", "sha256": "7e8e772e49c3d46687ca3147a5c4043d3e5fb6f9f779376856b06bb93d08057a"},
+    "sparse_leap_plan_builder": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\build_v4_2_scenario_3_sparse_leap_plan.py", "sha256": "6b1951529353cbefb7a722e20a3907385b95cc4f41200f94a23414bd858d7d34"},
+    "high_return_plan_builder": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\build_v4_2_high_return_round_1_plan.py", "sha256": "dff9d2706155cbb369fef675175254611b92160fe2dad82e6c9fa1bdb5bc0024"},
+    "pipeline": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\run_v4_2_scenario_3_pipeline.py", "sha256": "5cb4c5520db7c1b5ce31a5930fc57ed5db3e0bb3d7c9c0d3e92037b5ff38dc29"},
+    "browser_qa": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\qa_v4_2_scenario_3_stage.mjs", "sha256": "71ef3de87a0b5cb2756af06c9c6f3ac7fea68b6afd601df32c6442e0dcae8e45"},
+    "scenario_requirements_template": {"path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\review_templates\\scenario_requirements_market_selector.html", "sha256": "348bb9940887c64516c997c356b4f84902d276d333cba4df8a42fbdf39766a86"}
+  },
+  "execution": {
+    "campaign_id": "v4_2_high_return_min10_min20_leap_20260801",
+    "campaigns_root": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns",
+    "stable_cumulative_output": "F:\\V4_2_results\\all_completed_union_analysis",
+    "compute_workers": 3,
+    "batch_size": 12,
+    "minimum_free_memory_mb": 4096,
+    "review_workers": 4,
+    "compute_lock": ".v4_2_runner.lock",
+    "delivery_lock": ".v4_2_delivery.lock",
+    "union_lock": ".v4_2_union.lock",
+    "next_stage_compute_may_overlap_prior_delivery": true,
+    "current_plan_count": 1,
+    "planned_coordinate_count": 24,
+    "completed_coordinate_count": 1470,
+    "completed_trade_count": 350845,
+    "current_result_count": 1470,
+    "current_result_state": "two completed baseline stages remain published in immutable cumulative snapshot 35d8e9e2; high-return Round 1 has validate-only identity files and zero raw batches, trades, completion artifacts, analysis output, or HTML",
+    "status": "round_1_validate_only_ready_pending_repository_publication_and_explicit_start",
+    "completed_baseline": {
+      "campaign_id": "v4_2_scenario_3_all_window_rolling_20260801",
+      "completed_stage_count": 2,
+      "coordinate_count": 1470,
+      "trade_count": 350845,
+      "scenario_1_qualified_count": 8,
+      "scenario_2_qualified_count": 370,
+      "scenario_3_qualified_count": 0,
+      "analysis_manifest": {
+        "path": "F:\\V4_2_results\\all_completed_union_analysis\\snapshots\\35d8e9e2495027d344070f423a2d1fdb2d90c7b195ff5b71262798f5f23b4493\\analysis_manifest.json",
+        "sha256": "d91e90602cdacaab9b6f5cad9756e136c2e288f5d35bdd8ab2a7817b68aee066"
+      }
+    },
+    "plans": [
+      {
+        "stage_id": "s01_total_average_exit_axis_probe",
+        "planned_coordinate_count": 24,
+        "planned_output_root": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_high_return_min10_min20_leap_20260801\\s01_total_average_exit_axis_probe",
+        "plan": {
+          "path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_high_return_min10_min20_leap_20260801_s01_total_average_exit_axis_probe.json",
+          "sha256": "e56a7660df7f7e6982764e71050f008d638508e2fb8426efc73ed99bf0d24d68"
+        },
+        "audit": {
+          "path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_high_return_min10_min20_leap_20260801_s01_total_average_exit_axis_probe.audit.json",
+          "sha256": "2d54af8cda9e8a27b6411e8c23be24686888d9a7aa7e64f7c89dcfdf60fed909"
+        },
+        "validate_only_plan_fingerprint": "5bbd319465e6d7628fddb7f9a9de751213760652ce1682190049167fff4e3d09",
+        "source_manifest_predecessor_sha256_bound_inside_plan": "da5322361e19b55349bbea66350b0434182979af17b70bf414312790391252d4",
+        "source_manifest_binding_policy": "the plan records the predecessor manifest and this manifest binds the stable plan/audit, avoiding a circular self-hash dependency",
+        "validate_only": {
+          "status": "ready",
+          "output_schema_version": 4,
+          "plan_fingerprint_schema_version": 5,
+          "coordinate_count": 24,
+          "completed_coordinate_count": 0,
+          "pending_batch_count": 2,
+          "available_memory_mb_at_validation": 9098,
+          "grid_manifest_sha256": "843012ab42715fe32b4930b2fcff4b2f7a08307de1e92137cd7932fffe45b82a",
+          "input_plan_copy_sha256": "b74bceb538b6e6c16691a35edb0b75e91d71ddecfd411d84ba83ce43b8f9fea6",
+          "progress_sha256": "80824cc28cf877247955f449cc307b0b4fe14ecb00a8146df48a4680e6e727be",
+          "stage_manifest_sha256": "0a95010d94b101360ea24a7ae60b764ef07a2599fc0f843058377d4edf746fa7",
+          "runner_lock_sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+          "raw_result_artifacts_present": false,
+          "html_artifacts_present": false
+        }
+      }
+    ],
+    "excluded_incomplete_plan": {
+      "campaign_id": "v4_2_scenario_3_sparse_leap_20260801",
+      "stage_id": "s01_exit_axis_large_step_probe",
+      "coordinate_count": 24,
+      "plan_path": "research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_scenario_3_sparse_leap_20260801_s01_exit_axis_large_step_probe.json",
+      "plan_sha256": "4302da66f215a9aacb5f6db6f4dd77887723f57bf376d6b9ecf5298fdf3f3a1b",
+      "status": "stage_not_complete_anti_join_only"
+    }
+  },
+  "historical_causal_v4_2": {
+    "archive_root": "F:\\V4_2_archive\\pre_static_baseline_20260801",
+    "archive_manifest": "F:\\V4_2_archive\\pre_static_baseline_20260801\\archive_manifest.json",
+    "archive_manifest_sha256": "4348d9708b3d31025921e39a7ae796f0e8189e0817e31d351e99a633156e7d3b",
+    "planned_coordinate_count": 252,
+    "completed_stage_coordinate_counts": [108, 144],
+    "status": "archived_incompatible_with_current_static_marker_identity"
+  },
+  "repository_export": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2",
+    "branch": "codex/v4-2-only-export",
+    "base": "origin/main",
+    "history_policy": "ordinary_history_no_orphan_no_rewrite",
+    "payload_policy": "V4.2-only allowlist with external hash-pinned data and historical templates excluded from Git",
+    "status": "v4_2_only_repository_published_with_local_high_return_prelaunch_changes_pending",
+    "current_origin_main_commit": "25cdfa43114dae9b3c5600d7aa6930d7d32de497",
+    "commit_status": "published_baseline_plus_uncommitted_high_return_plan_delivery_and_qa_changes",
+    "push_status": "baseline_pushed_current_high_return_bytes_not_pushed",
+    "compute_gate": "exact current implementation and plan bytes must be committed and pushed, all technical gates must pass, and the user must provide a new explicit start instruction; validate-only does not authorize compute"
+  },
+  "presentation": {
+    "historical_v4_trade_template": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\rebound_only\\campaigns\\rbw13_v4_extreme_activity_filtered_20260729\\all_completed_union_analysis\\trade_explain\\index.html",
+    "historical_v4_trade_template_sha256": "c5c4964aa8ec14478a4ed60adb8e094d4890cba149006e3c454a55bf5ac7b146",
+    "market_selector_source": "D:\\Code\\macro\\yilimi-market-analysis-market-intuition-fix\\static\\intraday-analysis\\market-intuition-selector.html",
+    "market_selector_source_sha256": "b14e62ff5b15f20c2d1f4533fee858aa4129c8a626d26ac1e6ae4f3d21e4a214",
+    "scenario_requirements_template": "research_variants\\short_momentum_net_drop_rebound_v4_2\\review_templates\\scenario_requirements_market_selector.html",
+    "scenario_requirements_template_sha256": "348bb9940887c64516c997c356b4f84902d276d333cba4df8a42fbdf39766a86",
+    "scenario_requirements_route": "scenario_requirements\\index.html?scenario={scenario_id}",
+    "scenario_requirements_policy": "read the current trade-review full OHLC and render immutable scenario-definition intervals; presentation does not change qualification or trades",
+    "high_return_views": [
+      "min10_total_return",
+      "min10_average_trade",
+      "min20_total_return",
+      "min20_average_trade"
+    ],
+    "high_return_ranking_policy": "each view ranks only by its named metric with combo_id as the exact-tie breaker; Scenario 3 remains a separate promotion gate",
+    "current_delivery": {
+      "snapshot_id": "35d8e9e2495027d344070f423a2d1fdb2d90c7b195ff5b71262798f5f23b4493",
+      "snapshot_root": "F:\\V4_2_results\\all_completed_union_analysis\\snapshots\\35d8e9e2495027d344070f423a2d1fdb2d90c7b195ff5b71262798f5f23b4493",
+      "analysis_manifest_sha256": "d91e90602cdacaab9b6f5cad9756e136c2e288f5d35bdd8ab2a7817b68aee066",
+      "completion_manifest_sha256": "1a56ea7feded29dae1ef859c38a15e243b9dcb8f50be8072cf53d8a59b4a3964",
+      "main_entry_sha256": "d8a3d568d558aa649bbb7f1c2d050d7ea0eeb8eac2085c92fa404ebe8f1b4eba",
+      "trade_entry_sha256": "9c1ca2725ff9222c9694bece29552bccc6978893d05b60532d7291790b46ba3c",
+      "trade_review_manifest_sha256": "6e1dd04616d35820cb73f0b34728744d77aea7fd1b645d37fce381652183215b",
+      "scenario_requirements_entry_sha256": "c7325eab57393543e26534e7ebb33d73300ae06de2c19e277cc40b683fad5a7c",
+      "scenario_requirements_data_sha256": "46c0a28003356b853fb3f99801e0de46f0bbc1b2e3c9dc7fcc0657b584f01aea",
+      "qa_result_sha256": "a20689c25c36d3b0837edf7738bf4c5912c06ea1b3169258d317b61ffac8b91c",
+      "current_snapshot_sha256": "9049b09ff1acc20dd4f0b4d1ac14fb48ded1400db3e7974c5caaa16c12f26e86"
+    },
+    "filter_overlay_id": "v4_2_filter_audit_palette_static_baseline_v1",
+    "filter_overlay_policy": "reuse the filtering-audit HTML colors for applied universal, price-lock, circuit-halt, and call-auction intervals",
+    "stage_main_and_trade_required": true,
+    "cumulative_main_and_trade_required": true
+  },
+  "validation": {
+    "python_tests_passed": 48,
+    "python_tests_skipped_for_unavailable_current_result_artifacts": 2,
+    "review_delivery_focused_tests_passed": 5,
+    "review_delivery_focused_tests_skipped_for_unavailable_current_results": 0,
+    "review_delivery_test_file_sha256": "127c83232b055f25dc6e5ae5f7f91dd0af2f33608d33597766589df1034e5918",
+    "data_preparation_status": "complete_and_engine_load_validated",
+    "high_return_plan_test_file_sha256": "0b4d125f5480ff8c5d6b59dc16479f779981dc58d30956b7e624a7cc1e8f08c1",
+    "four_view_delivery_test_file_sha256": "00ca604edbb8de3fd50657d90816d81008af3616c7d4ee9bda30c32771cc0192",
+    "high_return_plan_focused_tests_passed": 2,
+    "high_return_prelaunch_focused_tests_passed": 7,
+    "browser_qa_node_syntax_check": "passed",
+    "plan_validation_status": "high_return_round_1_plan_passed_24_unique_coordinates_with_zero_overlap_against_1470_completions_and_24_incomplete_sparse_ids",
+    "browser_qa_status": "four-view and manifest-valid empty/non-empty Scenario-3 QA source is bound; runtime browser QA awaits a completed immutable high-return stage"
+  },
+  "parameter_acceptance": "none"
+}

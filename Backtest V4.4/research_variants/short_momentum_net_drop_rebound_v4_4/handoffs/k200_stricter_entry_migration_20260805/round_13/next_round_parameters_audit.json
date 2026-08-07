@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "ready_for_plan_binding",
+  "candidate_count": 3,
+  "internal_duplicate_count": 0,
+  "completed_overlap_count": 0,
+  "active_overlap_count": 0,
+  "pending_overlap_count": 0,
+  "confirmation_only": true,
+  "confirmation_reason": "The user requested a narrow test of whether increased entry difficulty lowers trade count and helps returns. This batch tests one K direction and cannot support a global convergence claim."
+}

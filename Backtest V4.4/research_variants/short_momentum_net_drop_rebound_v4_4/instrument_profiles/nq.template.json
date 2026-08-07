@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "status": "requires_user_input",
+  "instrument_id": "nq",
+  "display_name": "Nasdaq-100 Futures",
+  "timezone": "America/Chicago",
+  "bar_seconds": 15,
+  "strategy_contract_id": "short_momentum_net_drop_rebound_v4_4_cross_instrument_core_v2_positive_entry",
+  "ranking_lineage_id": "nq_replace_with_sample_specific_lineage",
+  "data": {
+    "path": null,
+    "preparation_manifest": null
+  },
+  "cost_model": {
+    "path": null
+  },
+  "gap_policy": {
+    "status": "requires_user_input",
+    "policy_id": null,
+    "mode": null,
+    "config": {"path": null, "size_bytes": null, "sha256": null},
+    "implementation": {"path": null, "size_bytes": null, "sha256": null}
+  },
+  "low_activity_policy": {
+    "status": "requires_user_input",
+    "policy_id": null,
+    "mode": null,
+    "config": {"path": null, "size_bytes": null, "sha256": null},
+    "implementation": {"path": null, "size_bytes": null, "sha256": null}
+  },
+  "scenario_set": null,
+  "required_user_inputs": [
+    "market_data_and_preparation_manifest",
+    "commission_slippage_and_any_fx_conversion",
+    "gap_policy",
+    "low_activity_thresholds_or_explicit_disabled_policy",
+    "sample_interval_and_ranking_lineage_id"
+  ]
+}

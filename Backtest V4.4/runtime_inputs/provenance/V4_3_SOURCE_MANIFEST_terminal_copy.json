@@ -1,0 +1,262 @@
+{
+  "schema_version": 3,
+  "status": "gap_contract_source_closed_round_01_delivery_refresh_pending_round_02_plan_pending",
+  "version_label": "V4.3",
+  "strategy_id": "net_drop_rebound_entry_peak_anchor_v4_3_all_window_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_exit",
+  "rebound_only_strategy_id": "net_drop_rebound_entry_peak_anchor_v4_3_all_window_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open",
+  "result_semantics_id": "v4_3_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v2",
+  "raw_output_schema_version": 6,
+  "plan_fingerprint_schema_version": 7,
+  "rebound_baseline_policy_id": "max_completed_w_window_open_to_low_v1",
+  "trade_audit_schemas": {
+    "rebound_only": {
+      "version": 2,
+      "id": "v4_3_max_completed_w_drop_execution_audit_v2"
+    },
+    "combined": {
+      "version": 2,
+      "id": "v4_3_max_completed_w_drop_combined_exit_audit_v2"
+    }
+  },
+  "primary_view_contract": {
+    "views": [
+      "scenario_1_qualified_total_return",
+      "unrestricted_total_return",
+      "unrestricted_average_return_ge10",
+      "unrestricted_average_return_ge20"
+    ],
+    "ranking_metrics": [
+      "train_return",
+      "train_avg_trade"
+    ],
+    "tie_breaker": "combo_id",
+    "gap_excluded_return_role": "display_only_gap_dependence_audit",
+    "gap_excluded_return_filters_or_ranks": false,
+    "combined_score": false,
+    "automatic_parameter_acceptance": false
+  },
+  "default_baseline_sampling_policy": "all_window",
+  "supported_baseline_sampling_policies": [
+    "all_window",
+    "exclude_marked"
+  ],
+  "strategy_ids_by_baseline_sampling_policy": {
+    "all_window": "net_drop_rebound_entry_peak_anchor_v4_3_all_window_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_exit",
+    "exclude_marked": "net_drop_rebound_entry_peak_anchor_v4_3_exclude_marked_rolling_tr_sum_calculated_execution_price_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_exit"
+  },
+  "result_semantics_ids_by_baseline_sampling_policy": {
+    "all_window": "v4_3_all_window_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v2",
+    "exclude_marked": "v4_3_exclude_marked_rolling_tr_sum_calculated_threshold_wait_next_real_trade_short_adverse_slippage_0_max_completed_w_drop_rebound_pending_exit_next_real_trade_open_combined_zero_extension_exit_results_v2"
+  },
+  "baseline_filter_ids_by_baseline_sampling_policy": {
+    "all_window": "all_window_market_no_baseline_exclusion_v4_3",
+    "exclude_marked": "static_baseline_marker_exclusion_v4_3"
+  },
+  "method_contract": {
+    "entry_baseline_method": "rolling_tr_sum",
+    "baseline_window": "exactly BH policy-eligible finite TR15 atoms ending at or before strict H inside one continuous segment",
+    "baseline_sampling_policies": {
+      "all_window": "default; every finite TR15 atom is eligible and baseline_excluded remains audit/chart evidence",
+      "exclude_marked": "finite TR15 atoms are eligible only when baseline_excluded is false; older eligible atoms backfill BH"
+    },
+    "synthetic_bar_policy": "synthetic status is independent of baseline_excluded; neither supported policy removes every synthetic bar",
+    "entry_fill_mode": "calculated_threshold",
+    "rebound_baseline": {
+      "policy_id": "max_completed_w_window_open_to_low_v1",
+      "candidate": "open[start]-low[end] for every completed in-position bar",
+      "observed_bar_count": "min(W, continuous_run[end])",
+      "candidate_filter": "positive finite values only",
+      "effective_timing": "candidate from the current completed bar becomes eligible on the next bar",
+      "aggregation": "monotonic maximum within one actual position",
+      "entry_reset": "clear all max-W state at every actual entry",
+      "same_signal_bar_entry": "evaluate with the candidate ending at signal_index-1; if no exit, apply the signal-bar candidate for the next bar",
+      "pending_entry": "apply the completed signal-bar candidate on the later fill bar",
+      "strict_new_low_check": "update active_low, then compare bar close against the frozen prior-completed-bar basis",
+      "ordinary_bar_check": "compare bar high/open against the frozen prior-completed-bar basis"
+    },
+    "pending_entry": {
+      "fill": "first_real_trade_bar_open",
+      "maximum_wait_bars": 120,
+      "price_retrigger_required": false,
+      "higher_high_cancellation": false,
+      "structural_reversal_cancellation": false,
+      "continuity_break_cancellation": true
+    },
+    "exit_precedence": [
+      "rebound_threshold",
+      "downside_speed_below_threshold"
+    ],
+    "pending_exit": {
+      "trigger_scope": "rebound_or_speed_signal_on_non_real_trade_bar",
+      "frozen_fields": [
+        "first_trigger_reason",
+        "trigger_time",
+        "theoretical_exit_price",
+        "trigger_evidence"
+      ],
+      "position_remains_open": true,
+      "fill": "next_real_trade_bar_open",
+      "flat_reset_after_actual_fill": true
+    }
+  },
+  "runtime_inputs": {
+    "manifest_path": "runtime_inputs/RUNTIME_INPUTS.json",
+    "manifest_sha256": "df36b83c9f05935eec88d7fc16e5b7dd784ca465099621c804ae5ae220f076df",
+    "manifest_size_bytes": 2429,
+    "path_policy": "repository_relative_active_runtime"
+  },
+  "data_preparation": {
+    "manifest_path": "runtime_inputs/data_preparation/data_preparation_manifest.json",
+    "manifest_sha256": "5a4cc09b04e0330ab6425fb7f5ff55dde70039933bb417e7791b516d77830cfb",
+    "prepared_identity": "v4_3_policy_neutral_baseline_marker_ec04981dcf7fa74a_7b7722fb792c_4d70961187e1",
+    "pipeline_version": "research_data_preparation_v4_3_policy_neutral_baseline_marker_20260802"
+  },
+  "scenario_definition": {
+    "path": "research_variants/short_momentum_net_drop_rebound_v4_3/plans/v4_3_scenario_groups_single_select_combined_exit_20260801.json",
+    "sha256": "d6db5d72be6cb9f498659588aa904cb10f634e8c1a23ba6aaabfed18c4efcdd6",
+    "schema_id": "v4_3_scenario_groups_single_select_combined_exit_v3_20260801",
+    "selection_mode": "single"
+  },
+  "implementation": {
+    "engine": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/v4_3_engine.py",
+      "sha256": "8b5559313082813d9485d6868a2533f124ccf88fb0faaf83a164906b48e15ebd",
+      "size_bytes": 95212
+    },
+    "runner": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/run_v4_3_resumable_campaign.py",
+      "sha256": "880196a44d8a29e5ede8f8ef49e55775ee0ab3421e5ad4543bd8ee83a28e33ec",
+      "size_bytes": 77475
+    },
+    "delivery_worker": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/run_v4_3_delivery_worker.py",
+      "sha256": "9c16ac25eddef01bbfdb781b36371faecd77d2b2099a67684f1a9e8c4ad517aa",
+      "size_bytes": 9774
+    },
+    "scenario_groups": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/scenario_groups.py",
+      "sha256": "8fb41e329a1fbd2ed8583afa0b586d1b3cc0226cfd12a7e42893377ec195a79f",
+      "size_bytes": 14767
+    },
+    "stage_analyzer": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/analyze_v4_3_scenario_3_stage.py",
+      "sha256": "868fa5efc9b0c6620485a54b6ba33a9505fab2f9dce579fdad2dee8d61c5408a",
+      "size_bytes": 89903
+    },
+    "cumulative_builder": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/build_v4_3_combined_union_analysis.py",
+      "sha256": "7d13fc1996ca8fe187fb639057859dc6da84a5ea99b9c18557e88a7692d79a39",
+      "size_bytes": 43605
+    },
+    "review_generator": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/build_v4_3_review_delivery.py",
+      "sha256": "2cc0a85d94524a3a720989f8c3800d0a6c037e1e88bb9476cd5e0b0ec540eb42",
+      "size_bytes": 106042
+    },
+    "preparation": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/data_preparation/prepare_dataset.py",
+      "sha256": "548cc4df829b95526d23715e288d6119e5da1a8fb47921491d1f24bf288518ff",
+      "size_bytes": 17001
+    },
+    "low_activity": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/data_preparation/low_activity.py",
+      "sha256": "d9772798039957bd3f8dd9fd2052a2ece636ec1b8541e2925fdec00d0cd944a1",
+      "size_bytes": 28885
+    },
+    "preparation_report": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/data_preparation/audit_report.py",
+      "sha256": "01a881bbb67ad04b692e4cda0d8a9fe2b610a2f7d9eb3c2f7bcb6f328a810789",
+      "size_bytes": 20196
+    }
+  },
+  "validation_sources": {
+    "stage_qa": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/qa_v4_3_scenario_3_stage.mjs",
+      "sha256": "34db6ab6fc79e1360274e513a916cec8e1ab55f08b1a40909fb8c26f433b3d0d",
+      "size_bytes": 21059
+    },
+    "engine_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/test_v4_3_engine.py",
+      "sha256": "e17b57c2fb56ad9a546b2d11d4f369814f87d9d46fe1c6e60e4d25bf4faf811b",
+      "size_bytes": 20484
+    },
+    "runner_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/test_run_v4_3_resumable_campaign.py",
+      "sha256": "654bc3a2d6875ecc7caa41da1e2ebeb8f90dceb2efc834bc91725de80b534cd9",
+      "size_bytes": 13205
+    },
+    "review_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/test_build_v4_3_review_delivery.py",
+      "sha256": "9f9331c3e9aafdf02272861ad0d285711abbcb49bed260580f5bd4d7aed122bb",
+      "size_bytes": 25142
+    },
+    "scenario_delivery_tests": {
+      "path": "research_variants/short_momentum_net_drop_rebound_v4_3/code/test_scenario_requirements_delivery.py",
+      "sha256": "f8a2a0b96bfd8e5ca84c24597385b2a213af4eaa43806262f4baeaabfe4d2841",
+      "size_bytes": 5479
+    },
+    "historical_template_gates": {
+      "main_sha256": "ef7ea69d9648d6fc84511f9753e7e2c07f36e73272b5e15b7ef606d7db274a72",
+      "trade_sha256": "c5c4964aa8ec14478a4ed60adb8e094d4890cba149006e3c454a55bf5ac7b146",
+      "plotly_sha256": "91c4c2879c1cee9f5cab0693f4d7c27773cbe7e22ab6252e5eef0ccfc7f2a7ef"
+    }
+  },
+  "campaign_state": {
+    "approved_plan_count": 1,
+    "approved_plan_path": "research_variants/short_momentum_net_drop_rebound_v4_3/plans/v4_3_max_w_multiround_20260802_round_01_all_window.json",
+    "approved_stage_id": "round_01_all_window",
+    "completed_coordinate_count": 12,
+    "result_count": 1,
+    "round_01_plan_sha256": "36f9f47fd1c49ac1be68abf7a0f146b81d667c115123b385dde31239daccdc80",
+    "round_01_plan_fingerprint": "da15e3965696637b55ac582d58d8fdd0eea54e2ae0c814bf2e444edd3f0adfec",
+    "round_01_completion_manifest_sha256": "3a3428b5d5f8b8f24db07b0d8f8ed733a03a48c6950e7a3e63196c7df4e273ca",
+    "round_01_trade_count": 1196,
+    "round_01_delivery": {
+      "status": "superseded_pending_gap_contract_refresh",
+      "superseded_reason": "user corrected gap-excluded return to display-only audit; the source contract is closed before one corrected derived refresh",
+      "immutable_union_snapshot": "3b1732df333f48f94d36cbb2c8990671ba96230b7972b66f6c472d70dad0ce87",
+      "stage_analysis_manifest_sha256": "ab71819fad49a33d3d4e842231339eed86bd323a0caa185ce9fee1f09cd64c6d",
+      "stage_trade_manifest_sha256": "d8f3bb62edef6176af1d56db38038c55da0718b14a084f616c4cfdcf3d1953eb",
+      "union_analysis_manifest_sha256": "15aacdea67ce4a5b925e4d0d879899a9f5f9005476bd3895a105b3b1a10351aa",
+      "union_trade_manifest_sha256": "4e93654376e99f67a0ca375a16854828951609261f635176309935398460e19c",
+      "main_entry_sha256": "dd70a0a125e7ee0261595be07f34bae7691432bbf139067c69ce7b2e1031135e",
+      "trade_entry_sha256": "330a14176badb4606d8732741887bc0b6ef828e290d5bd042047139f3d0e303c",
+      "review_workers": 4,
+      "browser_states_per_stage_and_union": 160,
+      "desktop_mobile_qa_passed": true,
+      "evidence_path": ".omo/teams/019fbd76-9439-7b10-a7e1-6b34003778c8/artifacts/C_round01_delivery_qa_20260802_v1.json",
+      "evidence_sha256": "7c5e2033305a2479a80e4121b87d7128071a9a008a2e8dd1e24f23bbde56b14a"
+    },
+    "next_stage_id": "round_02_all_window",
+    "parameter_acceptance": "none",
+    "compute_authorized": false,
+    "launch_gate": "Round 2 requires member-A bounded plan status approved_for_execution, identity binding to this manifest, anti-join against Round-1 completed combo IDs, an empty round_02_all_window root, and a fresh 3-worker/12-coordinate/4096-MiB launch audit"
+  },
+  "result_roots": {
+    "campaigns": "results/campaigns",
+    "cumulative_delivery": "results/all_completed_union_analysis",
+    "current_union_snapshot": null,
+    "current_union_status": "gap_contract_corrected_refresh_pending"
+  },
+  "provenance": {
+    "directory": "runtime_inputs/provenance",
+    "historical_absolute_paths_are_records_only": true,
+    "runtime_dependency": false,
+    "round_01_compute_time_source_manifest": {
+      "path": ".omo/teams/019fbd76-9439-7b10-a7e1-6b34003778c8/artifacts/B_SOURCE_MANIFEST_round01_compute_time_78fcea5452769fe1.json",
+      "sha256": "78fcea5452769fe14f531c4e3036fe7ba3b2513092a0ad1e43a5b7d495c949ec",
+      "size_bytes": 10757
+    },
+    "post_run_analysis_tool_repair": {
+      "scope": "analyzer and directly relevant review tests only",
+      "reason": "accept exact audited plan status and exact same-signal immediate-rebound pre-signal max-W source while retaining fail-closed applied-state boundaries",
+      "raw_stage_changed": false,
+      "round_01_plan_changed": false,
+      "engine_changed": false,
+      "runner_changed": false,
+      "all_round_01_trade_audits_passed": 1196,
+      "pytest_passed": 64,
+      "pytest_skipped_unavailable_historical_fixtures": 2
+    }
+  }
+}

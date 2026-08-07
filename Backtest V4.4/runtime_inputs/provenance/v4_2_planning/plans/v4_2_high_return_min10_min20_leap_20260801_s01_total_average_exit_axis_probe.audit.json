@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "plan_id": "v4_2_high_return_min10_min20_leap_20260801_s01_total_average_exit_axis_probe",
+  "checks": {
+    "frozen_memo_sha256": true,
+    "exact_24_combo_ids_and_order": true,
+    "two_12_coordinate_plan_order_batches": true,
+    "completed_compatible_count_1470": true,
+    "incomplete_sparse_count_24": true,
+    "completed_overlap_zero": true,
+    "incomplete_sparse_overlap_zero": true,
+    "four_independent_analysis_views": true,
+    "resources_3_12_4096": true,
+    "explicit_start_gate_retained": true
+  },
+  "plan": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_high_return_min10_min20_leap_20260801_s01_total_average_exit_axis_probe.json",
+    "sha256": "e56a7660df7f7e6982764e71050f008d638508e2fb8426efc73ed99bf0d24d68",
+    "size_bytes": 33557
+  },
+  "planner": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\code\\build_v4_2_high_return_round_1_plan.py",
+    "sha256": "dff9d2706155cbb369fef675175254611b92160fe2dad82e6c9fa1bdb5bc0024",
+    "size_bytes": 21384
+  },
+  "design_memo": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\.omo\\teams\\team-6e3b2f23\\artifacts\\A_v4_2_high_return_min10_min20_round_design_20260801.md",
+    "sha256": "32a4e0e7fd1bc30415a65c7a6e9d7151becda51a75928f7a00efa5815bc2d3f4",
+    "size_bytes": 18636
+  },
+  "source_manifest": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\SOURCE_MANIFEST.json",
+    "sha256": "da5322361e19b55349bbea66350b0434182979af17b70bf414312790391252d4",
+    "size_bytes": 16026
+  },
+  "source": {
+    "path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks\\k200_ticks_20260523_to_20260723_20260723_014534\\data_clean_immediate_tick_recovery_filter_v2_20260729\\k200_clean_15s_session_filled.csv",
+    "sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "size_bytes": 42822886
+  },
+  "data_preparation_manifest": {
+    "path": "F:\\V4_2_filtered_data\\k200_ec04981d_static_baseline_v4_2_20260801\\data_preparation_manifest.json",
+    "sha256": "77f7e261bd3876b827dddc7ce8b6dcdf502de28f9e51c76aaef8de55c0da342b",
+    "size_bytes": 6174
+  },
+  "scenario_definition": {
+    "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_scenario_groups_single_select_combined_exit_20260801.json",
+    "sha256": "fdb242160e0fe55dfd2420ef4cf0d1e78d5670cc5cfea8269d3c3fefde9918a7",
+    "size_bytes": 2624
+  },
+  "current_union_analysis": {
+    "path": "F:\\V4_2_results\\all_completed_union_analysis\\snapshots\\35d8e9e2495027d344070f423a2d1fdb2d90c7b195ff5b71262798f5f23b4493\\analysis_manifest.json",
+    "sha256": "d91e90602cdacaab9b6f5cad9756e136c2e288f5d35bdd8ab2a7817b68aee066",
+    "size_bytes": 16815
+  },
+  "anti_join": {
+    "completed_compatible_coordinate_count": 1470,
+    "incomplete_sparse_plan_coordinate_count": 24,
+    "proposed_coordinate_count": 24,
+    "proposed_unique_coordinate_count": 24,
+    "proposed_completed_overlap_count": 0,
+    "proposed_incomplete_sparse_overlap_count": 0,
+    "completed_sources": [
+      {
+        "campaign_id": "v4_2_scenario_3_all_window_rolling_20260801",
+        "stage_id": "s01_short_e_entry_reachability",
+        "coordinate_count": 840,
+        "completion_manifest": {
+          "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_scenario_3_all_window_rolling_20260801\\s01_short_e_entry_reachability\\completion_manifest.json",
+          "sha256": "7b1794219b6658370c962602f6c36d7c698dd1fa72dfc3ee9de9771bfd83668a",
+          "size_bytes": 2895
+        },
+        "stage_summary": {
+          "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_scenario_3_all_window_rolling_20260801\\s01_short_e_entry_reachability\\stage_summary.csv",
+          "sha256": "cdadc5d88356e0213bde4f43917ee36279c068e76d3cae2d8fbec0d8c60853f6",
+          "size_bytes": 508521
+        }
+      },
+      {
+        "campaign_id": "v4_2_scenario_3_all_window_rolling_20260801",
+        "stage_id": "s02_long_e_preperiod_lifecycle",
+        "coordinate_count": 630,
+        "completion_manifest": {
+          "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_scenario_3_all_window_rolling_20260801\\s02_long_e_preperiod_lifecycle\\completion_manifest.json",
+          "sha256": "b3aac47606606bd891d6e246bd53da2de748f0736289045854e277a5449d0065",
+          "size_bytes": 2895
+        },
+        "stage_summary": {
+          "path": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_scenario_3_all_window_rolling_20260801\\s02_long_e_preperiod_lifecycle\\stage_summary.csv",
+          "sha256": "b9de949af2d5d76ae18dcd1428a220115720d371df658b8a86a7535e7894032b",
+          "size_bytes": 382026
+        }
+      }
+    ],
+    "incomplete_sparse_source": {
+      "campaign_id": "v4_2_scenario_3_sparse_leap_20260801",
+      "stage_id": "s01_exit_axis_large_step_probe",
+      "coordinate_count": 24,
+      "plan": {
+        "path": "D:\\Code\\backtest-release\\Backtest V4.2\\research_variants\\short_momentum_net_drop_rebound_v4_2\\plans\\v4_2_scenario_3_sparse_leap_20260801_s01_exit_axis_large_step_probe.json",
+        "sha256": "4302da66f215a9aacb5f6db6f4dd77887723f57bf376d6b9ecf5298fdf3f3a1b",
+        "size_bytes": 29568
+      },
+      "completion_manifest_present": false
+    }
+  },
+  "planned_output_root": "F:\\Backtest test 6.11\\K200_short_momentum_dual_exit\\v4_2_calculated_entry\\campaigns\\v4_2_high_return_min10_min20_leap_20260801\\s01_total_average_exit_axis_probe",
+  "coordinate_count": 24,
+  "batch_count": 2
+}

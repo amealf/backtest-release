@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "status": "complete",
+  "bar_seconds": 15,
+  "preparation_manifest_sha256": "29936ddcd48bd18d112531813915223b72eff36801e3460e06b6b4684da88bc2",
+  "ranking_major_version": "V4.4",
+  "policy_contracts": {
+    "gap_policy": {
+      "policy_id": "k200m_current_continuity_and_real_gap_policy_v1",
+      "mode": "preserve_existing_v4_4_behavior",
+      "config_sha256": "fdb3948ff47ea83bb6cc6ddfb52158b920663e267559f6cab52ee401e9e69572",
+      "implementation_sha256": "219c190926a4012518ec7669a0c27938fd97355cecd8baf4e5948f4d9e380d16"
+    },
+    "low_activity_policy": {
+      "policy_id": "confirmed_low_activity_retroactive_baseline_exclusion_and_entry_gate_v4_4",
+      "mode": "pending_no_effect_confirmed_gate",
+      "config_sha256": "60fe6ce0c07daaea99fe0865bcf9c9e10950997babcbd2624175934068cecbf9",
+      "implementation_sha256": "2d70a36475d1e4c14c595e29a704bb02c226c9d10dfa4e92f028cfd863796787"
+    }
+  }
+}

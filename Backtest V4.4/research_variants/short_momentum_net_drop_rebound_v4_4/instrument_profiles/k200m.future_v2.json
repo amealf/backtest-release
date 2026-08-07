@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "status": "ready",
+  "instrument_id": "k200m",
+  "display_name": "Mini KOSPI 200 Futures",
+  "timezone": "Asia/Seoul",
+  "bar_seconds": 15,
+  "strategy_contract_id": "short_momentum_net_drop_rebound_v4_4_cross_instrument_core_v2_positive_entry",
+  "ranking_lineage_id": "k200m_v4_4_positive_entry_future_lineage",
+  "data": {
+    "path": "../../../runtime_inputs/market_data/k200_clean_15s_session_filled.csv",
+    "size_bytes": 42822886,
+    "sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+    "preparation_manifest": {
+      "path": "../../../runtime_inputs/data_preparation/data_preparation_manifest.json",
+      "size_bytes": 6463,
+      "sha256": "36f7e3b0d24cd38a48c281c6788efb8f285692e1bf7b8fe6983688ac6cb14c68"
+    },
+    "policy_attestation": {
+      "path": "policies/k200m_preparation_policy_attestation_v1.json",
+      "size_bytes": 878,
+      "sha256": "09e07813fcf20ac39104c12cf393f8c59f4874f56725a8025f49172b59fe4a57"
+    }
+  },
+  "cost_model": {
+    "path": "../../../runtime_inputs/cost_models/k200m_current_notional_cost_reference_20260803.json",
+    "size_bytes": 2178,
+    "sha256": "9a13431ebf03e91fe496ba7514b5fcf689bd9d197292a8c6c4cb57b576229ffe"
+  },
+  "gap_policy": {
+    "status": "ready",
+    "policy_id": "k200m_current_continuity_and_real_gap_policy_v1",
+    "mode": "preserve_existing_v4_4_behavior",
+    "config": {
+      "path": "policies/k200m_gap_policy_v1.json",
+      "size_bytes": 337,
+      "sha256": "fdb3948ff47ea83bb6cc6ddfb52158b920663e267559f6cab52ee401e9e69572"
+    },
+    "implementation": {
+      "path": "../code/v4_4_engine.py",
+      "size_bytes": 99433,
+      "sha256": "f8651b2290508e836e9e8afd2b36ad1ab11891b66017cedc57762d384504f5d8"
+    }
+  },
+  "low_activity_policy": {
+    "status": "ready",
+    "policy_id": "causal_pending_buffer_recovery_or_confirmed_exclusion_v1",
+    "mode": "causal_pending_buffer",
+    "config": {
+      "path": "policies/k200m_low_activity_policy_v1.json",
+      "size_bytes": 412,
+      "sha256": "aba34840e60c774ac48bd13f8e5ecea3f7d9a8fd6ed2fe468d74734573a4724a"
+    },
+    "implementation": {
+      "path": "../data_preparation/low_activity.py",
+      "size_bytes": 29955,
+      "sha256": "23d24f98750c1585bf68adc0daa77c841cebfcdb173eac57e268ee943eb8a8d4"
+    }
+  },
+  "scenario_set": {
+    "path": "../plans/v4_4_scenario_groups_single_select_combined_exit_20260801.json",
+    "size_bytes": 2624,
+    "sha256": "020bb4df6c535ea0e0fd5fff412fc05c39e24d40a9c35a2ada1ccdd7d7ad7af2",
+    "ranking_role": "optional_filter_only"
+  }
+}

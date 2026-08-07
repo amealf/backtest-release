@@ -1,0 +1,55 @@
+{
+  "status": "frozen_before_compute",
+  "plan": "D:\\Code\\backtest-release\\Backtest V4.4\\research_variants\\short_momentum_net_drop_rebound_v4_4\\plans\\generated_ai_cycle_20260806\\continuation_round_19_ai_known_grid_all_window.json",
+  "plan_sha256": "8216f2a1a14f5bc8a380feba1e61d1c0a6887d513d0de30c16f2076f00f63c76",
+  "stage_id": "continuation_round_19_ai_known_grid_all_window",
+  "phase": "known-grid",
+  "output_root": "D:\\Code\\backtest-release\\Backtest V4.4\\results\\campaigns\\v4_4_positive_entry_signal_repair_20260805\\continuation_round_19_ai_known_grid_all_window",
+  "completed_coordinate_count": 5627,
+  "pending_coordinate_count": 0,
+  "requested_coordinate_count": 79,
+  "internal_duplicate_count": 0,
+  "completed_overlap_count": 23,
+  "pending_overlap_count": 0,
+  "retained_new_coordinate_count": 56,
+  "block_counts": {
+    "grid_anchor_a_e": {
+      "requested": 9,
+      "retained": 5
+    },
+    "grid_anchor_b_bh": {
+      "requested": 14,
+      "retained": 5
+    },
+    "grid_anchor_c_e": {
+      "requested": 11,
+      "retained": 8
+    },
+    "grid_anchor_d_s": {
+      "requested": 10,
+      "retained": 8
+    },
+    "grid_anchor_e_s": {
+      "requested": 9,
+      "retained": 7
+    },
+    "grid_anchor_f_s": {
+      "requested": 9,
+      "retained": 8
+    },
+    "grid_anchor_g_trw": {
+      "requested": 10,
+      "retained": 9
+    },
+    "grid_anchor_h_k": {
+      "requested": 7,
+      "retained": 6
+    }
+  },
+  "resources": {
+    "workers": 4,
+    "batch_size": 8,
+    "minimum_free_memory_mb": 4096
+  },
+  "parameter_acceptance": "none"
+}

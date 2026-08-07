@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "status": "complete",
+  "method": "incremental_concat_of_independently_cleaned_tick_ranges",
+  "components": [
+    {
+      "data_path": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+      "data_sha256": "ec04981dcf7fa74a7c8266f7d678913ba6ad5dc8c9463194882ecdbd0d4121a4",
+      "data_size_bytes": 42822886,
+      "bar_count": 183056,
+      "first_epoch": 1779462000,
+      "last_epoch": 1784742225,
+      "audit_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks\\k200_ticks_20260523_to_20260723_20260723_014534\\data_clean_immediate_tick_recovery_filter_v2_20260729\\data_preparation_audit.json",
+      "audit_sha256": "e7b59b8cc45cad9be4f5628982b200835c6dd002b3dba7a45c1812f30767cae4"
+    },
+    {
+      "data_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks_supplements\\k200_postroll_supplement_20260723T024400_to_20260728T161430_20260728_151540\\data_clean_immediate_tick_recovery_20260807\\k200_clean_15s_session_filled.csv",
+      "data_sha256": "8e0eff06e26146651ee18b6a4f3a6e96f2d18253857aa51013ef58bae482c530",
+      "data_size_bytes": 3806719,
+      "bar_count": 16144,
+      "first_epoch": 1784742240,
+      "last_epoch": 1785221085,
+      "audit_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks_supplements\\k200_postroll_supplement_20260723T024400_to_20260728T161430_20260728_151540\\data_clean_immediate_tick_recovery_20260807\\data_preparation_audit.json",
+      "audit_sha256": "79b5886c832da53ad35ea8223a300b5399685ca63edbf1fd560ee72d2b4a665d"
+    },
+    {
+      "data_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks_supplements\\k200_postroll_supplement_20260728T161430_to_20260807T032200_20260807_022303\\data_clean\\k200_clean_15s_session_filled.csv",
+      "data_sha256": "314cd12b9727f090441b8154714fcddfa81d7c2e9bc128435ed445b3b871d4bb",
+      "data_size_bytes": 7933208,
+      "bar_count": 34168,
+      "first_epoch": 1785229200,
+      "last_epoch": 1786040505,
+      "audit_path": "F:\\Backtest test 6.11\\02_DATA_AND_AUDITS\\market_data\\k200_historical_ticks_supplements\\k200_postroll_supplement_20260728T161430_to_20260807T032200_20260807_022303\\data_clean\\data_preparation_audit.json",
+      "audit_sha256": "7451b73ae720bd58dc5af59045dee0595beec30f1ba3ddbc5b3f74215ea7fca4"
+    }
+  ],
+  "transient_tail_filter": {
+    "enabled": true,
+    "method": "same_bar_immediate_tick_recovery",
+    "tick_deviation": "0.03",
+    "recovery_tolerance": "0.001",
+    "max_recovery_seconds": 1,
+    "filtered_tick_count": 5
+  },
+  "outputs": {
+    "session_filled_15s": {
+      "path": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+      "sha256": "9760d367a109777c4789ce45d982a6c0708bacddad8f549450ed94f81ad5c405",
+      "size_bytes": 54562343,
+      "bar_count": 233368,
+      "first_epoch": 1779462000,
+      "last_epoch": 1786040505
+    }
+  },
+  "passed": true
+}

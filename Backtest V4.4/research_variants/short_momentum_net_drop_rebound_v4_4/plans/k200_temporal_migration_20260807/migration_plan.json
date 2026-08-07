@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "status": "frozen_before_evaluation",
+  "frozen_at": "2026-08-06T22:43:14+00:00",
+  "instrument": "K200",
+  "bar_seconds": 15,
+  "training": {
+    "start": "2026-05-26 00:00:00",
+    "end": "2026-07-08 23:52:00"
+  },
+  "walk_forward_slices": [
+    {
+      "round": "r1",
+      "start": "2026-07-08 23:52:15",
+      "end": "2026-07-17 05:59:45",
+      "role": "first_unseen_week"
+    },
+    {
+      "round": "r2",
+      "start": "2026-07-20 08:45:00",
+      "end": "2026-07-25 05:59:45",
+      "role": "adaptive_second_week"
+    },
+    {
+      "round": "r3",
+      "start": "2026-07-27 08:45:00",
+      "end": "2026-08-01 05:59:45",
+      "role": "adaptive_third_week"
+    },
+    {
+      "round": "r4",
+      "start": "2026-08-03 08:45:00",
+      "end": "2026-08-07 03:21:45",
+      "role": "final_holdout"
+    }
+  ],
+  "post_hoc_full_replay": {
+    "start": "2026-07-08 23:52:15",
+    "end": "2026-08-07 03:21:45"
+  },
+  "candidate_count_per_round": 400,
+  "round_policy": "R1 uses source-only multi-metric queues. Later rounds combine repeated earlier candidates, nearby source candidates, and structurally diverse source controls. Every new slice is unseen when its candidate set is frozen. R4 is the final holdout.",
+  "cost_model": {
+    "id": "k200m_shadow_cost_v2_derived_krw_notional_20260803",
+    "role": "derived_ranking_and_display_only_raw_trades_unchanged",
+    "reference_date": "2026-08-03",
+    "reference_path": "D:\\Code\\backtest-release\\Backtest V4.4\\runtime_inputs\\cost_models\\k200m_current_notional_cost_reference_20260803.json",
+    "reference_sha256": "9a13431ebf03e91fe496ba7514b5fcf689bd9d197292a8c6c4cb57b576229ffe",
+    "instrument_id": "k200m",
+    "instrument_name": "Mini KOSPI 200 Futures",
+    "reference_price": 1106.7,
+    "reference_price_currency": "index_points",
+    "reference_price_observed_at": "2026-07-23T02:43:45+08:00",
+    "reference_price_selection_rule": "last real-trade 15-second bar in the hash-bound active runtime market-data input",
+    "point_value": 50000.0,
+    "quote_currency": "KRW",
+    "contract_notional_quote": 55335000.0,
+    "commission_currency": "USD",
+    "round_trip_commission": 6.0,
+    "quote_per_commission_currency": 1446.7,
+    "round_trip_slippage_bps": 2.0,
+    "round_trip_commission_bps": 1.568663594470046,
+    "round_trip_commission_quote": 8680.2,
+    "round_trip_slippage_quote": 11067.0,
+    "round_trip_total_cost_quote": 19747.2,
+    "round_trip_total_cost_bps": 3.568663594470046,
+    "ranking_display_default": "cost_adjusted",
+    "ranking_basis": "cost_adjusted",
+    "available_ranking_display_modes": [
+      "cost_adjusted",
+      "gross"
+    ],
+    "contract_multiplier_krw_per_point": 50000.0,
+    "contract_notional_krw": 55335000.0,
+    "usdkrw": 1446.7,
+    "round_trip_commission_usd": 6.0,
+    "round_trip_commission_krw": 8680.2,
+    "round_trip_slippage_krw": 11067.0,
+    "round_trip_total_cost_krw": 19747.2
+  },
+  "workers": 4,
+  "intermediate_html": false,
+  "final_html_once": true,
+  "parameter_acceptance": "none"
+}

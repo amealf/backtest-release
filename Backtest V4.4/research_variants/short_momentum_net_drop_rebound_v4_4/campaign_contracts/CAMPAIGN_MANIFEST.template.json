@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "status": "requires_user_input",
+  "campaign_id": "replace_me",
+  "mode": "transfer_exact",
+  "supported_modes_in_order": [
+    "transfer_exact",
+    "target_local_refinement",
+    "continuation_search",
+    "fresh_search"
+  ],
+  "bar_seconds": 15,
+  "instrument_profile": {
+    "path": "../instrument_profiles/replace_me.json",
+    "size_bytes": null,
+    "sha256": null
+  },
+  "sample": {
+    "start": null,
+    "end": null
+  },
+  "ranking": {
+    "lineage_id": "replace_me",
+    "merge_policy": "same_instrument_compatible_lineage_only"
+  },
+  "source": {
+    "candidate_freeze": {
+      "path": null,
+      "size_bytes": null,
+      "sha256": null
+    }
+  },
+  "target_tuning_allowed": false,
+  "search": {
+    "scope": "replace_for_selected_mode",
+    "maximum_coordinate_count": null,
+    "parameter_space": null,
+    "neighborhood": null,
+    "exploration_contract": {
+      "path": "../../../project_management/05_domains/research/PARAMETER_EXPLORATION_GUIDE.en.md",
+      "size_bytes": null,
+      "sha256": null
+    }
+  },
+  "output_root": null,
+  "delivery": {
+    "shared_main_and_per_trade_required": true,
+    "stage_specific_per_trade_required": false
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "instrument_id": "INSTRUMENT_ID",
+  "display_name": "Instrument display name",
+  "sample_start": "2026-01-01 00:00:00",
+  "sample_end": "2026-01-31 23:59:45",
+  "timezone": "UTC",
+  "bar_seconds": 15,
+  "candidate_set_id": "candidate_set_id",
+  "source": {
+    "parameter_summary": "D:\\path\\to\\parameter_summary.csv",
+    "trade_records": "D:\\path\\to\\trades.csv",
+    "trade_review": "D:\\path\\to\\trade_review\\index.html"
+  },
+  "columns": {
+    "parameters": [
+      "combo_id",
+      "method",
+      "baseline_sampling_policy",
+      "entry_fill_mode",
+      "entry_execution_policy",
+      "entry_slippage",
+      "e",
+      "bh",
+      "trw",
+      "k",
+      "w",
+      "m",
+      "speed_window_bars"
+    ],
+    "metrics": {
+      "trade_count": "trade_count",
+      "gross_total_return": "gross_total_return",
+      "cost_total_return": "cost_total_return",
+      "cost_mean_trade": "cost_mean_trade",
+      "cost_max_drawdown_abs": "cost_max_drawdown_abs"
+    }
+  },
+  "experiment": {
+    "role": "Describe this interval's role in the current experiment.",
+    "description": "Describe what was evaluated and completed."
+  }
+}
