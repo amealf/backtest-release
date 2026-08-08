@@ -1,5 +1,27 @@
 # 代码架构
 
+## 外部审阅修复边界——2026-08-09
+
+`build_v4_4_review_delivery.py::_native_trade_frame_fast` 遇到合法的零交易坐标时返回空表。多进程 worker 仍写入该坐标的正常 `NATIVE_COMBO` 记录，同时写入 `NATIVE_TRADES=[]`、`waited_count=0` 和 `maximum_wait=0`。线程与进程发布路径由此保持一致，也不会制造交易。
+
+`analyze_v4_4_scenario_3_stage.py` 继续在 `report_data.js` 中保留完整阶段 `instrumentProfile`。精简的 `analysis_data.js` 只加入 `instrumentSummary`，包含品种 ID、显示名称、排序谱系、成本模型 ID、实验模式和情景策略。本地配置路径与策略实现路径不会进入精简浏览器载荷。
+
+`build_v4_4_cross_instrument_comparison.py::_comparison_html` 允许单元测试传入基础 CSS；正常发布仍从当前累计页面读取 CSS。跨品种测试可以验证按角色生成的动态名称，无需依赖 F 盘快照。展示测试改为检查当前语义属性和「开仓理由」中的现行信息位置，不再依赖过期的 CSS 顺序或图内标签文字。
+
+## 行情场景流程
+
+`runtime_inputs\scenarios\market_catalog.json` 把选择器选项映射到一个品种、一个评价结果包、一个行情文件、一个时区和一个精确区间。`tools\build_v4_41_scenario_manager.py` 为每个区间生成压缩浏览器资源并发布选择器，界面代码不包含品种专用文件名。
+
+选择器每次只加载一项已登记行情，选区保存在浏览器内存中，再通过 Chrome 的文件保存流程写出完整 `scenario_catalog.json`。载入控件导入整份多场景目录；新草稿使用下一个未占用的 `scenario_N` ID 和「新场景N」默认名称，仅名称可以修改。框选结果会规范为铺满图表高度的时间带。每个场景重复记录数据文件、评价身份、显示区间和全部选区，单独查看文件也能还原来源。
+
+`tools\apply_v4_41_scenario.py` 解析绑定的评价结果包，根据 `trade_records\trades.csv` 判断每段选区，再用 AND 合并分段资格，筛选结果包中的参数总体，并生成 `analysis_data.js` 和当前总入口页面外壳。迁入的 V4.4 场景可以复用兼容的预计算资格字段；新增或编辑后的场景会流式读取不可变逐笔记录。逐笔链接通过结果包自己的 `trade_review\index.html` 打开。
+
+## V4.41 交付打包
+
+- `tools\package_v4_4_with_trade_records.ps1` 发布 `Backtest_V4.41_current_with_trade_records_20260808.zip`。脚本名保留 V4.4 策略主版本命名空间；交付包身份与根发布记录采用 V4.41。
+- 交付包复制 `RELEASE.json`、根运行／配置文档、当前研究变体、`runtime_inputs`、`project_management`、工具、来自 `research_variants\short_momentum_net_drop_rebound_v4_4\handoffs\v4_4_cost_adjusted_multiround_20260803\analysis_reports` 的九份保留规范报告，以及已完成 campaign 阶段的不可变原始逐笔记录与已有衍生逐笔记录。`.omo` 不再是打包依赖。
+- 完整结果载荷、HTML 快照、`.git`、`.omo`、依赖、缓存、浏览器配置与编译字节码不进入 ZIP。原始 batch 逐笔账本为强制项；衍生阶段账本只在该已完成阶段实际生成时纳入。可恢复终结流程检查清单身份、ZIP 名称与大小和整包 SHA-256，不再建立重复解压目录。
+
 ## 发布身份边界
 
 - `RELEASE.json` 管理当前界面发布版本（`V4.41`），并声明策略／排序主版本继续使用 V4.4。引擎清单、参数身份与累计纳入规则继续采用现有 V4.4 合同和排序谱系。

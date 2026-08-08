@@ -18,6 +18,7 @@ node_modules/
 results/
 **/.v4_3_*.lock
 **/screenshots/
+project_management/qa-*.png
 **/browser-profile*/
 **/qa_output/
 **/batches/

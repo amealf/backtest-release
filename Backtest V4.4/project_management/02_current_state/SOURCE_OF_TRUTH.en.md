@@ -1,15 +1,51 @@
 # Current Valid Files
 
+## Formal V4.41 source release — 2026-08-09
+
+- ZIP: `D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip`.
+- SHA-256 sidecar: `D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.sha256`.
+- Audit: `D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.audit.json`.
+- Package source: `tools\package_v4_41_source_review.ps1`; the retained filename is historical, while its default output and embedded state now describe the formal Windows source release.
+- Git release identity: tag `V4.41` on the published `v4.41` branch. Acceptance requires an independent extracted-package result of 112 passed, 2 skipped, and 0 failed.
+- Scheme A publishes GitHub source plus the compact ZIP, sidecar, and audit. Multi-gigabyte historical ledgers and the 2026-08-08 complete local handoff remain outside the public release assets.
+- `Backtest_V4.41_source_review_20260808.zip` remains immutable historical review evidence and is not a formal release artifact.
+
+## V4.41 market-scenario system — 2026-08-08
+
+- Market registry: `runtime_inputs\scenarios\market_catalog.json`.
+- Saved-scenario registry: `runtime_inputs\scenarios\scenario_catalog.json`.
+- Scenario contract and operation note: `runtime_inputs\scenarios\README.md`.
+- Selector source and builder: `runtime_inputs\templates\market-intuition-selector.html` and `tools\build_v4_41_scenario_manager.py`.
+- Selector entry: `results\market_scenario_manager\index.html`.
+- The selector treats `scenario_catalog.json` as one multi-scenario directory: the import button loads that complete file, the ID is generated from the next unused `scenario_N`, and the editable name defaults to the next unused `新场景N`. Selection bands are normalized to the full chart height, so only the time interval is selected.
+- Scenario application: `tools\apply_v4_41_scenario.py`; outputs live under `results\scenario_analysis\<scenario_id>`.
+- The three migrated scenarios remain bound to K200 2026-05-26 through 2026-07-08. Scenario 1 qualifies 4,406 coordinates, Scenario 2 qualifies 6,292, and Scenario 3 is an explicit zero-coordinate population in the current 37,058-coordinate cumulative evidence.
+
+## Historical compact external-review package — 2026-08-08
+
+- ZIP: `D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip`
+- SHA-256 sidecar: `D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip.sha256`
+- Audit: `D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip.audit.json`
+- This immutable archive is historical review evidence. It does not replace the 2026-08-09 formal source release or the complete local handoff below.
+
+## Current portable handoff — 2026-08-08
+
+- ZIP: `D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip`
+- SHA-256 sidecar: `D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip.sha256`
+- Audit: `D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip.audit.json`
+- Package source: `tools\package_v4_4_with_trade_records.ps1`; V4.41 is the release identity and V4.4 remains the strategy/ranking major lineage.
+
 ## Active release identity — 2026-08-08
 
 `RELEASE.json` is authoritative for the active presentation release (`V4.41`) and its compatibility boundary. Strategy and result identity remain authoritative in `research_variants\short_momentum_net_drop_rebound_v4_4\SOURCE_MANIFEST.json` as V4.4. The cumulative publisher continues to admit completed V4.4-compatible stages by the existing major-version and ranking-lineage checks.
 
 ## Current K200 train/test per-trade navigation and layout — 2026-08-08
 
-- The K200 training per-trade entry remains `results\all_completed_union_analysis\trade_review\index.html`; it forwards to the current snapshot and now shows `显示测试集`. The K200 test entry remains `results\cross_instrument_comparison\runs\k200_train_test_si__combined_350_v56_20260807\trade_review_k200_test\index.html` and shows `显示训练集`.
-- Both controls preserve the exact selected `combo_id` and bind the destination research contract. A missing exact coordinate is not replaced by a nearby parameter set.
+- The K200 training per-trade entry remains `results\all_completed_union_analysis\trade_review\index.html`; it forwards to the current snapshot and shows `显示测试集`. The K200 test entry remains `results\cross_instrument_comparison\runs\k200_train_test_si__combined_350_v56_20260807\trade_review_k200_test\index.html` and shows `显示训练集`.
+- Both controls preserve the exact selected `combo_id` and bind the destination research contract. They now open the paired review inside the current page. `隐藏训练集` / `隐藏测试集` and Escape close the overlay and unload its iframe. A missing exact coordinate is not replaced by a nearby parameter set.
+- The paired-review button uses the same centered button vocabulary as the surrounding toolbar and never shows a hover underline. The embedded page omits its `当前参数` card; the outer page is hidden while the overlay is open and restored on close.
 - The redundant trade-picker heading/count and secondary summary line are removed. Drop, ratio, entry baseline, entry threshold, W baseline, and active-low values now render as compact colored boxes immediately below the reason heading; they are no longer Plotly annotations over price data. The Plotly legend is below the x-axis.
-- The browser tab title is `组合平仓逐笔查看` and the favicon is a blue `Z`. Shared source: `runtime_inputs\templates\historical_v4_trade.html`; focused QA: `tools\qa_v4_4_trade_review_layout.mjs`; retained evidence: `project_management\screenshots\trade_review_layout_20260808`.
+- The browser tab title is `组合平仓逐笔查看` and the favicon is a blue `Z`. Shared source: `runtime_inputs\templates\historical_v4_trade.html`; focused QA: `tools\qa_v4_4_trade_review_layout.mjs`; retained inline-review evidence: `project_management\screenshots\trade_review_inline_peer_20260809`.
 
 ## Current date-based evaluation-package framework — 2026-08-08
 

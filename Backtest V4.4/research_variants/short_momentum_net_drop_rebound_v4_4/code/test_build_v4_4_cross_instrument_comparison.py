@@ -12,7 +12,7 @@ from analyze_v4_4_scenario_3_stage import _legacy_v4_main_html
 
 
 def test_cross_page_contract_contains_required_controls_and_no_score() -> None:
-    html = cross._comparison_html()
+    html = cross._comparison_html(base_css=":root{--bg:#fff}")
     for token in (
         'id="scope-strip"',
         'id="return-view-controls"',
@@ -37,14 +37,12 @@ def test_cross_page_contract_contains_required_controls_and_no_score() -> None:
         "孤立正收益点",
         "事后全网格诊断",
         "综合 score",
-        "成本后排名",
-        "成本前排名",
         "手续费／滑点后",
         "无手续费／滑点",
-        "K200 总收益",
-        "SImain 总收益",
-        "K200 回测区间为 2026-05-26—2026-07-08，长于 SImain",
-        "查看 #",
+        "${sourceName} 总收益",
+        "${targetName} 总收益",
+        "${sourceName} 回测区间为 ${sourceRange}",
+        "`#${num(value)}`",
         'class="rank-link"',
         'target="_blank"',
         'rel="noopener"',
@@ -60,10 +58,10 @@ def test_cross_page_contract_contains_required_controls_and_no_score() -> None:
         "K200 成本后总收益",
     ):
         assert token not in html
-    simain_total = html.index("[target.total,'SImain 总收益'")
-    simain_median = html.index("[target.median,'SImain 中位单笔'")
-    k200_total = html.index("[source.total,'K200 总收益'")
-    assert simain_total < simain_median < k200_total
+    source_total = html.index("[source.total,`${sourceName} 总收益`")
+    target_total = html.index("[target.total,`${targetName} 总收益`")
+    target_median = html.index("[target.median,`${targetName} 中位单笔`")
+    assert source_total < target_total < target_median
     assert "target_mfe_points_median" in html
     assert "target_mae_points_median" in html
     assert "source_mfe_points_median" in html

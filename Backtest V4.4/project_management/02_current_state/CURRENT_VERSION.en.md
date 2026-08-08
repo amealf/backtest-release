@@ -1,14 +1,42 @@
 # Current Version — V4.41 Minor Release on the V4.4 Ranking Lineage
 
+## V4.41 formal source release — 2026-08-09
+
+V4.41 is formally published through Scheme A: the GitHub source, a compact Windows source ZIP, its SHA-256 sidecar, its machine audit, and tag `V4.41`. The package includes source, tests, project documents, runtime contracts, scenario catalogs and tools, the current cumulative browser payload, the stable main shell, and one representative per-trade chunk. It excludes complete historical trade ledgers, dependencies, caches, and the remaining per-coordinate chunks.
+
+The final package gate is an independent extraction with 112 passed, 2 skipped, and 0 failed. The two skips explicitly require closed historical local artifacts that are absent from the compact release. A preflight extraction exposed a stale market-selector source hash; the bound hash was corrected before the final package. Strategy execution, completed trades, returns, rankings, and retained result snapshots were not recomputed.
+
+The 2026-08-08 compact review archive remains immutable historical evidence. It is not the formal release package. The 2026-08-08 multi-gigabyte complete handoff remains local and is not published under Scheme A.
+
+## V4.41 market-scenario extension — 2026-08-08
+
+V4.41 now includes a catalog-driven market selector and saved-scenario application layer. This is a research-delivery extension inside the V4.4 major lineage: it does not change strategy semantics, completed trades, or cumulative ranking compatibility. Three current market intervals and the existing three K200 scenarios are registered. Scenario application writes separate ranking pages and keeps the existing stable main and per-trade pages unchanged.
+
+The selector now explains the catalog workflow in the interface, generates the next unused scenario ID and default name, keeps only the name editable, and normalizes drawn selections to full-height time bands. Saving still writes the complete multi-scenario catalog; no strategy or qualification rule changed.
+
+## V4.41 compact external-review package — 2026-08-08
+
+`D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip` is retained as the compact artifact reviewed by another GPT. It contains the source and tests captured on 2026-08-08, project management, runtime inputs, the 37,058-coordinate cumulative browser payload, and one representative per-trade chunk. It excludes the 3.5 GB complete ledger handoff and the remaining per-coordinate chunks. That immutable archive still records its observed 4 failed, 105 passed, and 2 skipped result.
+
+The current source resolves those four review findings and now completes the same suite with 109 passed, 2 skipped, and 0 failed. The package script records that current result for its next run. No replacement compact ZIP has been generated, and the 2026-08-08 archive remains historical review evidence.
+
+## V4.41 current handoff package and local cleanup — 2026-08-08
+
+The current portable handoff is `D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip`; its adjacent `.sha256` sidecar is the whole-archive hash authority. It contains source, runtime inputs, current project documents, retained reports, and 4,467 immutable raw or available derived transaction ledgers from 110 completed V4.4-compatible stages. The package retains V4.41 release identity and V4.4 strategy/ranking compatibility.
+
+The final package passed manifest identity, ZIP name/size, duplicate/forbidden-path, and whole-archive SHA-256 checks. Repeated per-entry ZIP hashing and a duplicate extraction tree are no longer part of normal verification. Nine canonical 2026-08-03 reports now live in the project handoff tree, so `.omo` is no longer required.
+
+After the final package passed, 22 obsolete package/sidecar files and two local directories were moved to the Windows Recycle Bin, totaling 39.972 GiB. Earlier in the same cleanup, `.omo` (68.72 MiB), old caches, Crashpad material, dashboard cache, and four obsolete QA images were also moved to the Recycle Bin. Current results, V4.2 evidence, the two V2 download dependencies, shared tools, provenance, and management archives remain retained.
+
 ## V4.41 release identity — 2026-08-08
 
 V4.41 is the active release and presentation label. It is a minor release: the strategy major version, result contract, parameter identities, and cumulative ranking boundary remain V4.4. Completed V4.4 results remain active and authoritative within their original evidence boundaries and continue to enter the same cumulative ranking when their ranking lineage and result contracts match. `RELEASE.json` records this split identity; no historical result is archived or excluded by this release.
 
 ## K200 paired per-trade review — 2026-08-08
 
-K200 training and later-period test reviews now form a bidirectional exact-coordinate pair. The toolbar names the destination (`显示测试集` or `显示训练集`) and carries the current `combo_id` plus the destination research-contract identity. The established main and per-trade URLs remain valid.
+K200 training and later-period test reviews now form a bidirectional exact-coordinate pair. The toolbar names the destination (`显示测试集` or `显示训练集`) and carries the current `combo_id` plus the destination research-contract identity. The paired result opens as an overlay inside the current page and can be closed with its `隐藏…` button or Escape. Closing unloads the iframe so the paired chart does not retain another renderer. The established main and per-trade URLs remain valid.
 
-The trade selector keeps only the transaction dropdown. Entry/drop audit values moved from the plot into compact color-preserving boxes below the reason heading, and the legend moved below the candlestick chart. The browser tab omits the version number and uses a blue `Z` favicon. This is a presentation and routing update; trade chunks, OHLC, fills, metrics, ranking, and strategy behavior are unchanged.
+The paired button is centered and uses the same hover state as adjacent toolbar buttons. The embedded page omits its `当前参数` card, while the outer page is hidden until the overlay closes. The trade selector keeps only the transaction dropdown. Entry/drop audit values moved from the plot into compact color-preserving boxes below the reason heading, and the legend moved below the candlestick chart. The browser tab omits the version number and uses a blue `Z` favicon. This is a presentation and routing update; trade chunks, OHLC, fills, metrics, ranking, and strategy behavior are unchanged.
 
 ## Instrument- and interval-neutral evaluation packages — 2026-08-08
 
@@ -147,7 +175,7 @@ V4.4 is an independent research version with repaired execution semantics and a 
 - The cumulative main-page generator exposes a keyboard-accessible, icon-only disclosure toggle on the `筛选与排序` panel. A fixed 40-by-36-pixel button contains a 20-pixel SVG chevron: up while expanded and down while collapsed. Collapsing preserves every selected filter and sort state while reducing the panel to one row. Layout and paint containment on the ranking table prevents the large table from being repainted during the height change. The user-selected snapshot `e4a20d1d5bcb8974f4341a3647e2e246c3c1ab855d66ce4b3d7d4998d7fb3d44` carries this UI-only publication; the current stable snapshot remains byte-preserved.
 - The stable cumulative main loads a lean summary payload under `results\all_completed_union_analysis\main` while its exact per-trade and scenario links continue routing into the immutable current snapshot. Each main-table row contains only the 32 fields used by controls, ranking, display, and routing; the current 5,044-row payload is 5,621,151 bytes. Filtering, metric ranking, and column sorting operate on integer row indexes without copying row objects. Table virtualization and sort-result caching remain intentionally absent.
 - Entry Reason step 2 uses hollow colored-outline ellipses for its high/entry point hover highlight. The collapsed per-trade Parameters tab sits six pixels above its prior desktop position; mobile drawer behavior is unchanged.
-- Candlestick line guides use solid strokes. Every market-range rectangle—including filtered-market, signal, baseline, rebound, frozen, and quiet-activity ranges—uses semantic translucent fill with no border. The long theoretical-line/actual-fill chart annotation is absent; detailed side-panel exit reasoning remains. The green frozen-low chart label is exactly `L=<formatted value>` without freeze, duration, or bar-count suffixes.
+- Candlestick line guides use solid strokes. Every market-range rectangle—including filtered-market, signal, baseline, rebound, frozen, and quiet-activity ranges—uses semantic translucent fill with no border. The chart omits the long theoretical-line/actual-fill annotation and the drop, ratio, entry-baseline, entry-threshold, W-baseline, and active-low value boxes. Those six bordered, semantically colored values now appear under Entry Reason; detailed side-panel exit reasoning remains.
 - ZIP handoffs contain the current code, project-management tree, canonical analysis reports, hash-bound 15-second OHLC, and per-stage raw/derived transaction CSVs. Package `D:\\Code\\backtest-release\\Backtest_V4.4_with_trade_records_20260803_final.zip` remains audited historical `SOURCE_FINAL_V4` evidence after the QA-only V5 source change; it is not a current-V5 source package. Other result payloads remain excluded.
 - A formal source-review ZIP preserves the project-relative code, data-preparation, plan, review-template, runtime-input, dependency, and local cumulative-fixture layout. It includes one package-root test runner and must pass it from an independent extraction. Compact UI-only archives may omit these dependencies only when explicitly labeled non-executable.
 - All current and future V4.4 result bytes are stored under `F:\Backtest\Backtest V4.4\results`. The historical logical root `D:\Code\backtest-release\Backtest V4.4\results` remains available as a directory junction, so existing plans, manifests, main HTML, and shared per-trade HTML retain their paths without regeneration.

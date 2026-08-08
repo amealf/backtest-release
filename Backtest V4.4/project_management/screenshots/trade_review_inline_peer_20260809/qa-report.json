@@ -1,0 +1,42 @@
+{
+  "status": "passed",
+  "checks": {
+    "buttonCentered": true,
+    "noUnderline": true,
+    "samePage": true,
+    "inlineTarget": true,
+    "peerChartLoaded": true,
+    "trainingDataLoaded": true,
+    "embeddedCurrentParametersHidden": true,
+    "outerPageHiddenWhileOpen": true,
+    "canHide": true,
+    "noErrors": true
+  },
+  "normal": {
+    "display": "flex",
+    "align": "center",
+    "justify": "center",
+    "decoration": "none"
+  },
+  "hover": "none",
+  "opened": {
+    "url": "file:///D:/Code/backtest-release/Backtest%20V4.4/results/cross_instrument_comparison/runs/k200_train_test_si__combined_350_v56_20260807/trade_review_k200_test/index.html?combo_id=v4_4_rolling_tr_sum_bpall_window_fillcalculated_threshold_execwait_next_real_trade_slip0_sx1_s332_rx1_e320_bh240_trw20_k1p4_w6_m4p5_7d214509a0&research_contract_id=v4_4_cross_instrument_comparison",
+    "src": "file:///D:/Code/backtest-release/Backtest%20V4.4/results/all_completed_union_analysis/trade_review/index.html?combo_id=v4_4_rolling_tr_sum_bpall_window_fillcalculated_threshold_execwait_next_real_trade_slip0_sx1_s332_rx1_e320_bh240_trw20_k1p4_w6_m4p5_7d214509a0&research_contract_id=v4_4_all_completed_combined_union&embedded=1",
+    "open": true,
+    "title": "训练集 · 相同参数",
+    "closeLabel": "隐藏训练集",
+    "outerContentVisibility": "hidden"
+  },
+  "peerLoaded": {
+    "url": "file:///D:/Code/backtest-release/Backtest%20V4.4/results/all_completed_union_analysis/snapshots/eb3398757b8ffe52332aec6ecdedc60df86b70afb4e1509c8fa3fcccd7b53dd5/trade_review/index.html?combo_id=v4_4_rolling_tr_sum_bpall_window_fillcalculated_threshold_execwait_next_real_trade_slip0_sx1_s332_rx1_e320_bh240_trw20_k1p4_w6_m4p5_7d214509a0&research_contract_id=v4_4_all_completed_combined_union&embedded=1",
+    "sample": "全训练 2026-05-26—2026-07-08 23:52:00；外部品种迁移验证",
+    "selectionCardDisplay": "none"
+  },
+  "closed": {
+    "url": "file:///D:/Code/backtest-release/Backtest%20V4.4/results/cross_instrument_comparison/runs/k200_train_test_si__combined_350_v56_20260807/trade_review_k200_test/index.html?combo_id=v4_4_rolling_tr_sum_bpall_window_fillcalculated_threshold_execwait_next_real_trade_slip0_sx1_s332_rx1_e320_bh240_trw20_k1p4_w6_m4p5_7d214509a0&research_contract_id=v4_4_cross_instrument_comparison",
+    "hidden": true,
+    "src": "",
+    "outerContentVisibility": "visible"
+  },
+  "errors": []
+}

@@ -46,6 +46,8 @@
 - 每个已完成评价保存到 `results\evaluation_packages\<instrument_id>\<start_YYYYMMDDTHHMMSS>__<end_YYYYMMDDTHHMMSS>`。目录名只包含品种和实际评价区间。训练、测试、迁移、留出或描述性用途写入 `EXPERIMENT.md`、比较方案和双语管理记录。
 - 每个日期结果包包含 `evaluation_manifest.json`、`parameter_summary.csv`、按候选集生成的浏览器精简数据、不可变逐笔记录、实验记录和逐笔入口。后续计算以不可变批次追加，只生成缺少的逐坐标区块。
 - `results\evaluation_comparison` 是通用多区间比较入口。比较方案可以选择任意已完成日期结果包，按精确 `combo_id` 连接，并保持每个品种的排名谱系独立。比较可以用于迁移、时间验证或其他实验，无需修改结果包名称。
+- `runtime_inputs\scenarios\market_catalog.json` 是行情选择器的固定分段目录。每项绑定一个品种、一个评价结果包、一个数据文件、一个时区和一个精确区间。
+- `runtime_inputs\scenarios\scenario_catalog.json` 是场景记录来源。一个场景只引用一项行情，可包含一段或多段选区；多段使用 AND。`tools\apply_v4_41_scenario.py` 根据已完成的不可变逐笔记录判断资格，并生成独立的总入口样式排序页；它不重跑策略，也不改写评价结果包。
 - 现有稳定入口与已完成总入口／逐笔 HTML 属于兼容契约。新读取链路要在平行目录生成，完成逐行数值一致性与浏览器可见内容一致性后，只切换稳定跳转。旧入口和已完成页面继续保留，可立即恢复。
 - 每个行情数据下载目录都必须包含 `README.md`。目录创建时生成，恢复下载或完成下载时刷新，并记录品种、来源、请求与更新时间、合约切割、主力合约选择规则、合并规则、血缘和主要文件。
 - 每次启动回测前，将品种、实际读取的数据文件、回测开始时间与回测结束时间追加到 `project_management\03_active_work\BACKTEST_MANAGEMENT.en.md` 及其中文镜像。回测中途停止时仍保留记录。

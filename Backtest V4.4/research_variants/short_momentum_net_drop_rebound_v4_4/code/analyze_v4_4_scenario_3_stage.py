@@ -55,11 +55,11 @@ LEGACY_V4_MAIN_TEMPLATE_SHA256 = (
 LEGACY_V4_MAIN_TEMPLATE_ID = "v4_unified_analysis_v3_style_20260729"
 LEGACY_V4_TRADE_DESIGN_PATH = RUNTIME_TEMPLATE_ROOT / "historical_v4_trade.html"
 LEGACY_V4_TRADE_DESIGN_SHA256 = (
-    "9ffc8fd269173a27eae47f21d993c1f43cc296f0b76b14018ff3fb45a9402b50"
+    "60073aad0b6a4162043c36dbddc95808f0b7e0352715fe4fca1fd9ea495ffc7e"
 )
 MARKET_SELECTOR_SOURCE_PATH = RUNTIME_TEMPLATE_ROOT / "market-intuition-selector.html"
 MARKET_SELECTOR_SOURCE_SHA256 = (
-    "b14e62ff5b15f20c2d1f4533fee858aa4129c8a626d26ac1e6ae4f3d21e4a214"
+    "5b9545080576d77b666eff8ab094dc1bc012f5a6b9c5dbb1cdcc340c341b96b0"
 )
 SCENARIO_REQUIREMENTS_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[1]
@@ -146,6 +146,7 @@ MAIN_SUMMARY_TOP_LEVEL_FIELDS = (
     "scenario3QualifiedCount",
     "highReturnViews",
     "costModel",
+    "instrumentSummary",
     "baselineSamplingPolicies",
     "scopeLabel",
     "strategyId",
@@ -1807,6 +1808,18 @@ def analyze(
     stage_instrument = loaded["stage_manifest"].get("instrument_contract")
     instrument_profile = stage_instrument if isinstance(stage_instrument, dict) else None
     selected_cost_model = _cost_model_from_stage_manifest(loaded["stage_manifest"])
+    instrument_summary = (
+        {
+            "instrument_id": instrument_profile.get("instrument_id"),
+            "display_name": instrument_profile.get("display_name"),
+            "ranking_lineage_id": instrument_profile.get("ranking_lineage_id"),
+            "cost_model_id": selected_cost_model["id"],
+            "experiment_mode": instrument_profile.get("experiment_mode"),
+            "scenario_policy": instrument_profile.get("scenario_policy"),
+        }
+        if instrument_profile is not None
+        else None
+    )
     summary = loaded["summary"].copy()
     scenario_enabled = loaded["artifacts"]["scenario_definition"] is not None
     if scenario_enabled:
@@ -1993,6 +2006,7 @@ def analyze(
         "highReturnViews": [dict(view) for view in active_high_return_views],
         "costModel": dict(selected_cost_model),
         "instrumentProfile": instrument_profile,
+        "instrumentSummary": instrument_summary,
         "speedWindows": sorted(int(value) for value in summary.speed_window_bars.unique()),
         "note": (
             "情景三要求三段行情各自只有一次区间内开仓、区间内零平仓；区间后允许回撤或速度退出。"

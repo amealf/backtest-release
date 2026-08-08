@@ -25,6 +25,10 @@ original locations.
 
 `RELEASE.json` declares the presentation release and its major-version compatibility boundary. `research_variants\short_momentum_net_drop_rebound_v4_4\SOURCE_MANIFEST.json` remains the strategy source and identity closure. The current K200 profile and K200 campaign evidence remain under `research_variants\short_momentum_net_drop_rebound_v4_4\instrument_profiles` and `results\campaigns`; other instruments use their own profiles, campaign manifests, and ranking lineages.
 
+## Formal source release
+
+Scheme A publishes the GitHub source, `Backtest_V4.41_source_release_20260809.zip`, its SHA-256 sidecar, its machine audit, and tag `V4.41`. This compact Windows package includes the current source, tests, runtime contracts, project documents, scenario tooling, cumulative browser payload, stable main shell, and one representative per-trade chunk. Multi-gigabyte historical ledgers remain outside the public release assets. The acceptance gate is 112 passed, 2 explicit historical-artifact skips, and 0 failed from an independent extraction.
+
 ## Result packages
 
 Completed evaluations are registered under `results\evaluation_packages\<instrument_id>\<start_YYYYMMDDTHHMMSS>__<end_YYYYMMDDTHHMMSS>`. Folder names record only the instrument and exact evaluated interval. Training, test, transfer, holdout, and descriptive roles belong in the package `EXPERIMENT.md` or a comparison plan, so the same package can be reused without renaming.
@@ -46,6 +50,20 @@ For a newly completed instrument and interval, copy `runtime_inputs\templates\EV
 ```
 
 Registration creates one immutable date package and updates the shared package catalog. Experiment roles stay in the spec-generated record and later comparison plans.
+
+## Market scenarios
+
+`runtime_inputs\scenarios\market_catalog.json` registers the fixed market intervals available in the selector. The current catalog contains K200 training, K200 subsequent-test, and the current SI interval. `runtime_inputs\scenarios\scenario_catalog.json` stores named scenarios; each scenario binds one market interval and one or more selected ranges.
+
+Build the selector and apply saved scenarios to existing evaluation packages with:
+
+```powershell
+.\.venv\Scripts\python.exe tools\build_v4_41_scenario_manager.py
+.\.venv\Scripts\python.exe tools\apply_v4_41_scenario.py --all
+.\.venv\Scripts\python.exe tools\apply_v4_41_scenario.py --scenario-id scenario_1
+```
+
+The selector is published at `results\market_scenario_manager\index.html`. Scenario rankings are written under `results\scenario_analysis\<scenario_id>` and reuse the current cumulative-main interface and package-owned per-trade routes. Applying a scenario reads completed summaries and immutable trade records; it does not rerun the strategy or change an evaluation package.
 
 ## Runtime setup
 
@@ -69,6 +87,16 @@ Run the V4.41 release tests and offline documentation builds:
 .\.venv\Scripts\python.exe -m pytest research_variants\short_momentum_net_drop_rebound_v4_4 -q
 npm run build:dashboard
 ```
+
+## Current handoff package
+
+The fixed package builder creates the V4.41 source/runtime/management handoff while retaining the V4.4 strategy-major transaction-record identity:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\package_v4_4_with_trade_records.ps1
+```
+
+The archive includes `RELEASE.json`, the current source and project documents, repository-local runtime inputs, canonical reports, and immutable raw/derived transaction ledgers from completed stages. Full result directories, HTML snapshots, dependencies, caches, `.git`, and `.omo` stay outside the ZIP.
 
 ## Run gate
 

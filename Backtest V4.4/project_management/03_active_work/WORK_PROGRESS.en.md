@@ -1,5 +1,51 @@
 # Work Progress
 
+## 2026-08-09 — K200 paired review opens inline
+
+- Replaced the training/test navigation link with a centered toolbar button using the existing button states and no hover underline.
+- The exact paired `combo_id` now loads in an overlay on the current page. The overlay closes through its `隐藏…` button or Escape and unloads its iframe on close.
+- Embedded reviews omit the `当前参数` card. Outer-page content is hidden while the overlay is open, preventing duplicated information from showing through.
+- Refreshed only the K200 training/test review shells and their presentation metadata. Chrome Beta checks passed in both directions with no browser errors; trades, OHLC, metrics, and rankings were not rebuilt.
+
+## 2026-08-09 — V4.41 formal source publication
+
+- Adopted Scheme A for the formal release: publish the GitHub source, compact Windows source ZIP, SHA-256 sidecar, machine audit, and `V4.41` tag. The multi-gigabyte historical ledgers remain outside the public assets.
+- The package keeps the current source, tests, project documents, runtime contracts, scenario catalogs and tools, current cumulative browser payload, stable main shell, and one representative per-trade chunk.
+- Independent preflight extraction caught a stale market-selector source hash in the scenario test contract. The source binding was corrected before final packaging; the failed preflight archive is excluded from publication.
+- Formal acceptance requires an independent final-package extraction with 112 passed, 2 skipped, and 0 failed. No engine run, result recomputation, or historical-ranking replacement is part of publication.
+
+## 2026-08-09 — External-review findings repaired
+
+- Zero-trade coordinates now publish valid empty per-trade chunks in the four-process path instead of failing on absent DataFrame columns. No synthetic trade is created.
+- Compact `analysis_data.js` now retains a minimal target-instrument summary while excluding local profile and policy paths. Full `report_data.js` keeps the complete closed-stage profile.
+- Cross-instrument page tests use injected CSS and dynamic instrument labels. Presentation assertions follow the current table CSS and the current placement of the six colored values under Entry Reason.
+- The source-review packaging script now records 109 passed, 2 skipped, and 0 failed. The existing 2026-08-08 ZIP remains unchanged with its historical 4-failure record; no replacement ZIP was generated.
+- The complete selected suite finished with 109 passed and 2 skipped. Engine, fills, costs, trades, returns, rankings, existing HTML, and retained result snapshots were not recomputed or modified.
+
+## 2026-08-09 — Scenario draft and time-band selection update
+
+- Changed the market selector to explain that `scenario_catalog.json` is a multi-scenario directory. Import loads the complete catalog; a new draft receives the next unused `scenario_N` ID and `新场景N` default name, with only the name editable.
+- After a successful save, the selector advances to the next unused draft. Drawn shapes are normalized to `yref: paper`, `y0: 0`, and `y1: 1`, so qualification records keep the x-axis time interval and do not use a price-axis rectangle.
+- Rebuilt `results\market_scenario_manager\index.html`; strategy, qualification, trade, and result data remain unchanged.
+
+## 2026-08-08 — Market selector and reusable scenario application delivered
+
+Registered K200 training, K200 subsequent-test, and current SI market intervals in a machine-readable catalog. Migrated the retained three K200 scenario definitions into one saved-scenario catalog. The selector now switches among registered markets, preserves custom-file loading, accepts one or more chart selections, loads an existing scenario file, and saves the updated catalog.
+
+Added a scenario application script that reads date-based evaluation packages and emits a current-main-style ranking under `results\scenario_analysis`. Current Scene 1 contains 4,406 qualified coordinates, Scene 2 contains 6,292, and Scene 3 remains a real empty population. Three focused tests passed. Computer Use found the Chrome Beta window but stopped because it could not determine the browser URL with enough confidence to enforce policy; screenshots were not produced.
+
+## 2026-08-08 — V4.41 compact external-review package
+
+- Added `tools\package_v4_41_source_review.ps1` and created `Backtest_V4.41_source_review_20260808.zip` for review by another GPT. It retains current source/tests, project management, runtime inputs, the current cumulative browser payload, and one representative per-trade chunk while excluding complete stage ledgers and the remaining 37,057 chunks.
+- The package is around 50 MB, records its source/snapshot identities and whole-archive SHA-256, and reproduces 4 failed, 105 passed, and 2 skipped tests from an independent extraction. The failures remain visible to the reviewer; no source, test, trade, return, ranking, or result snapshot changed.
+
+## 2026-08-08 — V4.41 final package and recoverable cleanup
+
+- Published `Backtest_V4.41_current_complete_20260808.zip` with the current source, runtime inputs, project documents, retained reports, 110 completed stages, and 4,467 transaction ledgers. The adjacent sidecar and audit own the final byte size, entry count, and whole-archive SHA-256.
+- Made package finalization resumable from a complete staging manifest, changed archive creation to `Fastest`, added an 8 MiB buffered SHA-256 reader, and replaced full extraction/per-entry ZIP rehashing with manifest plus ZIP-index plus whole-archive verification.
+- Required raw batch trade ledgers for every completed stage. Included derived stage ledgers only when produced and recorded 100 completed stages without that optional duplicate; no historical ledger was recomputed.
+- Copied nine canonical reports byte-for-byte into the project handoff tree, then recycled `.omo`. Moved 22 obsolete package files and two directories (39.972 GiB), plus earlier caches and obsolete QA material, to the Windows Recycle Bin. Preserved current results and required evidence/runtime dependencies.
+
 ## 2026-08-08 — Visual delivery evidence rule
 
 - Future work with a visible result includes a representative screenshot when the environment allows it, with a brief assessment of overlap, garbling, asymmetry, and obvious layout errors. Local Chrome file pages may be opened through Computer Use.

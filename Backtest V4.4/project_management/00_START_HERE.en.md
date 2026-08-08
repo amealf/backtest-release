@@ -161,6 +161,10 @@ The initializer detected these pre-existing files, limited to a small orientatio
 - `runtime_inputs\templates\historical_v4_main.html`
 - `runtime_inputs\templates\historical_v4_trade.html`
 - `runtime_inputs\templates\market-intuition-selector.html`
+- `runtime_inputs\scenarios\market_catalog.json`
+- `runtime_inputs\scenarios\scenario_catalog.json`
+- `tools\build_v4_41_scenario_manager.py`
+- `tools\apply_v4_41_scenario.py`
 - `runtime_inputs\templates\plotly.min.js`
 - `RUNTIME.md`
 

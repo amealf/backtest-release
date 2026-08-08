@@ -1,5 +1,9 @@
 # Project Goal
 
+## Scenario research surface
+
+Let the researcher choose one registered instrument-and-date market interval, mark one or more exact ranges, save that selection as a named scenario, and apply it to completed evaluation packages. The resulting qualified-coordinate page must preserve the current main ranking workflow and route every coordinate to its package-owned per-trade evidence without rerunning the strategy.
+
 ## Durable objective
 
 Maintain one reproducible instrument-neutral V4.4 strategy protocol. Any executable instrument profile and exact time interval can be backtested independently, stored as its own date-based evaluation package, and compared through an explicit experiment plan. Preserve the established K200 evidence lineage while supporting controlled exact transfer, target-local refinement, continuation, and fresh exploration on other futures instruments.

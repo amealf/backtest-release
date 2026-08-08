@@ -21,6 +21,13 @@
 - Prepared baseline atoms, events, and schema-5 manifest under `runtime_inputs/data_preparation`.
 - The current ready binding is `research_variants\short_momentum_net_drop_rebound_v4_4\instrument_profiles\k200m.json`; SImain and NQ templates are input checklists, not active sources.
 
+## Market and scenario catalogs
+
+- `runtime_inputs\scenarios\market_catalog.json` contains only predeclared selector intervals. Each market entry records `market_id`, labels, instrument, evaluation package, timezone, UTC offset, 15-second bar size, exact start/end, round-trip cost bps, and the data file's path base, size, and SHA-256.
+- `runtime_inputs\scenarios\scenario_catalog.json` stores the qualification rule and named scenarios. Each scenario repeats its market and evaluation identities, data file, displayed interval, AND aggregation, and one or more selected segments.
+- A saved or edited scene must not retain `precomputed_qualification_field`; that field is only a migration bridge for the unchanged three historical V4.4 scenarios. New scenes are evaluated from immutable package trade records.
+- Scenario qualification changes only membership. Displayed return, average trade, drawdown, count, and cost fields remain the full evaluation package metrics.
+
 ## Evaluation-result package contract
 
 - The logical root is `results\evaluation_packages`; physical bytes continue through the existing results junction to F. Package identity is `<instrument_id>\<start_YYYYMMDDTHHMMSS>__<end_YYYYMMDDTHHMMSS>` and uses the evaluated interval rather than warm-up or unused file coverage.
@@ -55,7 +62,8 @@ Duplicate timestamps fail closed. Historical absolute paths are provenance only 
 
 ## ZIP handoff records
 
-- A user-requested ZIP includes the hash-bound 15-second OHLC input and transaction records for every completed V4.4 stage.
-- Package each immutable raw `batches/**/trades.csv` and each derived `analysis/stage_trades.csv` below `trade_records/`, preserving file bytes.
+- A user-requested V4.41 ZIP includes the active `RELEASE.json`, the hash-bound 15-second OHLC input, and transaction records for every completed compatible V4.4 strategy-major stage.
+- Package each immutable raw `batches/**/trades.csv` below `trade_records/`, preserving file bytes. Include `analysis/stage_trades.csv` when the completed stage produced it; record a missing optional derived ledger in the manifest and never recompute it during packaging.
 - `trade_records/TRADE_RECORDS_MANIFEST.json` must state the source campaign/stage, record role, relative source path, row count, size, SHA-256, and the source completion/stage-manifest hashes.
 - Other result payloads remain outside the archive: campaign files, batch manifests, summaries, grid files, chunks, snapshots, HTML output, logs, locks, and partial or failed stages.
+- Package verification binds source-to-staging hashes, the manifest record-set hash, ZIP entry names and sizes, forbidden/duplicate paths, and the whole-archive SHA-256. It does not create a duplicate extraction tree or repeat each ZIP entry hash.

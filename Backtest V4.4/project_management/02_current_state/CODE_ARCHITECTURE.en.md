@@ -1,5 +1,27 @@
 # Code Architecture
 
+## External-review repair boundary — 2026-08-09
+
+`build_v4_4_review_delivery.py::_native_trade_frame_fast` now returns an empty frame when a valid coordinate has no trades. The process worker writes the coordinate's normal `NATIVE_COMBO` record with `NATIVE_TRADES=[]`, `waited_count=0`, and `maximum_wait=0`. Thread and process publication therefore agree without manufacturing a trade.
+
+`analyze_v4_4_scenario_3_stage.py` continues to keep the complete stage `instrumentProfile` in `report_data.js`. Its compact `analysis_data.js` now carries only `instrumentSummary`: instrument ID, display name, ranking lineage, cost-model ID, experiment mode, and scenario policy. Local profile paths and policy implementation paths stay outside the compact browser payload.
+
+`build_v4_4_cross_instrument_comparison.py::_comparison_html` accepts optional injected base CSS for unit tests. Normal publication still reads the current cumulative page CSS. Cross-instrument tests therefore verify dynamic role-relative labels without requiring an F-drive snapshot. Presentation tests check current semantic properties and the current Entry Reason placement instead of obsolete CSS ordering or chart-label text.
+
+## Market-scenario flow
+
+`runtime_inputs\scenarios\market_catalog.json` maps selector choices to one instrument, evaluation package, market-data file, timezone, and exact interval. `tools\build_v4_41_scenario_manager.py` creates interval-only gzip browser assets and publishes the selector without embedding a product-specific filename in the interface.
+
+The selector loads one registered asset at a time, keeps selected ranges in browser memory, and saves the complete `scenario_catalog.json` through Chrome's file-save flow. The import control loads that full multi-scenario directory; a new draft receives the next unused `scenario_N` ID and `新场景N` default label, while only the label remains editable. Drawn ranges are normalized to full-height time bands. Each scenario repeats its data file, evaluation identity, displayed interval, and selected ranges so the file is self-describing.
+
+`tools\apply_v4_41_scenario.py` resolves the bound evaluation package, evaluates every selected interval against `trade_records\trades.csv`, ANDs segment qualification, filters the package's coordinate population, and generates `analysis_data.js` plus a copy of the current main shell. Migrated V4.4 scenes may reuse their compatible precomputed qualification field. New or edited scenes stream the immutable trade records. Per-trade links resolve through the package-owned `trade_review\index.html`.
+
+## V4.41 handoff packaging
+
+- `tools\package_v4_4_with_trade_records.ps1` publishes `Backtest_V4.41_current_with_trade_records_20260808.zip`. The script name keeps the V4.4 strategy-major namespace; the package identity and root release record are V4.41.
+- The package copies `RELEASE.json`, root runtime/configuration documents, the current research variant, `runtime_inputs`, `project_management`, tools, nine retained canonical reports from `research_variants\short_momentum_net_drop_rebound_v4_4\handoffs\v4_4_cost_adjusted_multiround_20260803\analysis_reports`, and immutable raw plus available derived trade ledgers from completed campaign stages. `.omo` is no longer a package dependency.
+- It excludes full result payloads, HTML snapshots, `.git`, `.omo`, dependencies, caches, browser profiles, and compiled bytecode. Raw batch trade ledgers are mandatory; a derived stage ledger is included only when that completed stage produced one. The resumable finalizer checks manifest identity, ZIP names and sizes, and the whole-archive SHA-256 without creating a duplicate extraction tree.
+
 ## Release identity boundary
 
 - `RELEASE.json` owns the active presentation release (`V4.41`) and declares the unchanged V4.4 strategy/ranking major version. Engine manifests, parameter identities, and cumulative admission continue to use the existing V4.4 contracts and ranking lineage.

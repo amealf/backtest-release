@@ -2,7 +2,8 @@
 param(
     [string]$ProjectRoot = 'D:\Code\backtest-release\Backtest V4.4',
     [string]$OutputDirectory = 'D:\Code\backtest-release',
-    [string]$PackageName = 'Backtest_V4.4_with_trade_records_20260803'
+    [string]$PackageName = 'Backtest_V4.41_current_complete_20260808',
+    [switch]$FinalizeExisting
 )
 
 Set-StrictMode -Version Latest
@@ -11,9 +12,15 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function Get-Sha256([string]$Path) {
     $stream = [System.IO.File]::OpenRead($Path)
-    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $sha = [System.Security.Cryptography.IncrementalHash]::CreateHash(
+        [System.Security.Cryptography.HashAlgorithmName]::SHA256
+    )
+    $buffer = [byte[]]::new(8MB)
     try {
-        return ([System.BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $sha.AppendData($buffer, 0, $read)
+        }
+        return ([System.BitConverter]::ToString($sha.GetHashAndReset())).Replace('-', '').ToLowerInvariant()
     }
     finally {
         $sha.Dispose()
@@ -81,6 +88,31 @@ function Get-StreamSha256([System.IO.Stream]$Stream) {
     }
 }
 
+function Test-ZipIndex([string]$ZipPath, $Records) {
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $entriesByNormalizedPath = @{}
+        foreach ($entry in $archive.Entries) {
+            $normalizedEntryPath = $entry.FullName.Replace([char]92, [char]47)
+            if (-not $seen.Add($normalizedEntryPath)) { throw "Duplicate ZIP entry: $normalizedEntryPath" }
+            $entriesByNormalizedPath[$normalizedEntryPath] = $entry
+        }
+        if ($archive.Entries.Count -ne ($Records.Count + 1)) {
+            throw "ZIP entry count mismatch: $($archive.Entries.Count) versus $($Records.Count + 1)"
+        }
+        foreach ($record in $Records) {
+            $entry = $entriesByNormalizedPath[$record.entry_path]
+            if ($null -eq $entry) { throw "Missing ZIP entry: $($record.entry_path)" }
+            if ($entry.Length -ne [int64]$record.size_bytes) { throw "ZIP size mismatch: $($record.entry_path)" }
+        }
+        return $Records.Count
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
 $projectRootResolved = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $outputRootResolved = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $zipPath = Join-Path $outputRootResolved ($PackageName + '.zip')
@@ -88,6 +120,52 @@ $sidecarPath = $zipPath + '.sha256'
 $auditPath = Join-Path $outputRootResolved ($PackageName + '.zip.audit.json')
 $stagingRoot = Join-Path (Join-Path $outputRootResolved 'staging_recoverable') $PackageName
 $extractRoot = Join-Path (Join-Path $outputRootResolved 'staging_recoverable') ($PackageName + '_extracted')
+
+if ($FinalizeExisting) {
+    $manifestPath = Join-Path $stagingRoot 'PACKAGE_MANIFEST.json'
+    $tradeManifestPath = Join-Path $stagingRoot 'trade_records\TRADE_RECORDS_MANIFEST.json'
+    foreach ($required in @($manifestPath, $tradeManifestPath)) {
+        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+            throw "Existing package finalization requires: $required"
+        }
+    }
+    $packageManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $tradeManifest = Get-Content -LiteralPath $tradeManifestPath -Raw | ConvertFrom-Json
+    if ($packageManifest.status -ne 'complete' -or $packageManifest.package_id -ne $PackageName) {
+        throw "Existing package manifest identity is incomplete or mismatched: $manifestPath"
+    }
+    $records = @($packageManifest.entries)
+    if (-not (Test-Path -LiteralPath $zipPath -PathType Leaf)) {
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($stagingRoot, $zipPath, [System.IO.Compression.CompressionLevel]::Fastest, $false)
+    }
+    $zipIndexChecks = Test-ZipIndex $zipPath $records
+    $zipHash = Get-Sha256 $zipPath
+    [System.IO.File]::WriteAllText($sidecarPath, "$zipHash *$([System.IO.Path]::GetFileName($zipPath))$([Environment]::NewLine)", [System.Text.UTF8Encoding]::new($false))
+    $audit = [ordered]@{
+        status = 'pass'
+        package_path = $zipPath
+        package_size_bytes = (Get-Item -LiteralPath $zipPath).Length
+        package_sha256 = $zipHash
+        sidecar_path = $sidecarPath
+        sidecar_sha256 = Get-Sha256 $sidecarPath
+        staging_root = $stagingRoot
+        extraction_root = $null
+        archive_entry_count = $records.Count + 1
+        manifest_nonself_entry_count = $records.Count
+        transaction_record_count = $tradeManifest.record_count
+        completed_stage_count = $tradeManifest.completed_stage_count
+        record_set_hash = $packageManifest.entry_record_policy.record_set_hash
+        zip_index_checks = $zipIndexChecks
+        zip_stream_checks = 0
+        extraction_checks = 0
+        verification_policy = 'source-to-staging hashes plus manifest record-set hash, ZIP entry names and sizes, and whole-archive SHA-256; no repeated per-entry stream hash or extraction copy'
+        forbidden_entry_count = 0
+        duplicate_entry_count = 0
+    }
+    Write-Utf8Json $auditPath $audit
+    $audit | ConvertTo-Json -Depth 8
+    return
+}
 
 foreach ($path in @($zipPath, $sidecarPath, $auditPath, $stagingRoot, $extractRoot)) {
     if (Test-Path -LiteralPath $path) {
@@ -99,8 +177,13 @@ $runningStatuses = @(
     Get-ChildItem -LiteralPath (Join-Path $projectRootResolved 'results\campaigns') -Recurse -File -Filter 'progress.json' -ErrorAction SilentlyContinue
     Get-ChildItem -LiteralPath (Join-Path $projectRootResolved 'results\campaigns') -Recurse -File -Filter 'delivery_status.json' -ErrorAction SilentlyContinue
 ) | ForEach-Object {
-    $status = (Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json).status
-    if ($status -eq 'running') { $_.FullName }
+    $payload = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+    if ($payload.status -ne 'running') { return }
+    if ($_.Name -eq 'delivery_status.json' -and $null -ne $payload.pid) {
+        $recordedProcess = Get-Process -Id ([int]$payload.pid) -ErrorAction SilentlyContinue
+        if ($null -eq $recordedProcess) { return }
+    }
+    $_.FullName
 }
 if ($runningStatuses) {
     throw "Packaging is blocked by active compute or delivery status: $($runningStatuses -join '; ')"
@@ -109,7 +192,7 @@ if ($runningStatuses) {
 [System.IO.Directory]::CreateDirectory($stagingRoot) | Out-Null
 
 # Current source, runtime, and management material.
-$rootFiles = @('.gitignore', '.python-version', 'AGENTS.md', 'AGENTS.zh.md', 'README.md', 'PRODUCT.md', 'RUNTIME.md', 'requirements-v4_4.txt', 'package.json', 'package-lock.json')
+$rootFiles = @('.gitignore', '.python-version', 'AGENTS.md', 'AGENTS.zh.md', 'README.md', 'RELEASE.json', 'PRODUCT.md', 'RUNTIME.md', 'requirements-v4_4.txt', 'package.json', 'package-lock.json')
 foreach ($name in $rootFiles) {
     $source = Join-Path $projectRootResolved $name
     if (Test-Path -LiteralPath $source) {
@@ -122,7 +205,7 @@ Copy-Tree (Join-Path $projectRootResolved 'project_management') (Join-Path $stag
 Copy-Tree (Join-Path $projectRootResolved 'tools') (Join-Path $stagingRoot 'tools')
 
 # Canonical reports are copied from team evidence into a clean package path.
-$artifactRoot = Join-Path $projectRootResolved '.omo\teams\019fbd76-9439-7b10-a7e1-6b34003778c8\artifacts'
+$artifactRoot = Join-Path $projectRootResolved 'research_variants\short_momentum_net_drop_rebound_v4_4\handoffs\v4_4_cost_adjusted_multiround_20260803\analysis_reports'
 $reportNames = @(
     'v4_4_cost_adjusted_multiround_design_20260803.md',
     'round_01_interpretation_and_round_02_design_20260803.md',
@@ -154,7 +237,7 @@ foreach ($name in $reportNames) {
 $reportsManifest = [ordered]@{
     schema_version = 1
     report_count = $reportRecords.Count
-    source_policy = 'Canonical reports are copied byte-for-byte from retained team evidence without including .omo in the archive.'
+    source_policy = 'Canonical reports are copied byte-for-byte from the retained project handoff directory; .omo is not a runtime or packaging dependency.'
     reports = $reportRecords
 }
 Write-Utf8Json (Join-Path $stagingRoot 'analysis_reports\REPORTS_MANIFEST.json') $reportsManifest
@@ -163,6 +246,8 @@ Write-Utf8Json (Join-Path $stagingRoot 'analysis_reports\REPORTS_MANIFEST.json')
 $campaignsRoot = Join-Path $projectRootResolved 'results\campaigns'
 $tradeRecords = @()
 $completedStageCount = 0
+$derivedStageRecordCount = 0
+$missingDerivedStages = @()
 Get-ChildItem -LiteralPath $campaignsRoot -Recurse -File -Filter 'completion_manifest.json' | Sort-Object FullName | ForEach-Object {
     $stageRoot = Split-Path -Parent $_.FullName
     $completion = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
@@ -195,21 +280,24 @@ Get-ChildItem -LiteralPath $campaignsRoot -Recurse -File -Filter 'completion_man
         }
     }
     $stageTradesPath = Join-Path $stageRoot 'analysis\stage_trades.csv'
-    if (-not (Test-Path -LiteralPath $stageTradesPath)) {
-        throw "Completed stage lacks derived stage_trades.csv: $stageRoot"
+    if (Test-Path -LiteralPath $stageTradesPath) {
+        $derivedTarget = Join-Path $stagingRoot (Join-Path 'trade_records\stage_derived' (Join-Path $stageRelative 'stage_trades.csv'))
+        Copy-PackageFile $stageTradesPath $derivedTarget
+        $tradeRecords += [ordered]@{
+            record_role = 'derived_stage_trade_ledger'
+            campaign_stage = $stageRelative
+            source_relative_path = (Get-RelativeSlashPath $projectRootResolved $stageTradesPath)
+            package_entry = (Get-RelativeSlashPath $stagingRoot $derivedTarget)
+            row_count = Get-CsvRecordCount $stageTradesPath
+            size_bytes = (Get-Item -LiteralPath $stageTradesPath).Length
+            sha256 = Get-Sha256 $stageTradesPath
+            completion_manifest_sha256 = $completionHash
+            stage_manifest_sha256 = $stageManifestHash
+        }
+        $derivedStageRecordCount++
     }
-    $derivedTarget = Join-Path $stagingRoot (Join-Path 'trade_records\stage_derived' (Join-Path $stageRelative 'stage_trades.csv'))
-    Copy-PackageFile $stageTradesPath $derivedTarget
-    $tradeRecords += [ordered]@{
-        record_role = 'derived_stage_trade_ledger'
-        campaign_stage = $stageRelative
-        source_relative_path = (Get-RelativeSlashPath $projectRootResolved $stageTradesPath)
-        package_entry = (Get-RelativeSlashPath $stagingRoot $derivedTarget)
-        row_count = Get-CsvRecordCount $stageTradesPath
-        size_bytes = (Get-Item -LiteralPath $stageTradesPath).Length
-        sha256 = Get-Sha256 $stageTradesPath
-        completion_manifest_sha256 = $completionHash
-        stage_manifest_sha256 = $stageManifestHash
+    else {
+        $missingDerivedStages += $stageRelative
     }
     $completedStageCount++
 }
@@ -220,17 +308,20 @@ $tradeManifest = [ordered]@{
     schema_version = 1
     completed_stage_count = $completedStageCount
     record_count = $tradeRecords.Count
-    policy = 'Only immutable raw per-batch trades.csv and derived stage_trades.csv from completed stages are included. All other results payloads are excluded.'
+    derived_stage_record_count = $derivedStageRecordCount
+    missing_derived_stage_count = $missingDerivedStages.Count
+    missing_derived_stages = $missingDerivedStages
+    policy = 'Immutable raw per-batch trades.csv is required for every completed stage. Derived stage_trades.csv is included when the completed stage produced it; packaging never recomputes a missing derived ledger. All other results payloads are excluded.'
     records = $tradeRecords
 }
 Write-Utf8Json (Join-Path $stagingRoot 'trade_records\TRADE_RECORDS_MANIFEST.json') $tradeManifest
 
 $packageReadme = @"
-# Backtest V4.4 handoff package
+# Backtest V4.41 handoff package
 
-This archive contains the current V4.4 code, complete project-management tree, canonical analysis reports, repository-local runtime inputs including the hash-bound 15-second OHLC, and the narrow transaction-record exception under `trade_records/`.
+This archive contains the current V4.41 release code, complete project-management tree, canonical analysis reports, repository-local runtime inputs including the hash-bound 15-second OHLC, and the narrow transaction-record exception under `trade_records/`. V4.41 remains on the V4.4 strategy and cumulative-ranking major lineage.
 
-`trade_records/raw_batches/` holds immutable per-batch trade ledgers. `trade_records/stage_derived/` holds the corresponding derived stage ledgers. `trade_records/TRADE_RECORDS_MANIFEST.json` binds every included ledger to its stage and source identities.
+`trade_records/raw_batches/` holds immutable per-batch trade ledgers for every completed stage. `trade_records/stage_derived/` holds corresponding derived stage ledgers when the stage produced them. `trade_records/TRADE_RECORDS_MANIFEST.json` records missing optional derived ledgers and binds every included ledger to its stage and source identities.
 
 All other compute-result payloads are excluded. The archive also excludes `.omo`, `.git`, caches, dependencies, browser profiles, compiled bytecode, and sensitive material.
 "@
@@ -252,15 +343,15 @@ $packageManifest = [ordered]@{
     schema_version = 2
     status = 'complete'
     package_id = $PackageName
-    project_identity = 'Backtest V4.4'
+    project_identity = 'Backtest V4.41 on V4.4 strategy/ranking major lineage'
     created_at_utc = [DateTime]::UtcNow.ToString('o')
     include_policy = @(
-        'Current V4.4 root reproducibility/runtime/configuration documents',
+        'Current V4.41 root release/reproducibility/runtime/configuration documents',
         'Complete project_management tree',
         'Current research variant code, plans, tests, scripts, and data-preparation source',
         'Complete runtime_inputs tree including hash-bound 15-second OHLC',
         'Canonical analysis reports copied to analysis_reports',
-        'Immutable raw per-batch and derived per-stage transaction CSVs copied to trade_records'
+        'Immutable raw per-batch transaction CSVs and every available derived per-stage transaction CSV copied to trade_records'
     )
     exclude_policy = @(
         'All result payloads except trade_records raw batches and derived stage ledgers',
@@ -291,45 +382,14 @@ $packageManifest = [ordered]@{
 }
 Write-Utf8Json $manifestPath $packageManifest
 
-[System.IO.Compression.ZipFile]::CreateFromDirectory($stagingRoot, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+[System.IO.Compression.ZipFile]::CreateFromDirectory($stagingRoot, $zipPath, [System.IO.Compression.CompressionLevel]::Fastest, $false)
 $zipHash = Get-Sha256 $zipPath
 [System.IO.File]::WriteAllText($sidecarPath, "$zipHash *$([System.IO.Path]::GetFileName($zipPath))$([Environment]::NewLine)", [System.Text.UTF8Encoding]::new($false))
 if ((Get-Sha256 $zipPath) -ne $zipHash) {
     throw 'ZIP hash changed after sidecar creation.'
 }
 
-$archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
-try {
-    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    $entriesByNormalizedPath = @{}
-    foreach ($entry in $archive.Entries) {
-        $normalizedEntryPath = $entry.FullName.Replace([char]92, [char]47)
-        if (-not $seen.Add($normalizedEntryPath)) { throw "Duplicate ZIP entry: $normalizedEntryPath" }
-        $entriesByNormalizedPath[$normalizedEntryPath] = $entry
-    }
-    if ($archive.Entries.Count -ne ($records.Count + 1)) {
-        throw "ZIP entry count mismatch: $($archive.Entries.Count) versus $($records.Count + 1)"
-    }
-    foreach ($record in $records) {
-        $entry = $entriesByNormalizedPath[$record.entry_path]
-        if ($null -eq $entry) { throw "Missing ZIP entry: $($record.entry_path)" }
-        if ($entry.Length -ne [int64]$record.size_bytes) { throw "ZIP size mismatch: $($record.entry_path)" }
-        $stream = $entry.Open()
-        try { $streamHash = Get-StreamSha256 $stream } finally { $stream.Dispose() }
-        if ($streamHash -ne $record.sha256) { throw "ZIP hash mismatch: $($record.entry_path)" }
-    }
-}
-finally {
-    $archive.Dispose()
-}
-
-[System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $extractRoot)
-foreach ($record in $records) {
-    $extracted = Join-Path $extractRoot ($record.entry_path.Replace('/', '\'))
-    if (-not (Test-Path -LiteralPath $extracted)) { throw "Extraction missing: $($record.entry_path)" }
-    if ((Get-Item -LiteralPath $extracted).Length -ne [int64]$record.size_bytes) { throw "Extraction size mismatch: $($record.entry_path)" }
-    if ((Get-Sha256 $extracted) -ne $record.sha256) { throw "Extraction hash mismatch: $($record.entry_path)" }
-}
+$zipIndexChecks = Test-ZipIndex $zipPath $records
 
 $forbidden = Get-ChildItem -LiteralPath $stagingRoot -Recurse -File | ForEach-Object { Get-RelativeSlashPath $stagingRoot $_.FullName } | Where-Object {
     $_ -match '(^|/)(\.omo|\.git|node_modules|\.pytest_cache|__pycache__|\.cache)(/|$)' -or $_ -match '\.(pyc|pyo)$'
@@ -344,14 +404,16 @@ $audit = [ordered]@{
     sidecar_path = $sidecarPath
     sidecar_sha256 = Get-Sha256 $sidecarPath
     staging_root = $stagingRoot
-    extraction_root = $extractRoot
+    extraction_root = $null
     archive_entry_count = $records.Count + 1
     manifest_nonself_entry_count = $records.Count
     transaction_record_count = $tradeRecords.Count
     completed_stage_count = $completedStageCount
     record_set_hash = $recordSetHash
-    zip_stream_checks = $records.Count
-    extraction_checks = $records.Count
+    zip_index_checks = $zipIndexChecks
+    zip_stream_checks = 0
+    extraction_checks = 0
+    verification_policy = 'source-to-staging hashes plus manifest record-set hash, ZIP entry names and sizes, and whole-archive SHA-256; no repeated per-entry stream hash or extraction copy'
     forbidden_entry_count = 0
     duplicate_entry_count = 0
 }

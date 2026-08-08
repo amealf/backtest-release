@@ -36,8 +36,8 @@
     },
     "historical_v4_trade_template": {
       "path": "runtime_inputs/templates/historical_v4_trade.html",
-      "sha256": "0b30ac0e0ed189d83a6cf962cf1bf826a82d312bfd07ca294dc9952ece3d6fc9",
-      "size_bytes": 193687
+      "sha256": "60073aad0b6a4162043c36dbddc95808f0b7e0352715fe4fca1fd9ea495ffc7e",
+      "size_bytes": 227970
     },
     "plotly": {
       "path": "runtime_inputs/templates/plotly.min.js",

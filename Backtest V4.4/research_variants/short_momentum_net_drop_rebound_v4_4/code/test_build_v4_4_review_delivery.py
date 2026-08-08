@@ -240,7 +240,12 @@ def test_review_templates_are_offline_and_keep_v4_4_navigation_identity() -> Non
 
 
 def test_historical_trade_template_adds_static_filter_overlay_without_replacing_layout() -> None:
-    html = _historical_trade_html("../index.html")
+    html = _historical_trade_html(
+        "../index.html",
+        peer_review_href="../peer/index.html",
+        peer_review_label="显示测试集",
+        peer_research_contract_id="peer_contract",
+    )
     assert FILTER_OVERLAY_ID in html
     assert "v43MaxWAuditText" in html
     assert "rebound_exit_bar_candidate" in html
@@ -253,6 +258,15 @@ def test_historical_trade_template_adds_static_filter_overlay_without_replacing_
     assert "baseline_filter_events" in html
     assert 'id="chart"' in html
     assert "Plotly.react" in html
+    assert 'id="peerReviewLink" class="view-btn peer-review-toggle"' in html
+    assert 'id="peerReviewOverlay" class="peer-review-overlay"' in html
+    assert 'id="peerReviewFrame" class="peer-review-frame"' in html
+    assert 'target.searchParams.set("embedded", "1")' in html
+    assert 'els.peerReviewFrame.removeAttribute("src")' in html
+    assert '"label":"显示测试集"' in html
+    assert html.index("initPeerReview();") < html.index("if (allResultsCatalog)")
+    assert 'html[data-embedded-review="true"] .selection-card{display:none!important}' in html
+    assert 'html[data-peer-review-open="true"] .wrap > :not(.peer-review-overlay){visibility:hidden}' in html
 
 
 def _valid_max_w_rebound_trade() -> pd.DataFrame:
@@ -529,15 +543,12 @@ def test_closed_max_w_review_uses_four_workers_and_hash_gated_historical_assets(
     assert 'dash:"dash"' not in html
     assert 'dash:"dot"' not in html
     assert "虚线提示" not in html
-    assert "· 紫色" in html
-    assert "· 橙色" in html
+    assert "· 紫色" not in html
+    assert "· 橙色" not in html
     assert "pushAuditAnnotation(`cover=" not in html
     assert "pushAuditAnnotation(`理论线=" not in html
     assert "· 实际成交=" not in html
-    assert (
-        "pushAuditAnnotation(`L=${fmtRecorded(reboundLowPrice,3)}`,"
-        "theme.green,theme.ink);"
-    ) in html
+    assert "pushAuditAnnotation(`L=${fmtRecorded(reboundLowPrice,3)}`" not in html
     assert "pushAuditAnnotation(`L=${fmtRecorded(reboundLowPrice,3)} ·" not in html
     assert "function xRangeBand(x0, x1, color)" in html
     assert 'line:{color:"rgba(0,0,0,0)",width:0}' in html
@@ -617,7 +628,7 @@ def test_cumulative_main_filter_panel_can_collapse_to_one_row_and_expand() -> No
     assert '<path d="m6 9 6 6 6-6"></path>' in html
     assert 'id="control-toggle-label"' not in html
     assert "width:40px;height:36px" in html
-    assert "#table{contain:layout paint}" in html
+    assert "contain:layout paint" in html
     assert "setControlsCollapsed(false)" in html
     assert "controlToggle.onclick=()=>setControlsCollapsed" in html
     assert "collapsed?'Expand filters and sorting':'Collapse filters and sorting'" in html

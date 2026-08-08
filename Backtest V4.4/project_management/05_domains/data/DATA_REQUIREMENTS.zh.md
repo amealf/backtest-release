@@ -21,6 +21,13 @@
 - `runtime_inputs/data_preparation` 下的 baseline 原子、事件与 schema 5 清单。
 - 当前已就绪绑定为 `research_variants\short_momentum_net_drop_rebound_v4_4\instrument_profiles\k200m.json`；SImain 与 NQ 模板只用于收集输入，不是活动来源。
 
+## 行情与场景目录
+
+- `runtime_inputs\scenarios\market_catalog.json` 只保存预先登记的选择器区间。每项行情记录 `market_id`、中英文名称、品种、评价结果包、时区、UTC 偏移、15 秒 bar、精确起止时间、往返成本 bps，以及数据文件的路径基准、大小和 SHA-256。
+- `runtime_inputs\scenarios\scenario_catalog.json` 保存资格规则与命名场景。每个场景重复记录行情和评价身份、数据文件、显示区间、AND 聚合方式，以及一段或多段选区。
+- 新保存或编辑的场景不能保留 `precomputed_qualification_field`；该字段只用于迁移未变化的三个 V4.4 历史场景。新场景根据结果包的不可变逐笔记录判断资格。
+- 场景资格只改变参数集合。页面显示的收益、笔均、回撤、交易数和成本仍使用完整评价结果包指标。
+
 ## 回测结果包契约
 
 - 逻辑根目录为 `results\evaluation_packages`，实体字节继续通过现有 results 目录联接写入 F 盘。结果包身份为 `<instrument_id>\<start_YYYYMMDDTHHMMSS>__<end_YYYYMMDDTHHMMSS>`，时间只取实际评价区间，不包含预热或文件内尚未使用的行情。
@@ -55,7 +62,8 @@
 
 ## ZIP 交接记录
 
-- 用户要求 ZIP 时，纳入哈希绑定的 15 秒 OHLC 输入，以及每个已完成 V4.4 阶段的逐笔交易记录。
-- 每份不可变原始 `batches/**/trades.csv` 与每个衍生 `analysis/stage_trades.csv` 都复制到 `trade_records/`，并保持文件字节不变。
+- 用户要求 V4.41 ZIP 时，纳入当前 `RELEASE.json`、哈希绑定的 15 秒 OHLC 输入，以及每个已完成且兼容 V4.4 策略主版本阶段的逐笔交易记录。
+- 每份不可变原始 `batches/**/trades.csv` 都复制到 `trade_records/`，并保持文件字节不变。已完成阶段生成了 `analysis/stage_trades.csv` 时一并纳入；缺少可选衍生账本时写入清单，打包过程不会重新计算。
 - `trade_records/TRADE_RECORDS_MANIFEST.json` 必须记录来源 campaign／阶段、记录角色、相对来源路径、行数、大小、SHA-256，以及来源 completion／stage manifest 哈希。
 - 其他结果载荷继续留在 ZIP 外：campaign 文件、batch manifest、summary、grid、chunks、snapshot、HTML 输出、日志、锁，以及未完成或失败阶段。
+- 打包核验绑定来源到 staging 的哈希、清单记录集哈希、ZIP 条目名称与大小、禁止／重复路径和整包 SHA-256；不建立重复解压目录，也不重复计算每个 ZIP 条目哈希。

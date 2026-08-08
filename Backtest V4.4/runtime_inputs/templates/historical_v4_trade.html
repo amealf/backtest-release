@@ -103,10 +103,13 @@ try {
   --hover-text:#111827;
   --z-drawer:20;
   --z-drawer-tab:21;
+  --z-peer-review:30;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{width:100%;min-height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Microsoft YaHei,Arial,sans-serif}
+html[data-peer-review-open="true"]{overflow:hidden}
+html[data-peer-review-open="true"] .wrap > :not(.peer-review-overlay){visibility:hidden}
 body{font-size:14px}
 a{color:var(--blue);text-decoration:none;text-underline-offset:3px}
 a:hover{text-decoration:underline}
@@ -118,10 +121,16 @@ a:hover{text-decoration:underline}
 .review-label{display:inline-flex;align-items:center;margin-right:8px;padding:2px 7px;border:1px solid var(--line-strong);border-radius:999px;color:var(--text);font-weight:760;letter-spacing:.01em}
 .view-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
 .view-tabs{display:flex;gap:6px;align-items:center}
-.view-btn{height:32px;border:1px solid var(--line-strong);background:var(--panel-soft);border-radius:6px;color:var(--text);padding:0 12px;font-weight:650;cursor:pointer}
-.view-btn:hover{background:var(--panel-strong);border-color:var(--muted)}
+.view-btn{display:inline-flex;align-items:center;justify-content:center;height:32px;border:1px solid var(--line-strong);background:var(--panel-soft);border-radius:6px;color:var(--text);padding:0 12px;font:inherit;font-weight:650;line-height:1;cursor:pointer;text-decoration:none}
+.view-btn:hover{background:var(--panel-strong);border-color:var(--muted);text-decoration:none}
 .view-tabs a.view-btn{display:inline-flex;align-items:center;text-decoration:none}
 .view-btn.active{border-color:var(--blue);background:var(--blue-soft);color:var(--selected-text)}
+.peer-review-overlay{position:fixed;z-index:var(--z-peer-review);inset:12px;display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;background:var(--panel);border:1px solid var(--line-strong);border-radius:10px}
+.peer-review-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--panel-soft)}
+.peer-review-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:760}
+.peer-review-frame{display:block;width:100%;height:100%;border:0;background:var(--bg)}
+html[data-embedded-review="true"] #peerReviewLink{display:none!important}
+html[data-embedded-review="true"] .selection-card{display:none!important}
 .segmented{display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:7px;background:var(--panel-soft);padding:2px}
 .segmented-option{min-width:86px;height:28px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--body);padding:0 9px;font:inherit;font-size:12px;font-weight:720;cursor:pointer}
 .segmented-option:hover{background:var(--panel-strong);color:var(--text)}
@@ -263,6 +272,7 @@ select option:checked{color:var(--option-selected-text)!important;background:var
   .range-stats-period,.range-stats-grid{grid-template-columns:1fr 1fr}
   .range-stats-period>div{grid-template-columns:58px minmax(0,1fr)}
   .range-stat--empty{display:none}
+  .peer-review-overlay{inset:6px}
 }
 @media (prefers-reduced-motion:reduce){.controls-drawer{transition:none}}
 </style>
@@ -272,7 +282,7 @@ select option:checked{color:var(--option-selected-text)!important;background:var
   <div class="view-switch">
     <div class="view-copy"><span class="review-label">V4 净跌幅回撤逐笔查看</span></div>
     <div class="view-actions">
-      <a id="peerReviewLink" class="view-btn" href="#" hidden></a>
+      <button id="peerReviewLink" class="view-btn peer-review-toggle" type="button" aria-controls="peerReviewOverlay" aria-expanded="false" hidden></button>
       <button id="rangeStatsBtn" class="view-btn range-stats-toggle" type="button" aria-pressed="false">区间统计</button>
       <button id="holdingCheckBtn" class="view-btn holding-check-toggle" type="button" aria-pressed="false">持仓检测</button>
       <div class="segmented theme-segmented" role="group" aria-label="页面主题 Page theme">
@@ -286,6 +296,14 @@ select option:checked{color:var(--option-selected-text)!important;background:var
       </div>
     </div>
   </div>
+
+  <section id="peerReviewOverlay" class="peer-review-overlay" aria-hidden="true" hidden>
+    <div class="peer-review-head">
+      <strong id="peerReviewTitle" class="peer-review-title"></strong>
+      <button id="peerReviewClose" class="view-btn" type="button"></button>
+    </div>
+    <iframe id="peerReviewFrame" class="peer-review-frame" title="配对行情与逐笔结果"></iframe>
+  </section>
 
   
 
@@ -388,6 +406,7 @@ const volatilityTrBarSeconds = Number(15);
 const subminuteExecution = executionBarSeconds < 60;
 let unifiedN1 = !!features?.unified_n1;
 const params = new URLSearchParams(location.search);
+document.documentElement.dataset.embeddedReview = String(params.get("embedded") === "1");
 const els = {
   controlsDrawer: document.getElementById("controlsDrawer"),
   controlsCollapse: document.getElementById("controlsCollapse"),
@@ -447,6 +466,10 @@ const els = {
   param: document.getElementById("paramInfo"),
   tradeMetrics: document.getElementById("tradeMetrics"),
   peerReview: document.getElementById("peerReviewLink"),
+  peerReviewOverlay: document.getElementById("peerReviewOverlay"),
+  peerReviewTitle: document.getElementById("peerReviewTitle"),
+  peerReviewClose: document.getElementById("peerReviewClose"),
+  peerReviewFrame: document.getElementById("peerReviewFrame"),
   darkTheme: document.getElementById("darkThemeBtn"),
   lightTheme: document.getElementById("lightThemeBtn"),
   entryReasonBtn: document.getElementById("entryReasonBtn"),
@@ -461,6 +484,7 @@ const els = {
 const tradeCache = {};
 const scriptPromises = {};
 const peerReview = null;
+let peerReviewTarget = "";
 const DEFAULT_START_DATE = "2026-05-26";
 const SHOW_DAILY_FLOOR = false;
 const SHOW_ENTRY_RESET_REASON = false;
@@ -683,13 +707,54 @@ function esc(value) {
 function plotTheme() {
   return PLOT_THEMES[currentTheme] || PLOT_THEMES.dark;
 }
+function peerReviewDatasetLabel() {
+  return String(peerReview?.label || "配对行情").replace(/^显示/, "") || "配对行情";
+}
+function setPeerReviewOpen(open) {
+  const isOpen = Boolean(open && peerReviewTarget && els.peerReviewOverlay && els.peerReviewFrame);
+  const datasetLabel = peerReviewDatasetLabel();
+  els.peerReviewOverlay.hidden = !isOpen;
+  els.peerReviewOverlay.setAttribute("aria-hidden", String(!isOpen));
+  els.peerReview.setAttribute("aria-expanded", String(isOpen));
+  document.documentElement.dataset.peerReviewOpen = String(isOpen);
+  if (isOpen) {
+    els.peerReviewTitle.textContent = `${datasetLabel} · 相同参数`;
+    els.peerReviewClose.textContent = `隐藏${datasetLabel}`;
+    els.peerReviewFrame.title = `${datasetLabel}行情与逐笔结果`;
+    if (els.peerReviewFrame.getAttribute("src") !== peerReviewTarget) {
+      els.peerReviewFrame.setAttribute("src", peerReviewTarget);
+    }
+    els.peerReviewClose.focus();
+    return;
+  }
+  els.peerReviewFrame.removeAttribute("src");
+}
+function initPeerReview() {
+  els.peerReview.addEventListener("click", () => setPeerReviewOpen(true));
+  els.peerReviewClose.addEventListener("click", () => {
+    setPeerReviewOpen(false);
+    els.peerReview.focus();
+  });
+  window.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !els.peerReviewOverlay.hidden) {
+      setPeerReviewOpen(false);
+      els.peerReview.focus();
+    }
+  });
+}
 function updatePeerReviewLink(combo) {
   if (!els.peerReview || !peerReview?.href || !peerReview?.label) {
-    if (els.peerReview) els.peerReview.hidden = true;
+    peerReviewTarget = "";
+    if (els.peerReview) {
+      setPeerReviewOpen(false);
+      els.peerReview.hidden = true;
+    }
     return;
   }
   const comboId = String(combo?.combo_id || params.get("combo_id") || "");
   if (!comboId) {
+    peerReviewTarget = "";
+    setPeerReviewOpen(false);
     els.peerReview.hidden = true;
     return;
   }
@@ -701,9 +766,12 @@ function updatePeerReviewLink(combo) {
   } else {
     target.searchParams.delete("research_contract_id");
   }
+  target.searchParams.set("embedded", "1");
   els.peerReview.textContent = peerReview.label;
-  els.peerReview.href = target.href;
+  els.peerReview.setAttribute("aria-label", `${peerReview.label}，在本页面打开`);
+  peerReviewTarget = target.href;
   els.peerReview.hidden = false;
+  if (!els.peerReviewOverlay.hidden) setPeerReviewOpen(true);
 }
 function frozenIntervalLabel(startIndex, endIndex) {
   const start = Number(startIndex);
@@ -758,7 +826,11 @@ function initControlsDrawer() {
   els.controlsCollapse.addEventListener("click", () => setControlsDrawer(false));
   els.controlsOpen.addEventListener("click", () => setControlsDrawer(true));
   window.addEventListener("keydown", event => {
-    if (event.key === "Escape" && els.controlsDrawer.dataset.open === "true") setControlsDrawer(false);
+    if (
+      event.key === "Escape" &&
+      els.peerReviewOverlay.hidden &&
+      els.controlsDrawer.dataset.open === "true"
+    ) setControlsDrawer(false);
   });
 }
 function updateThemeControls() {
@@ -3544,6 +3616,7 @@ function init() {
   initControlsDrawer();
   updateThemeControls();
   selectReasonMode(reasonMode, false);
+  initPeerReview();
   els.darkTheme.addEventListener("click", () => {
     if (currentTheme !== "dark") void selectTheme("dark");
   });

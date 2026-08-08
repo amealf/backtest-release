@@ -479,8 +479,8 @@
   },
   "runtime_inputs": {
     "manifest_path": "runtime_inputs/RUNTIME_INPUTS.json",
-    "manifest_sha256": "702634c69d5edf6753307d75a25125b0aef2036b0bc3765cd831acf16968ac4c",
-    "manifest_size_bytes": 2733,
+    "manifest_sha256": "cd1e1d4f167121d8ed87c22fad4ca5aca1b05278d8bdaab1d90217853994efcc",
+    "manifest_size_bytes": 2728,
     "path_policy": "repository_relative_active_runtime"
   },
   "data_preparation": {
@@ -524,8 +524,8 @@
     },
     "stage_analyzer": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/analyze_v4_4_scenario_3_stage.py",
-      "sha256": "5ccd42137a64769353993d29ce1e1342ad634adbb96e93240c8a0f070a3dc66c",
-      "size_bytes": 123969
+      "sha256": "721d8a409e78a912c75f96b8d648a20e6ff175ef609d7b48e088779b86a02a56",
+      "size_bytes": 124595
     },
     "cumulative_builder": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_combined_union_analysis.py",
@@ -534,8 +534,8 @@
     },
     "cross_instrument_comparison": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_cross_instrument_comparison.py",
-      "sha256": "2fb2535a9381df7916071a362baa551eafcf1dff6c5f8ea293965f7f129387c0",
-      "size_bytes": 93368
+      "sha256": "00ec86c530c113c997d929c19f98667355589614bf606b08821ed2abfedf9806",
+      "size_bytes": 109018
     },
     "strict_entry_transfer": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_strict_entry_transfer.py",
@@ -544,13 +544,13 @@
     },
     "review_generator": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/build_v4_4_review_delivery.py",
-      "sha256": "2043d0751cd00acda9bcb34d5f8c1c85defd7a2873cf0207a4580be089931a55",
-      "size_bytes": 132692
+      "sha256": "e72dac862d393fb0191306625eff2b4969d0a0a848e54a9ef3155bd6bb904f8e",
+      "size_bytes": 135301
     },
     "trade_design_template": {
       "path": "runtime_inputs/templates/historical_v4_trade.html",
-      "sha256": "e36fcdca4d3ea99a2d6518286e10b471d2a4108039b9c4285a0942aea305a72f",
-      "size_bytes": 224110
+      "sha256": "60073aad0b6a4162043c36dbddc95808f0b7e0352715fe4fca1fd9ea495ffc7e",
+      "size_bytes": 227970
     },
     "preparation": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/data_preparation/prepare_dataset.py",
@@ -606,8 +606,8 @@
     },
     "review_tests": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_review_delivery.py",
-      "sha256": "c91d4e62aa2af552d155efa02e0f6368e4365ba93eb8cb4d2119e2dfc15aff79",
-      "size_bytes": 30457
+      "sha256": "cdc97758233e1858ff7017ce830f065c523a18f466ef7d8da376b48c77e9a52a",
+      "size_bytes": 31248
     },
     "scenario_delivery_tests": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_scenario_requirements_delivery.py",
@@ -621,8 +621,8 @@
     },
     "cross_instrument_tests": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_cross_instrument_comparison.py",
-      "sha256": "558502c3fda1053519a7f0b6ae4e6248693752db9725e667636623e32e5c7f54",
-      "size_bytes": 6802
+      "sha256": "ffdf28bdad9bb686ff58ff7ae2c8fafeab2e3c2e7ad07f9fd42a4e52354652ee",
+      "size_bytes": 6876
     },
     "strict_entry_transfer_tests": {
       "path": "research_variants/short_momentum_net_drop_rebound_v4_4/code/test_build_v4_4_strict_entry_transfer.py",

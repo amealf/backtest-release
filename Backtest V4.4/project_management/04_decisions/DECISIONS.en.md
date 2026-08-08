@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-08-09 — Keep paired K200 reviews on the current page
+
+- Open the exact training/test counterpart inside the current review page instead of navigating away.
+- Provide an explicit hide control and Escape handling. Unload the paired iframe on close to release its renderer.
+- Keep the established button vocabulary. Omit the embedded `当前参数` card and hide outer content while the overlay is open.
+
+## 2026-08-09 — Publish V4.41 through Scheme A
+
+- Publish the GitHub source, one compact Windows source ZIP, its SHA-256 sidecar, its machine audit, and annotated tag `V4.41`.
+- Exclude multi-gigabyte historical trade ledgers from public release assets. Keep the complete 2026-08-08 handoff local and independently recoverable.
+- Require the compact release to pass from an independent extraction. The release gate is 112 passed, 2 explicit historical-artifact skips, and 0 failed.
+- Keep the 2026-08-08 compact review archive immutable as historical evidence. A failed preflight package has no release authority and is never uploaded.
+
+## 2026-08-08 — Keep V4.41 packaging recoverable and proportional
+
+- Require immutable raw batch trade ledgers for every completed stage; include a derived stage ledger only when that stage produced one, and never recompute it for packaging.
+- Keep canonical reports in the project handoff tree so `.omo` can be recycled without breaking future packages.
+- Verify source-to-staging copies, the manifest record set, ZIP names/sizes, forbidden/duplicate paths, and the whole-archive SHA-256. Omit redundant extraction and per-entry ZIP rehashing.
+- Move an older package or staging copy to the Recycle Bin only after its replacement passes.
+
 ## 2026-08-08 — Include representative screenshots in visual deliveries
 
 - Whenever completed work has a visible result and the environment allows it, include one representative screenshot and judge basic display errors.

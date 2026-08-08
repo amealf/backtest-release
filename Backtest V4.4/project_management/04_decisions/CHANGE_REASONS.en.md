@@ -1,5 +1,35 @@
 # Change Reasons
 
+## 2026-08-09 — Close external-review reporting and identity gaps
+
+<strong>Reason:</strong> Valid zero-trade coordinates could complete numerical evaluation but fail during four-process HTML publication. Compact browser data also dropped the target instrument identity, and two presentation tests depended on a local snapshot path or obsolete literal UI text.
+
+<strong>Prior behavior:</strong> The process worker assumed trade columns existed even for a completely empty DataFrame. `main_summary_payload()` omitted the stage instrument profile entirely. Cross-instrument HTML tests read current snapshot CSS from the result drive and asserted fixed K200/SImain labels; presentation assertions depended on CSS property order and chart annotations removed by later accepted layout changes.
+
+<strong>Updated behavior:</strong> A zero-trade coordinate writes an empty chunk with zero wait statistics. Compact browser data retains only a minimal `instrumentSummary`. Cross-instrument tests inject CSS and check dynamic labels, while presentation tests check current semantic behavior. The package script records the current full-suite result.
+
+<strong>Evidence impact:</strong> No strategy state, fill, cost, trade, return, ranking, completed result, or existing published HTML changed. The source manifest binds the repaired report generators and tests; compatible V4.4 results remain eligible for the same cumulative ranking.
+
+<strong>Validity boundary:</strong> These changes affect future report generation, compact analysis metadata, tests, and future source-review packages. The retained 2026-08-08 compact ZIP remains immutable historical review evidence.
+
+## 2026-08-09 — Make scenario drafts self-managing
+
+- Prior behavior: the selector exposed manual scenario ID and name fields and labeled the full-catalog import as opening a scenario file, leaving the multi-scenario storage model implicit. Drawn ranges also looked like two-axis rectangles.
+- Updated behavior: the selector imports the complete `scenario_catalog.json`, generates the next unused ID and default name, keeps only the name editable, advances to the next draft after saving, and renders selection as a full-height time band.
+- Reason: scenario creation should not require bookkeeping, while the stored catalog and time endpoints remain explicit and reusable.
+- Evidence boundary: this is a selector-only presentation and authoring change; strategy, qualification, immutable trade records, and result packages are unchanged.
+
+## 2026-08-08 — Separate market identity, saved intuition, and result application
+
+- Prior behavior: the selector had one bundled K200 source and could only copy or export ranges. The retained scenarios lived in one strategy plan, and producing another scenario ranking required code-directed publication work.
+- Updated behavior: market intervals live in a reusable JSON catalog; named scenarios live in a separate JSON catalog; the selector can save its current one-or-many-range selection; one script applies a scenario to the matching completed evaluation package and generates the accepted main interface.
+- Reason: the researcher needs to test market intuitions repeatedly across instruments and dates without changing strategy code or rebuilding the storage model.
+- Validity boundary: one scenario belongs to one evaluation package. Cross-evaluation comparisons remain the responsibility of the generic evaluation comparison layer.
+
+## 2026-08-08 — Replace exhaustive package revalidation with bounded integrity checks
+
+The retained transaction population makes the current package several gigabytes. Re-extracting the archive and hashing every file again duplicated already completed source-to-staging hashes, created a second multi-gigabyte tree, and exceeded the execution window. The package now preserves the same evidence boundary while checking the manifest record set, archive index, forbidden/duplicate paths, and one whole-archive SHA-256. Missing optional derived ledgers are recorded instead of recomputed. This changes packaging cost only; strategy results and retained trade bytes are unchanged.
+
 ## 2026-08-08 — V4.41 release identity
 
 The current accumulated work needs a visible release name without splitting comparable backtest evidence. Separating the V4.41 presentation release from the V4.4 strategy/ranking identity gives the release a precise name while preserving all compatible completed results in one ranking.
@@ -346,7 +376,7 @@ The final low-activity label reveals a future recovery or confirmation. `baselin
 
 <strong>Prior behavior:</strong> `pointShape()` filled the two drop-point ellipses with their outline color. The desktop open tab used `top: calc(84px + 14px)`. Candlestick interval and guide shapes could use dashed or dotted strokes. The chart included a long theoretical-line/actual-fill/exit-basis annotation, and the frozen-low annotation appended freeze and duration details after `L=<value>`.
 
-<strong>Updated behavior:</strong> Only `pointShape()` changes to transparent fill with the existing colored outline; other circle helpers remain unchanged. The desktop tab uses `top: calc(84px + 8px)`, a six-pixel upward move, while its mobile override remains `top: 16px`. All candlestick interval and guide strokes are solid and keep their semantic colors; text identifies meanings by color rather than line style. The long theoretical-line/actual-fill chart annotation is absent, while detailed side-panel reasoning remains. The green frozen-low chart annotation is exactly `L=<formatted value>` without freeze, duration, or bar-count suffixes.
+<strong>Updated behavior:</strong> Only `pointShape()` changes to transparent fill with the existing colored outline; other circle helpers remain unchanged. The desktop tab uses `top: calc(84px + 8px)`, a six-pixel upward move, while its mobile override remains `top: 16px`. All candlestick interval and guide strokes are solid and keep their semantic colors; text identifies meanings by color rather than line style. The long theoretical-line/actual-fill chart annotation is absent, while detailed side-panel reasoning remains. This delivery initially reduced the frozen-low label to `L=<formatted value>`. A later V4.41 layout change moved that value, together with the other five colored evidence boxes, from the chart to Entry Reason.
 
 <strong>Evidence impact:</strong> The historical trade-template hash, analyzer/generator identity, QA source, review tests, and `SOURCE_MANIFEST` must close under a new source identity. Continuation Round-1 raw remains valid and immutable, while its derived stage/cumulative HTML requires one corrected-source redelivery and replacement QA. Source and browser assertions reject non-solid chart guides, misleading dashed-style copy, the removed chart annotation, and any non-exact frozen-low label.
 

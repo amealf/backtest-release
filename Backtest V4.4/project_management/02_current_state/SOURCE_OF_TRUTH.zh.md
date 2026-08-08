@@ -1,5 +1,40 @@
 # 当前有效文件
 
+## V4.41 正式源码发布——2026-08-09
+
+- ZIP：`D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip`。
+- SHA-256 sidecar：`D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.sha256`。
+- 审计：`D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.audit.json`。
+- 打包程序：`tools\package_v4_41_source_review.ps1`。文件名因历史原因保留，默认输出与包内状态已经改为 Windows 正式源码发布。
+- Git 发布身份：已发布 `v4.41` 分支上的 `V4.41` 标签。验收门槛为独立解压包 112 项通过、2 项跳过、0 项失败。
+- 方案 A 发布 GitHub 源码、紧凑 ZIP、sidecar 与审计。数 GB 历史逐笔账本和 2026-08-08 完整本地交接包不属于公开发布资产。
+- `Backtest_V4.41_source_review_20260808.zip` 继续作为不可变历史审阅证据，不属于正式发布文件。
+
+## V4.41 行情场景系统——2026-08-08
+
+- 行情目录：`runtime_inputs\scenarios\market_catalog.json`。
+- 场景目录：`runtime_inputs\scenarios\scenario_catalog.json`。
+- 场景契约与操作说明：`runtime_inputs\scenarios\README.md`。
+- 选择器来源与生成程序：`runtime_inputs\templates\market-intuition-selector.html` 和 `tools\build_v4_41_scenario_manager.py`。
+- 选择器入口：`results\market_scenario_manager\index.html`。
+- 选择器把 `scenario_catalog.json` 作为多场景目录管理：「载入场景目录」会导入整份文件，ID 按下一个未使用的 `scenario_N` 自动生成，名称默认使用下一个未使用的「新场景N」且仍可修改。框选区域会自动铺满图表上下边界，实际只选择时间范围。
+- 场景应用程序：`tools\apply_v4_41_scenario.py`；输出保存在 `results\scenario_analysis\<scenario_id>`。
+- 迁入的三个场景仍绑定 K200 2026-05-26 至 2026-07-08。当前 37,058 组累计证据中，情景一合格 4,406 组，情景二合格 6,292 组，情景三为明确的零参数总体。
+
+## 历史紧凑外部审阅包——2026-08-08
+
+- ZIP：`D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip`
+- SHA-256 sidecar：`D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip.sha256`
+- 审计：`D:\Code\backtest-release\Backtest_V4.41_source_review_20260808.zip.audit.json`
+- 该不可变压缩包只保留为历史审阅证据，不替代 2026-08-09 正式源码发布或下方完整本地交接包。
+
+## 当前可移交包——2026-08-08
+
+- ZIP：`D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip`
+- SHA-256 sidecar：`D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip.sha256`
+- 审计：`D:\Code\backtest-release\Backtest_V4.41_current_complete_20260808.zip.audit.json`
+- 打包来源：`tools\package_v4_4_with_trade_records.ps1`；发布身份采用 V4.41，策略／排序主谱系继续采用 V4.4。
+
 ## 当前发布身份——2026-08-08
 
 `RELEASE.json` 是当前界面发布版本（`V4.41`）及兼容边界的权威来源。策略与结果身份继续由 `research_variants\short_momentum_net_drop_rebound_v4_4\SOURCE_MANIFEST.json` 以 V4.4 身份约束。累计发布程序仍按原有主版本与排序谱系检查，纳入全部已完成且兼容 V4.4 的阶段。
@@ -7,9 +42,10 @@
 ## 当前 K200 训练／测试逐笔切换与布局——2026-08-08
 
 - K200 训练逐笔入口仍为 `results\all_completed_union_analysis\trade_review\index.html`，它跳转到当前快照并显示「显示测试集」。K200 测试逐笔入口仍为 `results\cross_instrument_comparison\runs\k200_train_test_si__combined_350_v56_20260807\trade_review_k200_test\index.html`，并显示「显示训练集」。
-- 两个按钮都保留当前精确 `combo_id`，同时绑定目标研究合同。目标区间缺少该精确坐标时，不会改用邻近参数。
+- 两个按钮都保留当前精确 `combo_id`，同时绑定目标研究合同，并在当前页打开配对逐笔页面。「隐藏训练集」／「隐藏测试集」和 Esc 可以关闭对照层；关闭时卸载 iframe。目标区间缺少该精确坐标时，不会改用邻近参数。
+- 配对按钮与周围工具栏按钮采用相同居中样式，悬停时没有下划线。内嵌页面不显示「当前参数」卡片；对照层打开期间隐藏外层内容，关闭后恢复。
 - 交易选择器的重复标题／计数和下方摘要行已经移除。drop、ratio、开仓基准、开仓阈值、W 基准和 active low 改为理由标题下方的紧凑彩色框，不再作为 Plotly 标注遮挡价格。Plotly 图例移到横轴下方。
-- 浏览器标签标题为「组合平仓逐笔查看」，图标为蓝色 `Z`。共享来源：`runtime_inputs\templates\historical_v4_trade.html`；专项检查：`tools\qa_v4_4_trade_review_layout.mjs`；保留证据：`project_management\screenshots\trade_review_layout_20260808`。
+- 浏览器标签标题为「组合平仓逐笔查看」，图标为蓝色 `Z`。共享来源：`runtime_inputs\templates\historical_v4_trade.html`；专项检查：`tools\qa_v4_4_trade_review_layout.mjs`；保留的同页对照证据：`project_management\screenshots\trade_review_inline_peer_20260809`。
 
 ## 当前按日期区间保存的结果包框架——2026-08-08
 

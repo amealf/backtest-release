@@ -1,5 +1,17 @@
 # Current Tasks
 
+## 2026-08-08 — Catalog-driven market scenarios complete
+
+The market registry, saved-scenario registry, selector save flow, scenario application script, and three current scenario ranking pages are complete. Existing result packages and stable main/per-trade pages were not changed. Future work adds a market by extending the market catalog, then saves and applies scenarios without product-specific selector code.
+
+## 2026-08-08 — V4.41 compact external-review package complete
+
+The compact review-candidate ZIP, sidecar, audit, package-root test runner, current cumulative browser payload, and representative per-trade chunk are complete. The independently extracted test runner reproduces 4 failures, 105 passes, and 2 skips. The failures are preserved for the requested external review; no source or test repair is authorized in this task.
+
+## 2026-08-08 — V4.41 package and safe local cleanup complete
+
+The final ZIP, SHA-256 sidecar, audit, stable canonical-report source, and lean resumable package builder are complete. Obsolete packages, staging copies, local Agent state, dependencies, and caches were moved to the Recycle Bin. Current results and required historical/runtime dependencies remain retained; no cleanup task is active.
+
 ## 2026-08-08 — V4.41 minor release complete
 
 The active presentation release is V4.41. Strategy computation and cumulative result compatibility remain on the V4.4 major ranking lineage, so earlier compatible results stay included. No result recomputation or historical-result archive is part of this release.

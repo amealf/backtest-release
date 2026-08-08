@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "catalog_id": "v4_41_market_catalog_20260808",
+  "markets": [
+    {
+      "market_id": "k200_20260526T000000__20260708T235200",
+      "label_zh": "K200 训",
+      "label_en": "K200 2026-05-26 to 2026-07-08",
+      "instrument_id": "K200",
+      "evaluation_id": "K200_20260526T000000__20260708T235200",
+      "timezone": "Asia/Seoul",
+      "utc_offset": "+09:00",
+      "bar_seconds": 15,
+      "round_trip_cost_bps": 3.568663594470046,
+      "start_time": "2026-05-26 00:00:00",
+      "end_time": "2026-07-08 23:52:00",
+      "data_file": {
+        "path": "runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+        "path_base": "repository_root",
+        "size_bytes": 54562343,
+        "sha256": "9760d367a109777c4789ce45d982a6c0708bacddad8f549450ed94f81ad5c405"
+      }
+    },
+    {
+      "market_id": "k200_20260708T235215__20260807T032145",
+      "label_zh": "K200 测",
+      "label_en": "K200 2026-07-08 to 2026-08-07",
+      "instrument_id": "K200",
+      "evaluation_id": "K200_20260708T235215__20260807T032145",
+      "timezone": "Asia/Seoul",
+      "utc_offset": "+09:00",
+      "bar_seconds": 15,
+      "round_trip_cost_bps": 3.568663594470046,
+      "start_time": "2026-07-08 23:52:15",
+      "end_time": "2026-08-07 03:21:45",
+      "data_file": {
+        "path": "runtime_inputs\\market_data\\k200_clean_15s_session_filled.csv",
+        "path_base": "repository_root",
+        "size_bytes": 54562343,
+        "sha256": "9760d367a109777c4789ce45d982a6c0708bacddad8f549450ed94f81ad5c405"
+      }
+    },
+    {
+      "market_id": "simain_20260129T000000__20260223T235945",
+      "label_zh": "SI 当前阶段",
+      "label_en": "SI 2026-01-29 to 2026-02-23",
+      "instrument_id": "SImain",
+      "evaluation_id": "SImain_20260129T000000__20260223T235945",
+      "timezone": "America/Chicago",
+      "utc_offset": "-06:00",
+      "bar_seconds": 15,
+      "round_trip_cost_bps": 3.568663594470046,
+      "start_time": "2026-01-29 00:00:00",
+      "end_time": "2026-02-23 23:59:45",
+      "data_file": {
+        "path": "D:\\Code\\data\\ibkr\\SImain\\SImain_15s_20260128_20260223_session_filled.csv",
+        "path_base": "absolute",
+        "size_bytes": 17311762,
+        "sha256": "90b5f481b5b8c62876a70456c32bdbc5dfc13c300747f3019d85996d04c0ae03"
+      }
+    }
+  ]
+}

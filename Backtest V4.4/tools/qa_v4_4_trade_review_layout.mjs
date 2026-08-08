@@ -13,6 +13,13 @@ const runRoot = path.join(
   "k200_train_test_si__combined_350_v56_20260807",
 );
 const testEntry = path.join(runRoot, "trade_review_k200_test", "index.html");
+const trainingEntry = path.join(
+  projectRoot,
+  "results",
+  "all_completed_union_analysis",
+  "trade_review",
+  "index.html",
+);
 const comboId =
   "v4_4_rolling_tr_sum_bpall_window_fillcalculated_threshold_execwait_next_real_trade_slip0_sx1_s332_rx1_e320_bh240_trw20_k1p4_w6_m4p5_7d214509a0";
 const outputRoot = path.join(
@@ -33,25 +40,56 @@ function entryUrl(filePath, researchContractId) {
 async function waitForReview(page) {
   await page.waitForSelector("#chart .main-svg", { timeout: 45_000 });
   await page.waitForFunction(
-    () =>
-      document.querySelector("#tradeSelect")?.options.length > 0 &&
-      !document.querySelector("#peerReviewLink")?.hidden,
+    () => document.querySelector("#tradeSelect")?.options.length > 0,
     null,
     { timeout: 45_000 },
   );
   await page.waitForTimeout(250);
 }
 
+async function waitForPeerButton(page) {
+  await page.waitForFunction(
+    () => !document.querySelector("#peerReviewLink")?.hidden,
+    null,
+    { timeout: 45_000 },
+  );
+}
+
+async function waitForPeerFrame(page) {
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    const frame = page
+      .frames()
+      .find((candidate) => candidate !== page.mainFrame() && candidate.url().includes("embedded=1"));
+    if (frame) {
+      await waitForReview(frame);
+      return frame;
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error("paired review frame did not load");
+}
+
 async function state(page) {
   return page.evaluate(() => {
     const chart = document.getElementById("chart");
     const peer = document.getElementById("peerReviewLink");
+    const peerStyle = peer ? getComputedStyle(peer) : null;
+    const overlay = document.getElementById("peerReviewOverlay");
+    const peerFrame = document.getElementById("peerReviewFrame");
     const annotations = chart?.layout?.annotations || [];
     return {
       title: document.title,
       favicon: document.querySelector('link[rel="icon"]')?.href || "",
       peerLabel: peer?.textContent?.trim() || "",
-      peerHref: peer?.href || "",
+      peerDisplay: peerStyle?.display || "",
+      peerAlignItems: peerStyle?.alignItems || "",
+      peerJustifyContent: peerStyle?.justifyContent || "",
+      peerTextDecoration: peerStyle?.textDecorationLine || "",
+      peerTarget: peerFrame?.getAttribute("src") || "",
+      peerOverlayOpen: Boolean(overlay && !overlay.hidden),
+      embeddedSelectionCardHidden:
+        document.documentElement.dataset.embeddedReview === "true" &&
+        getComputedStyle(document.querySelector(".selection-card")).display === "none",
       tradePickerHeaderExists: Boolean(document.querySelector(".trade-picker-head")),
       tradePickerMetaExists: Boolean(document.querySelector(".trade-picker-meta")),
       metrics: document.getElementById("tradeMetrics")?.innerText || "",
@@ -78,6 +116,7 @@ await page.goto(entryUrl(testEntry, "v4_4_cross_instrument_comparison"), {
   waitUntil: "load",
 });
 await waitForReview(page);
+await waitForPeerButton(page);
 await page.click("#controlsCollapse");
 await page.evaluate(() => {
   const reboundIndex = currentTrades.findIndex(
@@ -90,17 +129,40 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(300);
 const test = await state(page);
+await page.hover("#peerReviewLink");
+const peerHoverTextDecoration = await page.$eval(
+  "#peerReviewLink",
+  (node) => getComputedStyle(node).textDecorationLine,
+);
 await page.screenshot({ path: path.join(outputRoot, "test-dark.png"), fullPage: false });
 
 await page.click("#lightThemeBtn");
 await page.waitForTimeout(250);
 await page.screenshot({ path: path.join(outputRoot, "test-light.png"), fullPage: false });
 
+const testUrlBeforePeer = page.url();
 await page.click("#peerReviewLink");
+const trainingFrame = await waitForPeerFrame(page);
+const testWithTrainingOpen = await state(page);
+const training = await state(trainingFrame);
+await page.screenshot({ path: path.join(outputRoot, "test-with-training-inline.png"), fullPage: false });
+await page.click("#peerReviewClose");
+await page.waitForFunction(() => document.getElementById("peerReviewOverlay")?.hidden === true);
+const testAfterPeerClose = await state(page);
+
+await page.goto(entryUrl(trainingEntry, "v4_4_all_completed_combined_union"), {
+  waitUntil: "load",
+});
 await waitForReview(page);
+await waitForPeerButton(page);
 await page.click("#controlsCollapse");
-const training = await state(page);
-await page.screenshot({ path: path.join(outputRoot, "training-light.png"), fullPage: false });
+await page.waitForTimeout(250);
+const trainingUrlBeforePeer = page.url();
+await page.click("#peerReviewLink");
+const testFrame = await waitForPeerFrame(page);
+const trainingWithTestOpen = await state(page);
+const pairedTest = await state(testFrame);
+await page.screenshot({ path: path.join(outputRoot, "training-with-test-inline.png"), fullPage: false });
 
 const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const mobileErrors = [];
@@ -112,6 +174,7 @@ await mobile.goto(entryUrl(testEntry, "v4_4_cross_instrument_comparison"), {
   waitUntil: "load",
 });
 await waitForReview(mobile);
+await waitForPeerButton(mobile);
 await mobile.click("#controlsCollapse");
 const mobileOverflow = await mobile.evaluate(
   () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -122,12 +185,30 @@ await browser.close();
 const assertions = {
   title_has_no_version: !/V\d/i.test(test.title) && test.title === "组合平仓逐笔查看",
   favicon_is_blue_z: test.favicon.includes("%231f77d0") && test.favicon.includes("%3EZ%3C"),
-  test_links_to_same_training_combo:
+  peer_button_matches_toolbar:
+    ["flex", "inline-flex"].includes(test.peerDisplay) &&
+    test.peerAlignItems === "center" &&
+    test.peerJustifyContent === "center" &&
+    test.peerTextDecoration === "none" &&
+    peerHoverTextDecoration === "none",
+  test_opens_training_inline:
     test.peerLabel === "显示训练集" &&
-    new URL(test.peerHref).searchParams.get("combo_id") === comboId,
-  training_links_to_same_test_combo:
+    testWithTrainingOpen.peerOverlayOpen &&
+    testWithTrainingOpen.url === testUrlBeforePeer &&
+    new URL(testWithTrainingOpen.peerTarget, testUrlBeforePeer).searchParams.get("combo_id") === comboId &&
+    new URL(testWithTrainingOpen.peerTarget, testUrlBeforePeer).searchParams.get("embedded") === "1" &&
     training.peerLabel === "显示测试集" &&
-    new URL(training.peerHref).searchParams.get("combo_id") === comboId,
+    training.embeddedSelectionCardHidden,
+  inline_panel_can_hide:
+    !testAfterPeerClose.peerOverlayOpen &&
+    testAfterPeerClose.peerTarget === "",
+  training_opens_test_inline:
+    trainingWithTestOpen.peerOverlayOpen &&
+    trainingWithTestOpen.url === trainingUrlBeforePeer &&
+    new URL(trainingWithTestOpen.peerTarget, trainingUrlBeforePeer).searchParams.get("combo_id") === comboId &&
+    new URL(trainingWithTestOpen.peerTarget, trainingUrlBeforePeer).searchParams.get("embedded") === "1" &&
+    pairedTest.peerLabel === "显示训练集" &&
+    pairedTest.embeddedSelectionCardHidden,
   picker_extras_removed:
     !test.tradePickerHeaderExists && !test.tradePickerMetaExists,
   metrics_moved_below_reason:
@@ -147,6 +228,11 @@ const report = {
   assertions,
   test,
   training,
+  pairedTest,
+  testWithTrainingOpen,
+  testAfterPeerClose,
+  trainingWithTestOpen,
+  peerHoverTextDecoration,
   errors,
   mobileErrors,
   mobileOverflow,

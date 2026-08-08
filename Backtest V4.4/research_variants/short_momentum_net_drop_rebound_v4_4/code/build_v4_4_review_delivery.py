@@ -46,7 +46,7 @@ TRADE_SCRIPT_TEMPLATE = TEMPLATE_ROOT / "trade_analysis.js"
 HUB_DESIGN_SOURCE = PROJECT_ROOT / "project_management" / "research_hub.html"
 TRADE_DESIGN_SOURCE = RUNTIME_TEMPLATE_ROOT / "historical_v4_trade.html"
 TRADE_DESIGN_SOURCE_SHA256 = (
-    "9ffc8fd269173a27eae47f21d993c1f43cc296f0b76b14018ff3fb45a9402b50"
+    "60073aad0b6a4162043c36dbddc95808f0b7e0352715fe4fca1fd9ea495ffc7e"
 )
 TRADE_PLOTLY_SOURCE = RUNTIME_TEMPLATE_ROOT / "plotly.min.js"
 TRADE_PLOTLY_SOURCE_SHA256 = (
@@ -1662,6 +1662,8 @@ def _native_trade_frame_fast(
     source: pd.DataFrame,
     research_start_index: int,
 ) -> pd.DataFrame:
+    if trades.empty:
+        return trades.copy()
     ordered = trades.sort_values(["entry_index", "exit_index"], kind="mergesort").copy()
     out = ordered.copy()
     entry = pd.to_numeric(ordered["entry_index"], errors="raise").astype(int)
@@ -1871,7 +1873,10 @@ def _build_combo_chunk_process(
         source,
         _PROCESS_CHUNK_RESEARCH_START_INDEX,
     )
-    waits = pd.to_numeric(combo_trades["entry_wait_bar_count"], errors="raise")
+    waits = pd.to_numeric(
+        combo_trades.get("entry_wait_bar_count", pd.Series(dtype=int)),
+        errors="raise",
+    )
     waited_count = int(waits.gt(0).sum())
     maximum_wait = int(waits.max()) if len(waits) else 0
     native_json = native_frame.to_json(
