@@ -44,10 +44,11 @@ New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
 $rootFiles = @(
     '.gitignore', '.python-version', 'AGENTS.md', 'AGENTS.zh.md', 'README.md',
-    'PRODUCT.md', 'RELEASE.json', 'RUNTIME.md', 'requirements-v4_4.txt',
+    'GPTPRO_REVIEW_SCOPE.md', 'PRODUCT.md', 'RELEASE.json', 'RUNTIME.md', 'requirements-v4_4.txt',
     'package.json', 'package-lock.json'
 )
 foreach ($file in $rootFiles) { Copy-ProjectItem $file (Join-Path 'source\project' $file) }
+Copy-ProjectItem 'GPTPRO_REVIEW_SCOPE.md' 'GPTPRO_REVIEW_SCOPE.md'
 
 foreach ($directory in @('project_management', 'research_variants', 'runtime_inputs', 'tools')) {
     Copy-ProjectItem $directory (Join-Path 'source\project' $directory)
@@ -106,6 +107,8 @@ $readme = @"
 # Backtest V4.41 formal source release
 
 This compact package is the formal V4.41 source release for Windows. It contains the released V4.41 source, the V4.4 strategy/ranking contract, project management, runtime inputs, the current cumulative browser payload, the stable main shell used by scenario tooling, and one representative per-trade chunk.
+
+GPT Pro and other external reviewers must read `GPTPRO_REVIEW_SCOPE.md` before review. Findings that require omitted local data, local drives, raw ledgers, browser state, or machine-specific paths are outside this compact package's review scope.
 
 The 3.5 GB full handoff and all raw per-stage trade ledgers are intentionally excluded. No raw trade, return, ranking, or retained result snapshot was recomputed or modified.
 
@@ -182,7 +185,7 @@ $manifest = [ordered]@{
     completed_stage_count = 109
     source_manifest_sha256 = $sourceManifestSha
     observed_test_result = '0 failed, 112 passed, 2 skipped'
-    include_policy = @('released source and tests', 'project management', 'runtime inputs', 'market-scenario catalogs and focused tests', 'current cumulative browser payload and stable main shell', 'one representative per-trade chunk')
+    include_policy = @('package-level GPT Pro review-scope statement', 'released source and tests', 'project management', 'runtime inputs', 'market-scenario catalogs and focused tests', 'current cumulative browser payload and stable main shell', 'one representative per-trade chunk')
     exclude_policy = @('full raw/derived trade ledgers', 'all other per-coordinate trade chunks', 'bulk result CSVs', '.git, dependencies, caches, and local browser profiles')
     nonself_entry_count = $records.Count
     record_set_hash = $recordSetHash

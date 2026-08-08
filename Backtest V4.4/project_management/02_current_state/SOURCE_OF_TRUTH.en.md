@@ -6,6 +6,7 @@
 - SHA-256 sidecar: `D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.sha256`.
 - Audit: `D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.audit.json`.
 - Package source: `tools\package_v4_41_source_review.ps1`; the retained filename is historical, while its default output and embedded state now describe the formal Windows source release.
+- Package review boundary: `GPTPRO_REVIEW_SCOPE.md` appears at the ZIP root and under `source\project`. GPT Pro must treat absent local drives, market data, raw ledgers, browser state, and machine-specific paths as out of scope and review the remaining package-contained evidence.
 - Git release identity: tag `V4.41` on the published `v4.41` branch. Acceptance requires an independent extracted-package result of 112 passed, 2 skipped, and 0 failed.
 - Scheme A publishes GitHub source plus the compact ZIP, sidecar, and audit. Multi-gigabyte historical ledgers and the 2026-08-08 complete local handoff remain outside the public release assets.
 - `Backtest_V4.41_source_review_20260808.zip` remains immutable historical review evidence and is not a formal release artifact.

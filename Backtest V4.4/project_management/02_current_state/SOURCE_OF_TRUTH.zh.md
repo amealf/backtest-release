@@ -6,6 +6,7 @@
 - SHA-256 sidecar：`D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.sha256`。
 - 审计：`D:\Code\backtest-release\Backtest_V4.41_source_release_20260809.zip.audit.json`。
 - 打包程序：`tools\package_v4_41_source_review.ps1`。文件名因历史原因保留，默认输出与包内状态已经改为 Windows 正式源码发布。
+- 包内审阅边界：`GPTPRO_REVIEW_SCOPE.md` 同时位于 ZIP 根目录和 `source\project`。GPT Pro 应把缺失的本地磁盘、行情数据、原始账本、浏览器状态和机器专用路径视为审阅范围外，并继续审阅其余包内证据。
 - Git 发布身份：已发布 `v4.41` 分支上的 `V4.41` 标签。验收门槛为独立解压包 112 项通过、2 项跳过、0 项失败。
 - 方案 A 发布 GitHub 源码、紧凑 ZIP、sidecar 与审计。数 GB 历史逐笔账本和 2026-08-08 完整本地交接包不属于公开发布资产。
 - `Backtest_V4.41_source_review_20260808.zip` 继续作为不可变历史审阅证据，不属于正式发布文件。
